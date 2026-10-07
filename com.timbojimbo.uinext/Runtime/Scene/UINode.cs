@@ -47,6 +47,9 @@ namespace TimboJimbo.UINext
         [Tooltip("Its opacity fades it and what is inside it as one image, so overlapping parts do not show through each other.")]
         [SerializeField] private UIValue<bool> _groupOpacity = false;
 
+        [Tooltip("Blurs it and what is inside it, by this many points.")]
+        [SerializeField] private UIValue<float> _blur = 0f;
+
         [Tooltip("Cuts what is inside to its rect, with its corner radii.")]
         [SerializeField] private UIValue<bool> _clips = false;
         [SerializeField] private UIValue<CornerRadii> _clipRadii = new CornerRadii();
@@ -117,6 +120,13 @@ namespace TimboJimbo.UINext
         /// overlapping children do not show through each other. Fully opaque, it costs nothing.
         /// </summary>
         public UIValue<bool> GroupOpacity => _groupOpacity;
+
+        /// <summary>
+        /// Blurs it and everything inside it by this many points, as SwiftUI's blur(radius:) and CSS's filter: blur():
+        /// while it is above zero it is drawn to an image of its own first (as a group), blurred, then drawn. It animates,
+        /// so a node can blur in and out of focus.
+        /// </summary>
+        public UIValue<float> Blur => _blur;
 
         /// <summary>Whether it cuts what is inside it to its rect.</summary>
         public UIValue<bool> Clips => _clips;
@@ -507,7 +517,7 @@ namespace TimboJimbo.UINext
         {
             action(_width); action(_height); action(_padding); action(_gap); action(_direction); action(_wrap);
             action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
-            action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity);
+            action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity); action(_blur);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable);
         }
     }

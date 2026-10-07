@@ -95,6 +95,23 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void ABlurredNodeIsDrawnAsABlurredImageWithRoomForItsBlur()
+        {
+            Root.Node.Pad(100f);
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
+            card.Box(Color.white);
+            Frame();
+            Assert.AreEqual(0, Compositor.Groups.Count, "sharp, it is drawn as usual");
+            card.Blur.Value = 8f;
+            Frame();
+            Assert.AreEqual(1, Compositor.Groups.Count, "however opaque, a blurred node is drawn as an image first");
+            Assert.AreEqual(8f * Root.PixelsPerPoint, Compositor.Groups[0].Blur, 1e-3f);
+            var region = Compositor.Groups[0].Region;
+            Assert.LessOrEqual(region.xMin, 84f, "room past it for the blur to spread into");
+            Assert.GreaterOrEqual(region.xMax, 216f);
+        }
+
+        [Test]
         public void APresentedNodeIsLaidOutOverTheWholeRoot()
         {
             Root.Node.Pad(30f);

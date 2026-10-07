@@ -33,6 +33,8 @@ namespace TimboJimbo.UINext
             public RenderTexture Target;
             // The part of its root, in points, its image covers.
             public Rect Region;
+            // How far its image is blurred, in its pixels (0: not at all).
+            public float Blur;
             public int FirstBatch;
             public int BatchCount;
         }
@@ -134,6 +136,7 @@ namespace TimboJimbo.UINext
             if (s_material != null)
                 Object.DestroyImmediate(s_material);
             s_material = null;
+            UIRenderPass.ReleaseResources();
             s_orderDirty = s_slotsDirty = true;
         }
 
@@ -292,6 +295,13 @@ namespace TimboJimbo.UINext
             // smoothed over, within the root (nothing outside it is seen). Its image is that size, in steps, kept
             // while it fits.
             var bounds = GroupBounds(tree, node);
+            // A blur spreads what is drawn past it: room for its reach.
+            float blur = tree.Blurs[node.Index];
+            if (blur > 0f && bounds.width > 0f)
+            {
+                float reach = blur * 2f;
+                bounds = Rect.MinMaxRect(bounds.xMin - reach, bounds.yMin - reach, bounds.xMax + reach, bounds.yMax + reach);
+            }
             const float smoothing = 2f;
             int x = Mathf.FloorToInt(Mathf.Max(0f, bounds.xMin * scale - smoothing));
             int y = Mathf.FloorToInt(Mathf.Max(0f, bounds.yMin * scale - smoothing));
@@ -299,7 +309,7 @@ namespace TimboJimbo.UINext
             int yMax = Mathf.CeilToInt(Mathf.Min(root.Size.y * scale, bounds.yMax * scale + smoothing));
             var target = GroupTarget(Groups.Count, Mathf.Max(1, xMax - x), Mathf.Max(1, yMax - y));
             var region = new Rect(x / scale, y / scale, target.width / scale, target.height / scale);
-            Groups.Add(new Group { Tree = tree, Node = node, Target = target, Region = region });
+            Groups.Add(new Group { Tree = tree, Node = node, Target = target, Region = region, Blur = blur * scale });
             EnsureInstances(s_instanceCount + 1);
             s_instances[s_instanceCount] = new PrimitiveInstance
             {

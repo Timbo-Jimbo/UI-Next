@@ -36,6 +36,9 @@ namespace TimboJimbo.UINext
         // the opacity its image is drawn at (0 for the rest). Inside a group, slots' opacities are the group's own.
         public float[] Opacities = new float[32];
         public float[] GroupOpacities = new float[32];
+
+        // How far each node drawn as a group is blurred, in points (0 for none, and for nodes not drawn as groups).
+        public float[] Blurs = new float[32];
         public readonly List<ClipShape> ClipShapes = new();
         private Vector4[] _clipChains = new Vector4[32];
 
@@ -441,8 +444,11 @@ namespace TimboJimbo.UINext
                 // is drawn at the group's. A node a transition is fading (a page, an alert, an item going away) fades
                 // as a group too, so its parts never show through each other on the way.
                 bool fadingIn = transition != null && transition.Opacity.Value < 0.999f;
-                bool group = (node.GroupOpacity.Value || fadingIn) && opacity < 0.999f && shown;
+                // A blurred node is a group however opaque it is: its image is what is blurred.
+                float blur = node.Blur.Value;
+                bool group = shown && (((node.GroupOpacity.Value || fadingIn) && opacity < 0.999f) || blur > 0.01f);
                 GroupOpacities[i] = group ? effectiveOpacity : 0f;
+                Blurs[i] = group ? Mathf.Max(0f, blur) : 0f;
                 if (group) effectiveOpacity = 1f;
 
                 // Its clips: its parent's, and its parent's own clip; none for a node in the top layer.
@@ -508,6 +514,7 @@ namespace TimboJimbo.UINext
             Array.Resize(ref Shown, size);
             Array.Resize(ref Opacities, size);
             Array.Resize(ref GroupOpacities, size);
+            Array.Resize(ref Blurs, size);
             Array.Resize(ref _clipChains, size);
         }
 

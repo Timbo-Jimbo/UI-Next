@@ -593,6 +593,17 @@ namespace TimboJimboEditor.UINext.Demos
                 front.Child("Title").Label(title, 14f, Color.white, bold: true);
             }
 
+            var blurCase = Case(body, "Blur (tap it)");
+            var blurred = blurCase.Child("Card").Column(6f).Pad(18f);
+            blurred.Width.Value = Sizing.Grow();
+            var blurBox = blurred.Box(Palette[4], 16f);
+            blurBox.Gradient.Value = true;
+            blurBox.GradientTo.Value = Palette[1];
+            blurred.Child("Title").Label("In and out of focus", 20f, Color.white, bold: true);
+            blurred.Child("Body").Label("Everything inside it blurs with it.", 15f, Color.white);
+            blurred.Pressable();
+            blurred.Add<BlurToggle>().Setup(blurred, 10f);
+
             var lift = Case(body, "Top layer").Column(14f);
             var clipped = lift.Child("Clipped Box").Sized(Sizing.Grow(), Sizing.Fixed(90f)).Pad(14f).Align(AlignX.Center, AlignY.Bottom);
             clipped.Box(Card, 14f);
