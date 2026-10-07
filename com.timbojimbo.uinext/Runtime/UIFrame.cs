@@ -82,6 +82,7 @@ namespace TimboJimbo.UINext
             if (dt > 0f)
             {
                 ScrollView.StepAll(dt);
+                Pressable.StepAll(dt);
                 SpringStore.Step(dt);
             }
             else if (!Live && SpringStore.ActiveCount > 0)

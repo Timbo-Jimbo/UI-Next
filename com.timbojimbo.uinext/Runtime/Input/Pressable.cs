@@ -29,19 +29,33 @@ namespace TimboJimbo.UINext
 
         [SerializeField] private UnityEvent _onTap = new();
 
+        [Tooltip("Raised when it is held this long without the pointer leaving it; letting go then does not tap it.")]
+        [SerializeField] private UnityEvent _onLongPress = new();
+
         // How far a finger may wander off it and still count as on it, as UIKit's generous touch bounds.
         private const float TouchSlop = 24f;
+
+        // How long a press is held before it is a long press, as UIKit's default.
+        private const float LongPressTime = 0.5f;
+
+        // The buttons being held that answer long presses, stepped with the frame.
+        private static readonly System.Collections.Generic.List<Pressable> s_held = new();
 
         [NonSerialized] private UINode _node;
         [NonSerialized] private int _pointer = -1;
         [NonSerialized] private bool _inside;
         [NonSerialized] private Effect _disabled;
+        [NonSerialized] private float _heldFor;
+        [NonSerialized] private bool _longPressed;
 
         /// <summary>Raised when it is tapped (or submitted with focus on it).</summary>
         public event Action Tapped;
 
         /// <summary>Raised when it is turned on or off, with whether it is on now.</summary>
         public event Action<bool> Toggled;
+
+        /// <summary>Raised when it is held for half a second without the pointer leaving it; letting go then does not tap it.</summary>
+        public event Action LongPressed;
 
         /// <summary>Its node.</summary>
         public UINode Node => _node != null ? _node : _node = GetComponent<UINode>();
@@ -51,6 +65,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>The UnityEvent raised when it is tapped, for wiring in the inspector.</summary>
         public UnityEvent OnTap => _onTap;
+
+        /// <summary>The UnityEvent raised when it is long pressed.</summary>
+        public UnityEvent OnLongPress => _onLongPress;
 
         /// <summary>Whether a tap turns it on and off.</summary>
         public bool Toggles
@@ -117,7 +134,33 @@ namespace TimboJimbo.UINext
             if (_pointer >= 0 || !_interactable.Peek) return;
             if (!UIInput.TakeTap(this, e.PointerId)) return;
             _pointer = e.PointerId;
+            _heldFor = 0f;
+            _longPressed = false;
             SetInside(true);
+            if (LongPressed != null || _onLongPress.GetPersistentEventCount() > 0)
+                s_held.Add(this);
+        }
+
+        /// <summary>Moves every held button <paramref name="dt"/> seconds on: once a frame.</summary>
+        internal static void StepAll(float dt)
+        {
+            for (int i = s_held.Count - 1; i >= 0; i--)
+            {
+                var pressable = s_held[i];
+                if (pressable == null || pressable._pointer < 0 || pressable._longPressed)
+                {
+                    s_held.RemoveAt(i);
+                    continue;
+                }
+                // Off it, the clock waits; held long enough on it, it is a long press.
+                if (!pressable._inside) continue;
+                pressable._heldFor += dt;
+                if (pressable._heldFor < LongPressTime) continue;
+                pressable._longPressed = true;
+                s_held.RemoveAt(i);
+                pressable.LongPressed?.Invoke();
+                pressable._onLongPress?.Invoke();
+            }
         }
 
         void IPointerHandler.OnPointerMove(in PointerEvent e)
@@ -129,7 +172,7 @@ namespace TimboJimbo.UINext
         void IPointerHandler.OnPointerUp(in PointerEvent e)
         {
             if (e.PointerId != _pointer) return;
-            bool tapped = _inside && UIInput.IsOver(Node, e.Position, e.Kind == PointerKind.Touch ? TouchSlop : 0f);
+            bool tapped = _inside && !_longPressed && UIInput.IsOver(Node, e.Position, e.Kind == PointerKind.Touch ? TouchSlop : 0f);
             Release();
             if (tapped) Tap();
         }

@@ -42,6 +42,31 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void HeldLongEnoughItIsALongPressAndNoTap()
+        {
+            var button = Root.Node.Child("Button").Sized(Sizing.Fixed(100f), Sizing.Fixed(40f));
+            button.Box(Color.white);
+            int taps = 0, longPresses = 0;
+            var pressable = button.Pressable(() => taps++);
+            pressable.LongPressed += () => longPresses++;
+            Frame();
+            var center = Center(button);
+            Down(center);
+            Run(0.3f);
+            Assert.AreEqual(0, longPresses);
+            Run(0.4f);
+            Assert.AreEqual(1, longPresses);
+            Up(center, 1.0);
+            Assert.AreEqual(0, taps, "letting go after a long press is no tap");
+
+            Down(center);
+            Run(0.1f);
+            Up(center, 1.2);
+            Assert.AreEqual(1, taps, "a short press still taps");
+            Assert.AreEqual(1, longPresses);
+        }
+
+        [Test]
         public void TheDeepestButtonTakesTheTap()
         {
             var outer = Root.Node.Child("Outer").Sized(Sizing.Fixed(200f), Sizing.Fixed(100f)).Center();
