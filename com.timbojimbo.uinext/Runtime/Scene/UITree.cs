@@ -257,6 +257,7 @@ namespace TimboJimbo.UINext
 
             var rootSize = Root.SizeObservable.Value;
             var safeArea = Root.SafeAreaObservable.Value;
+            _keyboard = UIRoot.KeyboardObservable.Value / Root.PixelsPerPoint;
             _pass++;
 
             // The tree, then every presented node in it on its own: a presented screen is laid out as a root is,
@@ -268,6 +269,19 @@ namespace TimboJimbo.UINext
                 if (node.PresentationLevel.Value != 0 && node.Display.Value != DisplayMode.None)
                     Solve(i, rootSize, safeArea);
             }
+        }
+
+        // How far up the root the software keyboard reaches, in its points, for this layout.
+        private float _keyboard;
+
+        // A node avoiding the keyboard keeps what is inside it clear of it: its bottom padding is at least how far the
+        // keyboard reaches into it, by where its bottom was drawn last frame.
+        private Insets AvoidKeyboard(UINode node, Insets padding)
+        {
+            if (!node.AvoidsKeyboard.Value || _keyboard <= 0f) return padding;
+            float below = Mathf.Max(0f, Root.Size.y - node.DrawnRect.yMax);
+            padding.Bottom = Mathf.Max(padding.Bottom, _keyboard - below);
+            return padding;
         }
 
         // Lays out the subtree under node `start` as a tree of its own over the root's rect, leaving out what is not
@@ -300,7 +314,7 @@ namespace TimboJimbo.UINext
                     NextSibling = -1,
                     Width = node.Width.Value,
                     Height = node.Height.Value,
-                    Padding = node.Padding.Value,
+                    Padding = AvoidKeyboard(node, node.Padding.Value),
                     ChildGap = node.Gap.Value,
                     Direction = node.Direction.Value,
                     Wrap = node.Wrap.Value,

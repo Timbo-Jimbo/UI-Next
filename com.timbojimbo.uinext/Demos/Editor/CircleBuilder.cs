@@ -341,6 +341,8 @@ namespace TimboJimboEditor.UINext.Demos
             // The composer: a pill that grows with its lines, and a send button lit while there is something to send.
             var composer = content.Child("Composer").Row(8f).Pad(new Insets(12f, 12f, 6f, 30f)).Align(AlignX.Left, AlignY.Bottom);
             composer.Width.Value = Sizing.Grow();
+            // Room for the home indicator with the keyboard down; on the keyboard with it up.
+            composer.AvoidsKeyboard.Value = true;
             var input = composer.Child("Input");
             input.Width.Value = Sizing.Grow();
             var field = input.TextField("Message", 16f, multiline: true, maxLines: 5, padding: Insets.Symmetric(14f, 9f));

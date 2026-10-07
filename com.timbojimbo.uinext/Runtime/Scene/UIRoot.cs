@@ -44,6 +44,23 @@ namespace TimboJimbo.UINext
         internal readonly Observable<Vector2> SizeObservable = new(new Vector2(390f, 844f));
         internal readonly Observable<Insets> SafeAreaObservable = new();
 
+        // How far up the screen a docked software keyboard covers it, in screen pixels: layout follows it.
+        internal static readonly Observable<float> KeyboardObservable = new(0f);
+
+        /// <summary>
+        /// How far up from the bottom of the screen a docked software keyboard covers it, in screen pixels, following it
+        /// as it slides: nodes that avoid it (<see cref="UINode.AvoidsKeyboard"/>) keep what is inside them above it. The
+        /// text field's assembly keeps it up to date from the platform's keyboard; set it yourself to try a layout.
+        /// </summary>
+        public static float KeyboardHeight
+        {
+            get => KeyboardObservable.Peek;
+            set => KeyboardObservable.Value = UnityEngine.Mathf.Max(0f, value);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetKeyboard() => KeyboardObservable.Value = 0f;
+
         private UINode _node;
 
         // Its RectTransform's size and pivot are the stack's, as a canvas's are: driven, so changing them dirties nothing.

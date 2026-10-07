@@ -150,6 +150,34 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void ANodeAvoidingTheKeyboardKeepsWhatIsInsideItAboveIt()
+        {
+            var page = Root.Node.Column();
+            page.Height.Value = Sizing.Grow();
+            page.Width.Value = Sizing.Grow();
+            page.Child("Thread").Sized(Sizing.Grow(), Sizing.Grow());
+            var bar = page.Child("Composer").Pad(new Insets(10f, 10f, 6f, 30f));
+            bar.Width.Value = Sizing.Grow();
+            bar.AvoidsKeyboard.Value = true;
+            var field = bar.Child("Field").Sized(Sizing.Grow(), Sizing.Fixed(36f));
+            try
+            {
+                Frame();
+                Assert.AreEqual(Root.Size.y - 30f, field.DrawnRect.yMax, 0.5f, "the home indicator's room, with the keyboard down");
+                UIRoot.KeyboardHeight = 300f * Root.PixelsPerPoint;
+                Frame();
+                Assert.AreEqual(Root.Size.y - 300f, field.DrawnRect.yMax, 0.5f, "on the keyboard, with it up");
+                UIRoot.KeyboardHeight = 0f;
+                Frame();
+                Assert.AreEqual(Root.Size.y - 30f, field.DrawnRect.yMax, 0.5f);
+            }
+            finally
+            {
+                UIRoot.KeyboardHeight = 0f;
+            }
+        }
+
+        [Test]
         public void APresentedNodeIsLaidOutOverTheWholeRoot()
         {
             Root.Node.Pad(30f);
