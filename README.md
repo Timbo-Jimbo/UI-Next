@@ -40,7 +40,7 @@ button.Pressable(() =>
 - **Coming and going:** a node shown or hidden inside `UI.Animate` stays drawn while it leaves; `DisplayTransition` fades, grows or slides it.
 - **Presentations:** `Presentation` presents a node over everything as a sheet, an alert or a pushed or full-screen page, with a dim backdrop, back to dismiss, and the screens under a cover culled.
 - **Gestures:** `Pressable` (tap, long press, toggles, Interactable), `Draggable` (pan), `Pinchable` (two-finger pinch and turn), `ScrollView` (iOS deceleration, rubber band, paging, wheel), `ListView` (long lists that make only the rows near view).
-- **Text fields:** `node.TextField("Message", 16f, multiline: true, maxLines: 5)`; `Submitted`, `TextChanged`, `Config` (content type, return key, capitalisation, autocorrection), `MaxLength`.
+- **Text fields:** `node.TextField("Message", 16f, multiline: true, maxLines: 5)`; `Submitted`, `TextChanged`, `Config` (content type, return key, capitalisation, autocorrection), `MaxLength`. A node with `AvoidsKeyboard` keeps what is inside it above the software keyboard.
 - **Tools:** the state bar (*UI Next States* in the Scene view's overlays) previews interaction states, states and modes on the selected node in the Scene and Game views; `UISimulator` and `UICapture` run and capture frames outside play mode, for tests and screenshots.
 
 ## Demos
@@ -50,7 +50,6 @@ button.Pressable(() =>
 ## Known limits
 
 - Not tried on devices yet; the native keyboards, the IME and pinch with real fingers are untested.
-- No keyboard avoidance yet: the safe area reaches roots and presented screens, not nodes inside a full-bleed page.
 - No backdrop blur (materials): the UI draws straight into the back buffer, which the render graph cannot read back.
 - Lists without scroll anchoring: rows above the view measuring differently from their estimate move what is in view.
 - Masks are layers (flattened, then masked); coverage masks in tile memory are not built. No caching layers, no accessibility yet.
