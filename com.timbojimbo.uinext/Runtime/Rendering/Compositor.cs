@@ -51,7 +51,6 @@ namespace TimboJimbo.UINext
         private static readonly int InstanceOffsetId = Shader.PropertyToID("_InstanceOffset");
         private static readonly int MatrixId = Shader.PropertyToID("_UIMatrix");
         private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
-        private static readonly int TexSizeId = Shader.PropertyToID("_TexSize");
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
@@ -274,7 +273,6 @@ namespace TimboJimbo.UINext
                 properties.SetMatrix(MatrixId, matrix);
                 var texture = batch.Texture != null ? batch.Texture : Texture2D.whiteTexture;
                 properties.SetTexture(MainTexId, texture);
-                properties.SetVector(TexSizeId, new Vector4(texture.width, texture.height, 1f / Mathf.Max(1, texture.width), 1f / Mathf.Max(1, texture.height)));
                 cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, batch.Count, properties);
             }
         }

@@ -61,7 +61,6 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
             float4x4 _UIMatrix;
             Texture2D _MainTex;
             SamplerState sampler_MainTex;
-            float4 _TexSize;
 
             static const float2 kCorners[6] =
             {
@@ -101,16 +100,21 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                     rect = float4(rect.x, rect.y, slot.sizeOpacity.x - rect.x - rect.z, slot.sizeOpacity.y - rect.y - rect.w);
                 rect.zw = max(rect.zw, 0);
 
-                // Room around it for anti-aliasing (a pixel and a half, in its own units) and for a shadow's blur.
-                float margin = 1.5 * max(slot.sizeOpacity.w, 0.01) + (inst.type == 1u ? inst.params.y * 2.5 : 0);
+                // Room around it for anti-aliasing (a pixel and a half, in its own units) and for a shadow's blur; none
+                // for a glyph, whose quad has its own and whose neighbours in the atlas lie just past it.
+                bool glyph = inst.type >= 3u;
+                float margin = glyph ? 0 : 1.5 * max(slot.sizeOpacity.w, 0.01) + (inst.type == 1u ? inst.params.y * 2.5 : 0);
                 float2 corner = kCorners[vertexID % 6];
                 float2 p = rect.xy - margin + corner * (rect.zw + 2 * margin);
+                float2 t = (p - rect.xy) / max(rect.zw, 1e-5);
+                // Italic: a glyph's top is moved right by its skew.
+                if (glyph)
+                    p.x += inst.params.z * (1 - corner.y);
                 float2 root = float2(dot(slot.row0.xy, p) + slot.row0.z, dot(slot.row1.xy, p) + slot.row1.z);
 
                 o.position = mul(_UIMatrix, float4(root, 0, 1));
                 o.local = p - (rect.xy + rect.zw * 0.5);
                 o.root = root;
-                float2 t = (p - rect.xy) / max(rect.zw, 1e-5);
                 // Textures run up from their bottom; this space runs down.
                 o.uv = float2(inst.uv.x + t.x * inst.uv.z, inst.uv.y + (1 - t.y) * inst.uv.w);
                 o.halfSize = rect.zw * 0.5;
@@ -128,8 +132,11 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 float aa = max(max(localPixel.x, localPixel.y), 1e-5);
                 float2 rootPixel = fwidth(i.root);
                 float rootAA = max(max(rootPixel.x, rootPixel.y), 1e-5);
-                float2 texelPixel = fwidth(i.uv) * _TexSize.xy;
-                float4 tex = _MainTex.Sample(sampler_MainTex, i.uv);
+                // Kept inside its own part of the texture: an image's crop or a glyph's cell in its atlas.
+                float2 uvMin = min(inst.uv.xy, inst.uv.xy + inst.uv.zw);
+                float2 uvMax = max(inst.uv.xy, inst.uv.xy + inst.uv.zw);
+                float4 tex = _MainTex.Sample(sampler_MainTex, clamp(i.uv, uvMin, uvMax));
+                float fieldPixel = max(fwidth(tex.a), 1e-4);
 
                 float4 color = inst.color;
                 float coverage = 1;
@@ -165,15 +172,14 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 }
                 else if (inst.type == 3u)
                 {
-                    // The distance field holds 0.5 at the glyph's edge, spanning its range in texels either side.
-                    float range = max(inst.params.x, 1);
-                    float distance = (tex.a - 0.5) * 2 * range;
-                    float texels = max(length(texelPixel) * 0.70710678, 1e-5);
-                    coverage = saturate(distance / texels + 0.5);
+                    // The distance field holds 0.5 at the glyph's edge (less where synthetic bold widens it), resolved
+                    // over about a pixel by how fast the field changes on screen, so edges stay crisp at any size.
+                    coverage = saturate((tex.a - (0.5 - inst.params.y)) / fieldPixel + 0.5);
                 }
                 else
                 {
-                    color = float4(tex.rgb * inst.color.rgb, tex.a * inst.color.a);
+                    // A colour bitmap glyph (emoji): its own colours, the tint's alpha.
+                    color = tex * inst.color;
                 }
 
                 [unroll]

@@ -16,6 +16,17 @@ namespace TimboJimbo.UINext
         /// <summary>The node's laid-out size (where it is going), which content lays itself out at.</summary>
         public Vector2 Size => _node.Frame.Model.size;
 
+        /// <summary>Where content goes: the node's laid-out size inside its padding, in its own space.</summary>
+        public Rect ContentRect
+        {
+            get
+            {
+                var size = Size;
+                var padding = _node.Padding.Value;
+                return new Rect(padding.Left, padding.Top, Mathf.Max(0f, size.x - padding.Horizontal), Mathf.Max(0f, size.y - padding.Vertical));
+            }
+        }
+
         /// <summary>A rounded rect filling the node, inset by <paramref name="inset"/>, with an optional border inside its edge.</summary>
         public void FillNode(Color fill, CornerRadii radii, Insets inset = default, float borderWidth = 0f, Color border = default)
         {
@@ -105,16 +116,17 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
-        /// A glyph quad at <paramref name="rect"/> from an atlas: a signed distance field one with a distance range of
-        /// <paramref name="sdfRange"/> texels, or a bitmap one (colour emoji) when <paramref name="sdf"/> is false.
+        /// A glyph quad at <paramref name="rect"/> from an atlas, its top moved right by <paramref name="skew"/> (italic):
+        /// a signed distance field one, widened by <paramref name="dilate"/> (a share of the field, for synthetic bold),
+        /// or a colour bitmap one (emoji) when <paramref name="sdf"/> is false.
         /// </summary>
-        public void Glyph(Rect rect, Rect uv, Texture atlas, Color color, bool sdf, float sdfRange)
+        public void Glyph(Rect rect, float skew, Rect uv, Texture atlas, Color color, bool sdf, float dilate = 0f)
         {
             Add(new PrimitiveInstance
             {
                 Rect = new Vector4(rect.x, rect.y, rect.width, rect.height),
                 Color = color,
-                Params = new Vector4(sdfRange, 0f, 0f, 0f),
+                Params = new Vector4(0f, dilate, skew, 0f),
                 Uv = new Vector4(uv.x, uv.y, uv.width, uv.height),
                 Type = (uint)(sdf ? PrimitiveType.GlyphSdf : PrimitiveType.GlyphBitmap),
             }, atlas);
