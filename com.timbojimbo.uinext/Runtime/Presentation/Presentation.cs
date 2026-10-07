@@ -283,6 +283,8 @@ namespace TimboJimbo.UINext
         {
             base.OnDisable();
             UIInput.Back -= OnBack;
+            // A change still moving it is no longer its: when it finishes, its handlers find it is not the current one.
+            _change = null;
             if (_presented || s_stack.Contains(this))
             {
                 _presented = false;

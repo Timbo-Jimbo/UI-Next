@@ -38,13 +38,23 @@ namespace TimboJimbo.UINext
         public UIValue<ImageFit> Fit => _fit;
         public UIValue<CornerRadii> CornerRadii => _cornerRadii;
 
+        /// <summary>Its native size in points, scaled down to <paramref name="availableWidth"/> keeping its aspect when that is narrower.</summary>
         public Vector2 Measure(float availableWidth)
         {
+            Vector2 native;
             var sprite = _sprite.Value;
             if (sprite != null)
-                return sprite.rect.size * (100f / Mathf.Max(1f, sprite.pixelsPerUnit));
-            var texture = _texture.Value;
-            return texture != null ? new Vector2(texture.width, texture.height) : Vector2.zero;
+            {
+                native = sprite.rect.size * (100f / Mathf.Max(1f, sprite.pixelsPerUnit));
+            }
+            else
+            {
+                var texture = _texture.Value;
+                native = texture != null ? new Vector2(texture.width, texture.height) : Vector2.zero;
+            }
+            if (availableWidth >= 0f && native.x > availableWidth && native.x > 0f)
+                native *= availableWidth / native.x;
+            return native;
         }
 
         public float MinWidth => 0f;
