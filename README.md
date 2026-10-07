@@ -36,7 +36,7 @@ button.Pressable(() =>
 });
 ```
 
-- **Nodes:** `UINode` is layout and drawn transform (`Offset`, `Scale`, `Rotation`, `Opacity`, `ZIndex`, `Clips`, `TopLayer`) and filters (`GroupOpacity`, `Blur`, `Saturation`, `Brightness`); `UIRoot` sizes a tree to the screen. `UIBuild` builds trees from code; the inspector builds them by hand.
+- **Nodes:** `UINode` is layout and drawn transform (`Offset`, `Scale`, `Rotation`, `Opacity`, `ZIndex`, `Clips`, `TopLayer`) and filters (`GroupOpacity`, `Blur`, `Saturation`, `Brightness`, `Mask`); `UIRoot` sizes a tree to the screen. `UIBuild` builds trees from code; the inspector builds them by hand.
 - **Coming and going:** a node shown or hidden inside `UI.Animate` stays drawn while it leaves; `DisplayTransition` fades, grows or slides it.
 - **Presentations:** `Presentation` presents a node over everything as a sheet, an alert or a pushed or full-screen page, with a dim backdrop, back to dismiss, and the screens under a cover culled.
 - **Gestures:** `Pressable` (tap, long press, toggles, Interactable), `Draggable` (pan), `Pinchable` (two-finger pinch and turn), `ScrollView` (iOS deceleration, rubber band, paging, wheel), `ListView` (long lists that make only the rows near view).
@@ -53,4 +53,4 @@ button.Pressable(() =>
 - No keyboard avoidance yet: the safe area reaches roots and presented screens, not nodes inside a full-bleed page.
 - No backdrop blur (materials): the UI draws straight into the back buffer, which the render graph cannot read back.
 - Lists without scroll anchoring: rows above the view measuring differently from their estimate move what is in view.
-- No masks beyond rounded-rect clips, no caching layers, no accessibility yet.
+- Masks are layers (flattened, then masked); coverage masks in tile memory are not built. No caching layers, no accessibility yet.
