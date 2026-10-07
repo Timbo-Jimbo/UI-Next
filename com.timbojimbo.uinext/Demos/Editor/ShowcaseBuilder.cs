@@ -477,6 +477,15 @@ namespace TimboJimboEditor.UINext.Demos
                 row.Child("Text").Label("Row " + (i + 1), 16f, Text);
                 row.Pressable();
             }
+
+            var longDemo = Case(body, "Ten thousand rows (made as they scroll in)");
+            var longBox = longDemo.Child("Long list").Sized(Sizing.Grow(), Sizing.Fixed(300f));
+            longBox.Box(Card, 14f);
+            longBox.Clip(14f);
+            longBox.Scroll();
+            var longList = longBox.Add<ListView>();
+            longList.EstimatedRowHeight = 52f;
+            page.Add<LongListDemo>().Setup(longList, Text, Palette);
         }
 
         private static void PresentPage(UINode page, UINode body)

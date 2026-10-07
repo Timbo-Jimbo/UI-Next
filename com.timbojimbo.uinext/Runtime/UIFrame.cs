@@ -82,6 +82,7 @@ namespace TimboJimbo.UINext
         {
             FrameIndex++;
             UpdateRoots();
+            ListView.ReconcileAll();
             UIScheduler.Flush(Phase.Layout);
             if (dt > 0f)
             {
