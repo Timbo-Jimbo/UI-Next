@@ -72,6 +72,29 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void AGroupsImageCoversWhatItDrawsNotTheWholeRoot()
+        {
+            Root.Node.Pad(100f);
+            var group = Root.Node.Child("Group").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
+            group.GroupOpacity.Value = true;
+            group.Opacity.Value = 0.5f;
+            var box = group.Box(Color.white);
+            box.ShadowColor.Value = Color.black;
+            box.ShadowBlur.Value = 10f;
+            box.ShadowOffset.Value = new Vector2(0f, 40f);
+            Frame();
+            Assert.AreEqual(1, Compositor.Groups.Count);
+            // The box is at 100,100; its shadow is 40 lower, its blur reaching 25 past that.
+            var region = Compositor.Groups[0].Region;
+            Assert.LessOrEqual(region.xMin, 75f);
+            Assert.LessOrEqual(region.yMin, 100f);
+            Assert.GreaterOrEqual(region.xMax, 225f);
+            Assert.GreaterOrEqual(region.yMax, 265f);
+            Assert.Less(region.width, Root.Size.x);
+            Assert.Less(region.height, Root.Size.y);
+        }
+
+        [Test]
         public void APresentedNodeIsLaidOutOverTheWholeRoot()
         {
             Root.Node.Pad(30f);

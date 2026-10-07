@@ -31,9 +31,14 @@ namespace TimboJimbo.UINext
             public UITree Tree;
             public UINode Node;
             public RenderTexture Target;
+            // The part of its root, in points, its image covers.
+            public Rect Region;
             public int FirstBatch;
             public int BatchCount;
         }
+
+        // Group images grow and shrink in steps of this many pixels, and are kept while what they cover fits.
+        private const int GroupStep = 64;
 
         // The groups of this build, outermost first (draw them last first), and their batches.
         internal static readonly List<Group> Groups = new();
@@ -281,19 +286,81 @@ namespace TimboJimbo.UINext
         // A group's quad: covering its root (its slot is the root's), sampling the group's image at the group's opacity.
         private static void EmitGroupQuad(UITree tree, UINode node, int slotBase)
         {
-            var target = GroupTarget(Groups.Count, tree.Root);
-            Groups.Add(new Group { Tree = tree, Node = node, Target = target });
+            var root = tree.Root;
+            float scale = root.PixelsPerPoint;
+            // What the group covers, in its root's pixels: everything drawn in it, and the pixels its edges are
+            // smoothed over, within the root (nothing outside it is seen). Its image is that size, in steps, kept
+            // while it fits.
+            var bounds = GroupBounds(tree, node);
+            const float smoothing = 2f;
+            int x = Mathf.FloorToInt(Mathf.Max(0f, bounds.xMin * scale - smoothing));
+            int y = Mathf.FloorToInt(Mathf.Max(0f, bounds.yMin * scale - smoothing));
+            int xMax = Mathf.CeilToInt(Mathf.Min(root.Size.x * scale, bounds.xMax * scale + smoothing));
+            int yMax = Mathf.CeilToInt(Mathf.Min(root.Size.y * scale, bounds.yMax * scale + smoothing));
+            var target = GroupTarget(Groups.Count, Mathf.Max(1, xMax - x), Mathf.Max(1, yMax - y));
+            var region = new Rect(x / scale, y / scale, target.width / scale, target.height / scale);
+            Groups.Add(new Group { Tree = tree, Node = node, Target = target, Region = region });
             EnsureInstances(s_instanceCount + 1);
             s_instances[s_instanceCount] = new PrimitiveInstance
             {
+                Rect = new Vector4(region.x, region.y, region.width, region.height),
                 Color = new Color(1f, 1f, 1f, tree.GroupOpacities[node.Index]),
                 Uv = new Vector4(0f, 0f, 1f, 1f),
                 Slot = (uint)slotBase,
                 Type = (uint)PrimitiveType.Group,
-                Flags = (uint)PrimitiveFlags.RelativeToNode,
             };
             s_textures[s_instanceCount] = target;
             s_instanceCount++;
+        }
+
+        // The bounds of what a group draws, in its root's points: every primitive the walk puts in it (its nodes but
+        // hidden and presented ones, with what is inside them), placed as the shader places it.
+        private static Rect GroupBounds(UITree tree, UINode group)
+        {
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+            int end = tree.SubtreeEnd[group.Index];
+            for (int i = group.Index; i < end;)
+            {
+                var node = tree.Nodes[i];
+                if (!tree.Shown[i] || (node != group && node.PresentationLevel.Peek != 0))
+                {
+                    i = tree.SubtreeEnd[i];
+                    continue;
+                }
+                var size = (Vector2)tree.Slots[i].SizeOpacity;
+                Include(node.Instances, tree.World[i], size, ref min, ref max);
+                Include(node.OverlayInstances, tree.World[i], size, ref min, ref max);
+                i++;
+            }
+            return min.x > max.x ? Rect.zero : Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        }
+
+        // Grows the bounds by primitives of a node <paramref name="size"/> big at <paramref name="world"/>: each one's
+        // rect, a shadow's blur past it and an italic glyph's slant, as the shader draws them.
+        private static void Include(List<PrimitiveInstance> instances, Affine2 world, Vector2 size, ref Vector2 min, ref Vector2 max)
+        {
+            for (int k = 0; k < instances.Count; k++)
+            {
+                var instance = instances[k];
+                var rect = instance.Rect;
+                if ((instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0)
+                    rect = new Vector4(rect.x, rect.y, size.x - rect.x - rect.z, size.y - rect.y - rect.w);
+                float blur = instance.Type == (uint)PrimitiveType.Shadow ? instance.Params.y * 2.5f : 0f;
+                float left = rect.x - blur, top = rect.y - blur;
+                float right = rect.x + Mathf.Max(rect.z, 0f) + blur, bottom = rect.y + Mathf.Max(rect.w, 0f) + blur;
+                float slant = instance.Type >= (uint)PrimitiveType.GlyphSdf ? instance.Params.z : 0f;
+                Include(world.Apply(new Vector2(left + slant, top)), ref min, ref max);
+                Include(world.Apply(new Vector2(right + slant, top)), ref min, ref max);
+                Include(world.Apply(new Vector2(right, bottom)), ref min, ref max);
+                Include(world.Apply(new Vector2(left, bottom)), ref min, ref max);
+            }
+        }
+
+        private static void Include(Vector2 point, ref Vector2 min, ref Vector2 max)
+        {
+            min = Vector2.Min(min, point);
+            max = Vector2.Max(max, point);
         }
 
         // The nodes of a group in drawing order, for hit testing, without drawing them.
@@ -330,15 +397,18 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // The image the index-th group of a build is drawn to, at its root's size in pixels.
-        private static RenderTexture GroupTarget(int index, UIRoot root)
+        // The image the index-th group of a build is drawn to: at least width by height pixels, in steps, kept while
+        // it is big enough and not more than a step too big each way.
+        private static RenderTexture GroupTarget(int index, int width, int height)
         {
-            int width = Mathf.Max(1, Mathf.RoundToInt(root.PixelSize.x));
-            int height = Mathf.Max(1, Mathf.RoundToInt(root.PixelSize.y));
+            width = (width + GroupStep - 1) / GroupStep * GroupStep;
+            height = (height + GroupStep - 1) / GroupStep * GroupStep;
             while (s_groupTargets.Count <= index)
                 s_groupTargets.Add(null);
             var target = s_groupTargets[index];
-            if (target != null && target.width == width && target.height == height) return target;
+            if (target != null && target.width >= width && target.height >= height
+                && target.width <= width + GroupStep && target.height <= height + GroupStep)
+                return target;
             if (target != null)
             {
                 target.Release();
@@ -492,15 +562,18 @@ namespace TimboJimbo.UINext
         public static void Render(RasterCommandBuffer cmd, Camera camera, bool sceneView, bool flipped) =>
             Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped);
 
-        /// <summary>Draws the index-th group's image: what is in it, in its root's space, over a clear image.</summary>
+        /// <summary>Draws the index-th group's image: what is in it, the part of its root it covers, over a clear image.</summary>
         public static void RenderGroup(RasterCommandBuffer cmd, int index, bool flipped)
         {
             var group = Groups[index];
             cmd.ClearRenderTarget(false, true, Color.clear);
-            Draw(cmd, GroupBatches, group.FirstBatch, group.BatchCount, null, false, flipped);
+            var region = group.Region;
+            var matrix = GL.GetGPUProjectionMatrix(Matrix4x4.Ortho(region.xMin, region.xMax, region.yMax, region.yMin, -1f, 1f), flipped);
+            Draw(cmd, GroupBatches, group.FirstBatch, group.BatchCount, null, false, flipped, matrix);
         }
 
-        private static void Draw(RasterCommandBuffer cmd, List<Batch> batches, int first, int count, Camera camera, bool sceneView, bool flipped)
+        private static void Draw(RasterCommandBuffer cmd, List<Batch> batches, int first, int count, Camera camera, bool sceneView, bool flipped,
+            Matrix4x4? region = null)
         {
             var material = Material;
             if (material == null || count == 0 || s_instanceBuffer == null) return;
@@ -516,7 +589,7 @@ namespace TimboJimbo.UINext
                     // A root gone since the build: none of its batches are drawn.
                     skip = currentTree.Root == null;
                     if (!skip)
-                        matrix = MatrixFor(currentTree.Root, camera, sceneView, flipped);
+                        matrix = region ?? MatrixFor(currentTree.Root, camera, sceneView, flipped);
                 }
                 if (skip) continue;
                 var properties = s_properties;
