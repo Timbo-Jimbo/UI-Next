@@ -16,6 +16,7 @@
 - `Presentation`: sheets, alerts and pushed or full-screen pages in a stack, each laid out as a root of its own, with a dim backdrop, modality, back to dismiss, and culling below a cover in place
 - `DisplayTransition`: a node shown or hidden inside `UI.Animate` fades, grows or slides in and out
 - `UINode.GroupOpacity`: while not fully opaque, a node and everything inside it is drawn to an image of its own first and faded as one, so overlapping parts don't show through each other; nested groups and clips work, each image covers only what its group draws, and fully opaque it costs nothing
+- `UINode.Blur`: a node and everything inside it blurred as one image (dual Kawase passes on its group image), animated
 - Content cross-fades: inside `UI.Animate`, a change to a drawn value that cannot interpolate (a label's text, an image's sprite, a drawable's bool or enum) fades the node's old drawing out as the new one fades in
 - A state's enter and exit animations move everything it changes when it is set outside `UI.Animate`, token values included
 - `UIBuild`, extension methods for building trees from code
