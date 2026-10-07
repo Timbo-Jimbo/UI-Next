@@ -31,7 +31,11 @@ namespace TimboJimbo.UINext
             _enabled = true;
             var node = Node;
             foreach (var value in Values())
+            {
                 value.Attach(node);
+                if (value is IDrawnValue drawn)
+                    drawn.CrossFades = true;
+            }
             node.RegisterDrawable(this);
         }
 
@@ -101,6 +105,11 @@ namespace TimboJimbo.UINext
             _node.OverlayTextures.Clear();
             if (_node.Display.Value == DisplayMode.Visible || _node.Leaving.Value)
             {
+                // Cross-fading: the old drawing first, fading out, under the new one, fading in.
+                float t = _node.CrossFadeProgress();
+                if (t < 1f)
+                    _node.DrawOutgoing(1f - t);
+                int first = _node.Instances.Count, firstOverlay = _node.OverlayInstances.Count;
                 var painter = new Painter(_node);
                 var drawables = _node.Drawables;
                 for (int i = 0; i < drawables.Count; i++)
@@ -108,6 +117,11 @@ namespace TimboJimbo.UINext
                     var drawable = drawables[i];
                     if (drawable != null && drawable.isActiveAndEnabled)
                         drawable.Draw(painter);
+                }
+                if (t < 1f)
+                {
+                    UINode.Fade(_node.Instances, first, t);
+                    UINode.Fade(_node.OverlayInstances, firstOverlay, t);
                 }
             }
             Compositor.MarkInstancesDirty(_node.Tree);

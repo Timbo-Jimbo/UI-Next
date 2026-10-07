@@ -173,6 +173,12 @@ namespace TimboJimbo.UINext
         // Told when it comes into layout, with where it is laid out (a DisplayTransition bringing it in from there).
         [NonSerialized] internal Action<Rect> EnteredLayout;
 
+        // A cross-fade of its drawing: what it drew before, and how far the new drawing has faded in (made the first
+        // time it cross-fades).
+        [NonSerialized] private List<PrimitiveInstance> _outgoing;
+        [NonSerialized] private List<Texture> _outgoingTextures;
+        [NonSerialized] private AnimatedValue<float> _crossFade;
+
         // States it provides to itself and what is inside it.
         [NonSerialized] private Dictionary<UIState, bool> _states;
         [NonSerialized] private readonly Observable<int> _stateRevision = new();
@@ -335,6 +341,66 @@ namespace TimboJimbo.UINext
             if (Tree != null) return ParentNode;
             var parent = transform.parent;
             return parent != null && parent.TryGetComponent(out UINode node) && node.isActiveAndEnabled ? node : null;
+        }
+
+        /// <summary>
+        /// Cross-fades its drawing on <paramref name="animation"/>: what it draws now fades out as what it draws next
+        /// fades in. Called when a drawn value that cannot interpolate changes inside a change. Cross-fading already,
+        /// the drawing on its way out stays the one that was there first.
+        /// </summary>
+        internal void CrossFadeDrawing(UIAnimation animation)
+        {
+            if (Instances.Count == 0 && OverlayInstances.Count == 0) return;
+            _crossFade ??= new AnimatedValue<float>(1f, 0.002f, true);
+            if (!_crossFade.IsAnimating || _outgoing == null)
+            {
+                _outgoing ??= new List<PrimitiveInstance>();
+                _outgoingTextures ??= new List<Texture>();
+                _outgoing.Clear();
+                _outgoingTextures.Clear();
+                _outgoing.AddRange(Instances);
+                _outgoingTextures.AddRange(InstanceTextures);
+                _outgoing.AddRange(OverlayInstances);
+                _outgoingTextures.AddRange(OverlayTextures);
+            }
+            _crossFade.Jump(0f);
+            _crossFade.SpringTo(1f, Vector4.zero, animation);
+            DrawComputation?.Invalidate();
+        }
+
+        // How far the new drawing has faded in: 1 when it is not cross-fading. Tracked, so drawing follows it.
+        internal float CrossFadeProgress()
+        {
+            if (_crossFade == null || _outgoing == null) return 1f;
+            float t = Mathf.Clamp01(_crossFade.Value);
+            if (t >= 0.999f && !_crossFade.IsAnimating)
+            {
+                _outgoing.Clear();
+                return 1f;
+            }
+            return t;
+        }
+
+        // The drawing on its way out, at <paramref name="opacity"/>.
+        internal void DrawOutgoing(float opacity)
+        {
+            if (_outgoing == null || _outgoing.Count == 0) return;
+            int first = Instances.Count;
+            Instances.AddRange(_outgoing);
+            InstanceTextures.AddRange(_outgoingTextures);
+            Fade(Instances, first, opacity);
+        }
+
+        // Fades primitives from <paramref name="first"/> on to <paramref name="opacity"/> of what they were.
+        internal static void Fade(List<PrimitiveInstance> instances, int first, float opacity)
+        {
+            for (int i = first; i < instances.Count; i++)
+            {
+                var instance = instances[i];
+                instance.Color.w *= opacity;
+                instance.Color2.w *= opacity;
+                instances[i] = instance;
+            }
         }
 
         /// <summary>Its transition values, made if it has none yet (the tree composites it with them from now on).</summary>

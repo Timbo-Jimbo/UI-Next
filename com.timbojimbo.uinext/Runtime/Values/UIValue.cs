@@ -4,6 +4,12 @@ using UnityEngine;
 
 namespace TimboJimbo.UINext
 {
+    /// <summary>A value a drawable draws from: a change of it that cannot interpolate cross-fades the drawing.</summary>
+    internal interface IDrawnValue
+    {
+        bool CrossFades { set; }
+    }
+
     /// <summary>The non-generic face of every <see cref="UIValue{T}"/>, for the components that own them.</summary>
     public interface IUIValue
     {
@@ -24,7 +30,7 @@ namespace TimboJimbo.UINext
     /// where it is drawn, and a change inside <see cref="UI.Animate(UIAnimation, Action)"/> springs between them.
     /// </summary>
     [Serializable]
-    public class UIValue<T> : AnimatedValue<T>, IUIValue, ISerializationCallbackReceiver
+    public class UIValue<T> : AnimatedValue<T>, IUIValue, IDrawnValue, ISerializationCallbackReceiver
     {
         [SerializeField] private T _value;
         [SerializeField] private TokenAsset _token;
@@ -34,6 +40,7 @@ namespace TimboJimbo.UINext
         [NonSerialized] private UINode _owner;
         [NonSerialized] private Resolver _resolver;
         [NonSerialized] private int _winner = -1;
+        [NonSerialized] private bool _crossFades;
 
         public UIValue() { }
 
@@ -132,6 +139,19 @@ namespace TimboJimbo.UINext
         }
 
         void IUIValue.Refresh() => Resolve();
+
+        bool IDrawnValue.CrossFades
+        {
+            set => _crossFades = value;
+        }
+
+        // A drawable's value that cannot interpolate, changed on an animation (a label's text, an image's sprite):
+        // its node's old drawing fades out as the new one fades in.
+        private protected override void OnSnap(UIAnimation animation)
+        {
+            if (_crossFades && _owner != null)
+                _owner.CrossFadeDrawing(animation);
+        }
 
         void ISerializationCallbackReceiver.OnBeforeSerialize() { }
 

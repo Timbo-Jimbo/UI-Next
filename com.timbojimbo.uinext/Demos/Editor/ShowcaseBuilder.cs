@@ -264,7 +264,12 @@ namespace TimboJimboEditor.UINext.Demos
             }
             list.Clip(14f);
 
-            page.Add<AnimateDemo>().Setup(tracks, animations, card.Pressable(), toggles, items);
+            var fadeCase = Case(body, "Cross-fade: text cannot interpolate (tap it)");
+            var weather = fadeCase.Child("Weather").Pad(18f, 12f).Align(AlignX.Left, AlignY.Center);
+            weather.Box(Card, 14f);
+            var weatherText = weather.Child("Text").Label("☀️ Sunny", 22f, Text, bold: true);
+
+            page.Add<AnimateDemo>().Setup(tracks, animations, card.Pressable(), toggles, items, weather.Pressable(), weatherText);
         }
 
         private static void StatesPage(UINode page, UINode body)

@@ -117,6 +117,30 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void TextChangedInsideAnimateCrossFades()
+        {
+            var label = Root.Node.Child("Label").Label("One", 20f);
+            Frame();
+            int glyphs = label.Node.Instances.Count;
+            Assert.Greater(glyphs, 0);
+
+            UI.Animate(new UIAnimation(0.5f), () => label.Text.Value = "Two");
+            Frame(1f / 60f);
+            Frame(0.1f);
+            var instances = label.Node.Instances;
+            Assert.Greater(instances.Count, glyphs, "the old drawing and the new, while it cross-fades");
+            Assert.Less(instances[0].Color.w, 1f, "the old fading out");
+            Assert.Less(instances[instances.Count - 1].Color.w, 1f, "the new fading in");
+            Run(2f);
+            Assert.AreEqual(3, label.Node.Instances.Count, "just the new one once it has faded in");
+            Assert.AreEqual(1f, label.Node.Instances[0].Color.w, 1e-4f);
+
+            label.Text.Value = "Three";
+            Frame();
+            Assert.AreEqual(5, label.Node.Instances.Count, "outside a change, at once");
+        }
+
+        [Test]
         public void AChangeFinishesWhenEverythingItMovedHasLanded()
         {
             var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));

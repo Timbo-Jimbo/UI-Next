@@ -167,10 +167,15 @@ namespace TimboJimbo.UINext
             SpringStore.Stop(_slot, arrived: false);
         }
 
+        /// <summary>A change of a value that cannot interpolate was made on <paramref name="animation"/>.</summary>
+        private protected virtual void OnSnap(UIAnimation animation) { }
+
         private void Present(T previous, UIAnimation? implicitAnimation)
         {
             var transaction = UITransaction.Current;
             var animation = transaction?.Animation ?? implicitAnimation;
+            if (s_converter == null && UIFrame.Live && animation is { AtOnce: false } snapped)
+                OnSnap(snapped);
             bool animates = s_converter != null && UIFrame.Live && animation.HasValue && !animation.Value.AtOnce
                             && (_slot >= 0 || HasPresentationReaders || _alwaysAnimates);
             if (animates)

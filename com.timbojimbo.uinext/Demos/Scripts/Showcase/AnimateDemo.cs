@@ -16,14 +16,22 @@ namespace TimboJimbo.UINext.Demos.Showcase
         [SerializeField] private Pressable _card;
         [SerializeField] private List<Pressable> _toggles = new();
         [SerializeField] private List<UINode> _items = new();
+        [SerializeField] private Pressable _weather;
+        [SerializeField] private Label _weatherText;
 
-        public void Setup(List<Pressable> tracks, List<UIAnimation> animations, Pressable card, List<Pressable> toggles, List<UINode> items)
+        private static readonly string[] Weathers = { "☀️ Sunny", "⛅ Cloudy", "🌧️ Rainy", "❄️ Snowy" };
+        private int _weatherIndex;
+
+        public void Setup(List<Pressable> tracks, List<UIAnimation> animations, Pressable card, List<Pressable> toggles, List<UINode> items,
+            Pressable weather, Label weatherText)
         {
             _tracks = tracks;
             _animations = animations;
             _card = card;
             _toggles = toggles;
             _items = items;
+            _weather = weather;
+            _weatherText = weatherText;
         }
 
         private void OnEnable()
@@ -44,6 +52,11 @@ namespace TimboJimbo.UINext.Demos.Showcase
                 _toggles[i].Toggled += on => UI.Animate(UIAnimation.Snappy, () =>
                     item.Display.Value = on ? DisplayMode.None : DisplayMode.Visible);
             }
+            // Text cannot interpolate: changed inside Animate, the old text fades out as the new fades in, and the
+            // box springs to the new text's size.
+            if (_weather != null)
+                _weather.Tapped += () => UI.Animate(new UIAnimation(0.45f), () =>
+                    _weatherText.Text.Value = Weathers[_weatherIndex = (_weatherIndex + 1) % Weathers.Length]);
         }
     }
 }
