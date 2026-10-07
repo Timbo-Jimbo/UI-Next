@@ -233,7 +233,38 @@ namespace TimboJimboEditor.UINext.Demos
             below.Box(Card, 14f);
             below.Child("Text").Label("I move with it", 15f, Secondary);
 
-            page.Add<AnimateDemo>().Setup(tracks, animations, card.Pressable());
+            var comeGo = Case(body, "Appear and disappear (tap the toggles)").Column(10f);
+            var toggleRow = comeGo.Child("Toggles").Row(8f);
+            toggleRow.Width.Value = Sizing.Grow();
+            var toggles = new List<Pressable>();
+            var items = new List<UINode>();
+            var list = Panel(comeGo.Child("Items").Column(8f), 10f);
+            list.Width.Value = Sizing.Grow();
+            foreach (var (name, fade, scale, edge, colour) in new[]
+                     {
+                         ("Fades", true, 1f, DisplayEdge.None, Palette[0]), ("Grows", true, 0.6f, DisplayEdge.None, Palette[1]),
+                         ("Slides", false, 1f, DisplayEdge.Right, Palette[2]),
+                     })
+            {
+                // Each toggle hides its item; greyed while it is hidden.
+                var toggle = Button(toggleRow, name, Accent, Color.white);
+                toggle.Toggles = true;
+                toggle.Node.Width.Value = Sizing.Grow();
+                toggle.GetComponent<Box>().Fill.When(InteractionStates.Selected, new Color(0.62f, 0.62f, 0.66f));
+                toggles.Add(toggle);
+                var item = list.Child(name).Sized(Sizing.Grow(), Sizing.Fixed(44f)).Pad(14f, 0f).Align(AlignX.Left, AlignY.Center);
+                item.Box(colour, 12f);
+                item.Child("Title").Label(name, 16f, Color.white, bold: true);
+                var transition = item.Add<DisplayTransition>();
+                transition.Fade = fade;
+                transition.Scale = scale;
+                transition.Edge = edge;
+                transition.PastParent = edge != DisplayEdge.None;
+                items.Add(item);
+            }
+            list.Clip(14f);
+
+            page.Add<AnimateDemo>().Setup(tracks, animations, card.Pressable(), toggles, items);
         }
 
         private static void StatesPage(UINode page, UINode body)

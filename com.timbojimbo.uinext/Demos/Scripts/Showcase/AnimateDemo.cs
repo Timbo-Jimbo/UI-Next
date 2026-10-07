@@ -6,19 +6,24 @@ namespace TimboJimbo.UINext.Demos.Showcase
     /// <summary>
     /// Animate: each track's ball goes to the other end on its own spring when the track is tapped (its alignment
     /// changes inside UI.Animate, and layout moves it); tapped again mid-flight, it turns round from where it is, at
-    /// the speed it has. The card grows and shrinks, and what is below it moves with it.
+    /// the speed it has. The card grows and shrinks, and what is below it moves with it. Each toggle shows or hides
+    /// its item inside UI.Animate: it comes and goes by its DisplayTransition, and the others close up.
     /// </summary>
     public sealed class AnimateDemo : MonoBehaviour
     {
         [SerializeField] private List<Pressable> _tracks = new();
         [SerializeField] private List<UIAnimation> _animations = new();
         [SerializeField] private Pressable _card;
+        [SerializeField] private List<Pressable> _toggles = new();
+        [SerializeField] private List<UINode> _items = new();
 
-        public void Setup(List<Pressable> tracks, List<UIAnimation> animations, Pressable card)
+        public void Setup(List<Pressable> tracks, List<UIAnimation> animations, Pressable card, List<Pressable> toggles, List<UINode> items)
         {
             _tracks = tracks;
             _animations = animations;
             _card = card;
+            _toggles = toggles;
+            _items = items;
         }
 
         private void OnEnable()
@@ -33,6 +38,12 @@ namespace TimboJimbo.UINext.Demos.Showcase
             var card = _card.Node;
             _card.Tapped += () => UI.Animate(UIAnimation.Bouncy, () =>
                 card.Height.Value = card.Height.Peek.Value > 100f ? Sizing.Fixed(72f) : Sizing.Fixed(180f));
+            for (int i = 0; i < _toggles.Count && i < _items.Count; i++)
+            {
+                var item = _items[i];
+                _toggles[i].Toggled += on => UI.Animate(UIAnimation.Snappy, () =>
+                    item.Display.Value = on ? DisplayMode.None : DisplayMode.Visible);
+            }
         }
     }
 }

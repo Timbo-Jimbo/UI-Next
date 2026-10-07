@@ -96,8 +96,7 @@ namespace TimboJimbo.UINext
     }
 
     /// <summary>
-    /// The side a node slides past as it disappears, and in from as it appears (<see cref="DisplayEffect.Edge"/>): just
-    /// clearing its parent's rect as drawn, so it goes out of view where something clips at that edge.
+    /// The side a node slides past as it disappears, and in from as it appears (<see cref="DisplayTransition.Edge"/>).
     /// </summary>
     public enum DisplayEdge
     {

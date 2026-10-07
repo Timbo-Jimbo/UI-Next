@@ -152,6 +152,17 @@ namespace TimboJimbo.UINext
         // its ancestors' clips. Negative while it is being dismissed (drawn, but taking no pointers).
         [NonSerialized] internal readonly Observable<int> PresentationLevel = new();
 
+        // While it goes away by its DisplayTransition: out of layout (Display None) but still drawn where it was, taking
+        // no pointers, until the transition is over.
+        [NonSerialized] internal readonly Observable<bool> Leaving = new();
+
+        // The layout pass it was last laid out in: a node laid out in the pass before carries on from where it is drawn;
+        // one coming back into layout (or laid out for the first time) lands where it goes at once.
+        [NonSerialized] internal int LayoutPass = -1;
+
+        // Told when it comes into layout, with where it is laid out (a DisplayTransition bringing it in from there).
+        [NonSerialized] internal Action<Rect> EnteredLayout;
+
         // States it provides to itself and what is inside it.
         [NonSerialized] private Dictionary<UIState, bool> _states;
         [NonSerialized] private readonly Observable<int> _stateRevision = new();

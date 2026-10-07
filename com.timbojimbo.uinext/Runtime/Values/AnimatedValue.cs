@@ -148,6 +148,18 @@ namespace TimboJimbo.UINext
             _presentation.Notify();
         }
 
+        /// <summary>Puts it at <paramref name="value"/> at once, model and presentation, whatever change is being made.</summary>
+        internal void Jump(T value)
+        {
+            bool changed = !s_comparer.Equals(_model, value);
+            _model = value;
+            if (changed) NotifyChanged();
+            if (_slot >= 0)
+                SpringStore.Stop(_slot, arrived: false);
+            else if (changed)
+                _presentation.Notify();
+        }
+
         /// <summary>Puts its presentation where its model is, at rest, cutting short any change moving it.</summary>
         public void Settle()
         {

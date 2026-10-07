@@ -81,6 +81,40 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void ANodeHiddenInsideAnimateStaysDrawnWhileItGoes()
+        {
+            var column = Root.Node.Column();
+            var first = column.Child("First").Sized(Sizing.Fixed(100f), Sizing.Fixed(50f));
+            first.Box(Color.white);
+            var transition = first.Add<DisplayTransition>();
+            var second = column.Child("Second").Sized(Sizing.Fixed(100f), Sizing.Fixed(50f));
+            second.Box(Color.white);
+            Frame();
+
+            UI.Animate(new UIAnimation(0.4f), () => first.Display.Value = DisplayMode.None);
+            Assert.AreEqual(0f, second.LaidOutRect.y, "what was below closes up at once in layout");
+            Frame(1f / 60f);
+            Frame(0.1f);
+            Assert.IsTrue(first.Leaving.Peek);
+            int index = first.Index;
+            Assert.IsTrue(first.Tree.Shown[index], "still drawn while it goes");
+            Assert.Less(first.Tree.Slots[index].SizeOpacity.z, 1f, "fading");
+            Assert.Greater(second.PresentedRect.y, 0f, "and what was below springs up");
+            Run(2f);
+            Assert.IsFalse(first.Leaving.Peek);
+            Assert.IsFalse(first.Tree.Shown[first.Index]);
+
+            UI.Animate(new UIAnimation(0.4f), () => first.Display.Value = DisplayMode.Visible);
+            Assert.AreEqual(new Rect(0f, 0f, 100f, 50f), first.PresentedRect, "it comes back where it goes, not from where it was");
+            Frame(1f / 60f);
+            Frame(0.1f);
+            Assert.Less(first.Tree.Slots[first.Index].SizeOpacity.z, 1f, "fading in");
+            Run(2f);
+            Assert.AreEqual(1f, first.Tree.Slots[first.Index].SizeOpacity.z);
+            Object.DestroyImmediate(transition);
+        }
+
+        [Test]
         public void AChangeFinishesWhenEverythingItMovedHasLanded()
         {
             var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));

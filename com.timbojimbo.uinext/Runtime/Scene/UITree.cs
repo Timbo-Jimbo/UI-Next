@@ -42,6 +42,7 @@ namespace TimboJimbo.UINext
 
         private readonly LayoutComputation _layout;
         private readonly CompositeComputation _composite;
+        private int _pass;
         private bool _structureDirty = true;
         private DrivenRectTransformTracker _tracker;
 
@@ -203,7 +204,7 @@ namespace TimboJimbo.UINext
                 if (i >= Nodes.Count) continue;
                 var node = Nodes[i];
                 if (node == null || !Shown[i] || Slots[i].SizeOpacity.z <= 0.001f) continue;
-                if (!node.HitTestable.Peek) continue;
+                if (!node.HitTestable.Peek || node.Leaving.Peek) continue;
                 if (node.Drawables.Count == 0 && !node.TryGetComponent<IPointerHandler>(out _)) continue;
                 if (Contains(i, point, 0f) && InsideClips(i, point))
                     return i;
@@ -248,6 +249,7 @@ namespace TimboJimbo.UINext
 
             var rootSize = Root.SizeObservable.Value;
             var safeArea = Root.SafeAreaObservable.Value;
+            _pass++;
 
             // The tree, then every presented node in it on its own: a presented screen is laid out as a root is,
             // covering the root whatever its place in the hierarchy, its padding kept clear of the safe area.
@@ -333,7 +335,19 @@ namespace TimboJimbo.UINext
                 var node = Nodes[_solverToNode[k]];
                 ref var s = ref _solver[k];
                 var rect = k == 0 ? new Rect(0f, 0f, rootSize.x, rootSize.y) : s.Rect;
-                node.Frame.SetModel(rect, null);
+                // Laid out in the pass before, it carries on from where it is drawn (springing inside a change); coming
+                // back into layout, it is where it goes at once, and whatever brings it in starts from there.
+                bool carriesOn = node.LayoutPass == _pass - 1 || node.LayoutPass == _pass;
+                node.LayoutPass = _pass;
+                if (carriesOn)
+                {
+                    node.Frame.SetModel(rect, null);
+                }
+                else
+                {
+                    node.Frame.Jump(rect);
+                    node.EnteredLayout?.Invoke(rect);
+                }
                 if (k > 0)
                     WriteRectTransform(node.RectTransform, rect);
                 else if (start > 0)
@@ -395,7 +409,7 @@ namespace TimboJimbo.UINext
                     scale *= transition.Scale.Value;
                     opacity *= Mathf.Clamp01(transition.Opacity.Value);
                 }
-                bool shown = node.Display.Value == DisplayMode.Visible && (p < 0 || Shown[p]);
+                bool shown = (node.Display.Value == DisplayMode.Visible || node.Leaving.Value) && (p < 0 || Shown[p]);
                 // Lifted into the top layer or presented: out of its ancestors' clips.
                 bool topLayer = node.TopLayer.Value || node.PresentationLevel.Value != 0;
                 _ = node.ZIndex.Value;
