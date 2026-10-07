@@ -47,6 +47,23 @@ namespace TimboJimbo.UINext
         private static readonly List<int> s_trackIds = new();
         private static readonly List<IPointerHandler> s_handlers = new();
         private static readonly List<IPointerHandler> s_calling = new();
+
+        // Lists of handlers being called, lent out so a handler that sets off more calls (a claim, a move) gets its own,
+        // and given back for the next pointer event: moves come every frame a pointer is down.
+        private static readonly Stack<List<IPointerHandler>> s_lists = new();
+
+        private static List<IPointerHandler> Borrow(List<IPointerHandler> from)
+        {
+            var list = s_lists.Count > 0 ? s_lists.Pop() : new List<IPointerHandler>();
+            list.AddRange(from);
+            return list;
+        }
+
+        private static void GiveBack(List<IPointerHandler> list)
+        {
+            list.Clear();
+            s_lists.Push(list);
+        }
         private static readonly List<IHoverHandler> s_hovered = new();
         private static readonly List<IHoverHandler> s_hovering = new();
         private static readonly List<IHoverHandler> s_hoverScratch = new();
@@ -94,16 +111,15 @@ namespace TimboJimbo.UINext
             if (!track.Handlers.Contains(handler)) return false;
             track.Owner = handler;
             // A list of its own: a claim is often made from inside a handler Down is calling, from s_calling.
-            var others = new List<IPointerHandler>(track.Handlers.Count);
-            foreach (var other in track.Handlers)
-                if (other != handler)
-                    others.Add(other);
+            var others = Borrow(track.Handlers);
+            others.Remove(handler);
             track.Handlers.Clear();
             track.Handlers.Add(handler);
             var e = track.Event(track.Last, track.LastTime);
             foreach (var other in others)
                 if (Alive(other))
                     other.OnPointerCancel(in e);
+            GiveBack(others);
             return true;
         }
 
@@ -281,13 +297,14 @@ namespace TimboJimbo.UINext
             track.LastTime = time;
             track.Velocity.Add(point, time);
             var e = track.Event(point, time);
-            var calling = new List<IPointerHandler>(track.Handlers);
+            var calling = Borrow(track.Handlers);
             foreach (var handler in calling)
             {
                 if (!s_tracks.ContainsKey(pointerId) || !track.Handlers.Contains(handler)) continue;
                 if (Alive(handler))
                     handler.OnPointerMove(in e);
             }
+            GiveBack(calling);
         }
 
         internal static void Up(int pointerId, Vector2 screen, double time)
@@ -297,9 +314,11 @@ namespace TimboJimbo.UINext
             var point = track.Root != null ? track.Root.ScreenToRoot(screen) : track.Last;
             track.Velocity.Add(point, time);
             var e = track.Event(point, time);
-            foreach (var handler in track.Handlers.ToArray())
+            var calling = Borrow(track.Handlers);
+            foreach (var handler in calling)
                 if (Alive(handler))
                     handler.OnPointerUp(in e);
+            GiveBack(calling);
         }
 
         internal static void Cancel(int pointerId, double time)
@@ -307,9 +326,11 @@ namespace TimboJimbo.UINext
             if (!s_tracks.TryGetValue(pointerId, out var track)) return;
             s_tracks.Remove(pointerId);
             var e = track.Event(track.Last, time);
-            foreach (var handler in track.Handlers.ToArray())
+            var calling = Borrow(track.Handlers);
+            foreach (var handler in calling)
                 if (Alive(handler))
                     handler.OnPointerCancel(in e);
+            GiveBack(calling);
         }
 
         /// <summary>Asks for back, as Escape does: the latest handler that takes it acts on it.</summary>
