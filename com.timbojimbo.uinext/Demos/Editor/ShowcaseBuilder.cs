@@ -113,6 +113,8 @@ namespace TimboJimboEditor.UINext.Demos
             title_.Node.Width.Value = Sizing.Grow();
             var body = content.Child("Body").Sized(Sizing.Grow(), Sizing.Grow()).Column(22f).Pad(new Insets(16f, 16f, 16f, 40f));
             body.Scroll();
+            // Room past what it holds for the keyboard, so a field near its end can scroll up above it.
+            body.AvoidsKeyboard.Value = true;
             return (page, back.Pressable(), body);
         }
 

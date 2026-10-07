@@ -110,6 +110,9 @@ namespace TimboJimbo.UINext
         // The caret is to be brought into view as the text is next drawn (it moved, or the text changed).
         [NonSerialized] internal bool Reveal;
 
+        // The keyboard's height (screen pixels) the field was last kept above; NaN to keep it above the keyboard again.
+        [NonSerialized] private float _keptAbove = float.NaN;
+
         /// <summary>Its node: the part of the screen its text is seen through, which clips it.</summary>
         public UINode Node => _node != null ? _node : _node = GetComponent<UINode>();
 
@@ -244,6 +247,7 @@ namespace TimboJimbo.UINext
             _blinkFrom = Time.unscaledTime;
             _caretOn.Value = true;
             Reveal = true;
+            _keptAbove = float.NaN;
             UIFocus.FirstResponder = Pressable;
             TextInputSystem.Begin(this);
             // The field whose session that ended may have taken the keyboard straight back, which ended this one's.
@@ -350,9 +354,40 @@ namespace TimboJimbo.UINext
             }
             if (_selecting && !UIInput.IsOver(Node, _pointerAt))
                 DragSelectTo(_pointerAt);
+            if (UIRoot.KeyboardHeight != _keptAbove)
+            {
+                _keptAbove = UIRoot.KeyboardHeight;
+                KeepAboveKeyboard();
+            }
             bool on = BlinkOn();
             if (_caretOn.Peek != on)
                 _caretOn.Value = on;
+        }
+
+        // Scrolls the nearest scroll view the field is in the least it takes to show the field within it and above the
+        // keyboard, as iOS brings the field being edited into view as editing begins and as its keyboard rises: once
+        // when editing begins, and each frame the keyboard's height changes. A scroll view that avoids the keyboard has
+        // room past what it holds for it.
+        private void KeepAboveKeyboard()
+        {
+            var node = Node;
+            var root = node.Tree?.Root;
+            if (root == null) return;
+            const float margin = 12f;
+            float keyboardTop = root.Size.y - UIRoot.KeyboardHeight / root.PixelsPerPoint;
+            for (var n = node.Parent; n != null; n = n.Parent)
+            {
+                var scroller = n.Scroller;
+                if (scroller == null || !scroller.isActiveAndEnabled) continue;
+                var view = n.DrawnRect;
+                var field = node.DrawnRect;
+                float bottom = Mathf.Min(view.yMax, keyboardTop) - margin;
+                float top = view.yMin + margin;
+                float by = field.yMax > bottom ? field.yMax - bottom : field.yMin < top ? field.yMin - top : 0f;
+                if (Mathf.Abs(by) > 0.5f)
+                    scroller.ScrollTo(scroller.ContentOffset + new Vector2(0f, by));
+                return;
+            }
         }
 
         private bool BlinkOn()
