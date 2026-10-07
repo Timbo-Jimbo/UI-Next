@@ -4,7 +4,9 @@
     "references": [
         "TimboJimbo.UINext",
         "TimboJimbo.UI.Text.Runtime",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "TimboJimbo.UINext.TextInput",
+        "TimboJimbo.UI.TextInput.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -13,6 +15,12 @@
     "precompiledReferences": [],
     "autoReferenced": false,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.timbojimbo.ui.textinput",
+            "expression": "0.1.0",
+            "define": "UINEXT_TEXTINPUT"
+        }
+    ],
     "noEngineReferences": false
 }

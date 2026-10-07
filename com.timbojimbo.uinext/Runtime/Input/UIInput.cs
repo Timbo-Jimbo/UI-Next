@@ -163,8 +163,18 @@ namespace TimboJimbo.UINext
 
             var keyboard = Keyboard.current;
             var gamepad = Gamepad.current;
-            if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame) || (gamepad != null && gamepad.buttonEast.wasPressedThisFrame))
+            bool escape = keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+            bool east = gamepad != null && gamepad.buttonEast.wasPressedThisFrame;
+            // While something is typed into, Escape is its own (it ends the editing) and B lets it go, as Escape would.
+            if (UIFocus.KeysTaken)
+            {
+                if (east)
+                    UIFocus.FirstResponder = null;
+            }
+            else if (escape || east)
+            {
                 GoBack();
+            }
             UIFocus.Poll(now);
 
             var pen = Pen.current;

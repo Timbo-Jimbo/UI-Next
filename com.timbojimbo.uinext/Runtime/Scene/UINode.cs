@@ -225,6 +225,22 @@ namespace TimboJimbo.UINext
             }
         }
 
+        /// <summary>A point in its root's points as a point in its own space, as it is drawn (as of the last frame).</summary>
+        public Vector2 RootToLocal(Vector2 point)
+        {
+            var tree = Tree;
+            if (tree == null || Index < 0 || Index >= tree.Nodes.Count) return point - Frame.Peek.position;
+            return tree.World[Index].Inverse.Apply(point);
+        }
+
+        /// <summary>A point in its own space as a point in its root's points, as it is drawn (as of the last frame).</summary>
+        public Vector2 LocalToRoot(Vector2 point)
+        {
+            var tree = Tree;
+            if (tree == null || Index < 0 || Index >= tree.Nodes.Count) return point + Frame.Peek.position;
+            return tree.World[Index].Apply(point);
+        }
+
         // ── States ───────────────────────────────────────────────────────────────
 
         /// <summary>

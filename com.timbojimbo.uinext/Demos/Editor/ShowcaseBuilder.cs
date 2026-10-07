@@ -406,7 +406,37 @@ namespace TimboJimboEditor.UINext.Demos
             scripts.Child("Emoji").Label("Emoji 🎉🚀✨🦊", 18f, Text);
             scripts.Child("Scripts").Label("Ελληνικά · 日本語 · 한국어", 18f, Text);
             scripts.Child("Right to left").Label("مرحبا بالعالم · שלום עולם", 18f, Text);
+
+#if UINEXT_TEXTINPUT
+            var fields = Panel(Case(body, "Text fields (tap one)").Column(10f), 14f);
+            Field(fields, "Name", "Your name");
+            var password = Field(fields, "Password", "Password");
+            var secure = password.Config;
+            secure.ContentType = TimboJimbo.UI.TextInput.TextContentType.Password;
+            password.Config = secure;
+            Field(fields, "Note", "A note that grows to four lines", multiline: true, maxLines: 4);
+#endif
         }
+
+#if UINEXT_TEXTINPUT
+        // A field on a soft grey ground whose border lights up while it is typed into.
+        private static TextField Field(UINode parent, string name, string placeholder, bool multiline = false, int maxLines = 5)
+        {
+            var node = parent.Child(name);
+            node.Width.Value = Sizing.Grow();
+            var field = node.TextField(placeholder, 16f, multiline, maxLines, Insets.Symmetric(12f, 10f));
+            node.ClipRadii.Value = 10f;
+            var box = node.Box(new Color(0.47f, 0.47f, 0.5f, 0.1f), 10f);
+            box.BorderWidth.Value = 1.5f;
+            box.BorderColor.Value = new Color(Accent.r, Accent.g, Accent.b, 0f);
+            box.BorderColor.When(InteractionStates.Focused, Accent);
+            field.Color.Value = Text;
+            field.PlaceholderColor.Value = new Color(Secondary.r, Secondary.g, Secondary.b, 0.6f);
+            field.CaretColor.Value = Accent;
+            field.SelectionColor.Value = new Color(Accent.r, Accent.g, Accent.b, 0.25f);
+            return field;
+        }
+#endif
 
         private static void ScrollPage(UINode page, UINode body)
         {

@@ -11,7 +11,7 @@ namespace TimboJimbo.UINext
     /// (A) press the focused one. Only the topmost presentation's buttons can take it (a dialog keeps focus inside
     /// itself). It shows only while it is being used (focus-visible): the focused button is Focused while a key or a
     /// gamepad moved it there, and stops being so when a pointer is used. A button moved to inside a scroll view is
-    /// scrolled into view.
+    /// scrolled into view. While something is typed into (<see cref="FirstResponder"/>), the keys are its own.
     /// </summary>
     public static class UIFocus
     {
@@ -25,6 +25,13 @@ namespace TimboJimbo.UINext
         private static Vector2 s_heldDirection;
         private static double s_nextRepeat;
         private static bool s_submitting;
+        private static Pressable s_firstResponder;
+
+        // A submit key held since something was typed into, kept from pressing until it is let go.
+        private static bool s_swallowing;
+
+        // The frame something typed into last let go of the keys: they were its own all that frame.
+        private static int s_resignedFrame = -1;
 
         /// <summary>Raised when focus moves, with the button it moved to (null when it is cleared).</summary>
         public static event Action<Pressable> Changed;
@@ -35,6 +42,34 @@ namespace TimboJimbo.UINext
         /// <summary>Whether focus is showing: a key or a gamepad moved it, and no pointer has been used since.</summary>
         public static bool IsVisible => s_visible && Focused != null;
 
+        /// <summary>
+        /// What is being typed into, as UIKit's first responder: the button of a text field being edited, or null.
+        /// Setting it focuses it. While there is one, the keys are its own: the arrows, Enter and Space neither move nor
+        /// press focus, and Escape does not go back (the field ends its editing). Tab still moves focus on, and focus
+        /// moving off it, or a gamepad's East button (B), lets it go. It shows as Focused while it is typed into,
+        /// whatever is used meanwhile, as a browser shows a text box's focus.
+        /// </summary>
+        public static Pressable FirstResponder
+        {
+            get => s_firstResponder != null ? s_firstResponder : null;
+            set
+            {
+                var previous = FirstResponder;
+                if (value == previous) return;
+                s_firstResponder = value;
+                if (previous != null)
+                {
+                    s_resignedFrame = Time.frameCount;
+                    previous.Node.SetInteraction(InteractionStates.Focused, previous == Focused && s_visible);
+                }
+                if (value != null)
+                    Focus(value, s_visible);
+            }
+        }
+
+        // Whether the keys are something's to type with this frame: it is typed into, or let go of them this frame.
+        internal static bool KeysTaken => FirstResponder != null || s_resignedFrame == Time.frameCount;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
         {
@@ -42,6 +77,9 @@ namespace TimboJimbo.UINext
             s_visible = false;
             s_heldDirection = Vector2.zero;
             s_submitting = false;
+            s_firstResponder = null;
+            s_swallowing = false;
+            s_resignedFrame = -1;
         }
 
         /// <summary>Focuses <paramref name="target"/>, showing it unless told not to.</summary>
@@ -49,6 +87,14 @@ namespace TimboJimbo.UINext
         {
             if (Focused != target)
             {
+                // Focus moving off what is typed into lets it go.
+                if (FirstResponder != null && target != FirstResponder)
+                {
+                    var responder = FirstResponder;
+                    s_firstResponder = null;
+                    s_resignedFrame = Time.frameCount;
+                    responder.Node.SetInteraction(InteractionStates.Focused, false);
+                }
                 SetShown(false);
                 s_focused = target;
                 if (target != null)
@@ -158,7 +204,7 @@ namespace TimboJimbo.UINext
         {
             var focused = Focused;
             if (focused != null)
-                focused.Node.SetInteraction(InteractionStates.Focused, shown);
+                focused.Node.SetInteraction(InteractionStates.Focused, shown || focused == FirstResponder);
         }
 
         // Scrolls every scroll view the node is inside, innermost first, until it is in view.
@@ -188,6 +234,7 @@ namespace TimboJimbo.UINext
         {
             var keyboard = Keyboard.current;
             var gamepad = Gamepad.current;
+            bool taken = KeysTaken;
             var direction = Vector2.zero;
             if (keyboard != null)
             {
@@ -208,6 +255,27 @@ namespace TimboJimbo.UINext
             if (direction != Vector2.zero)
                 direction = Mathf.Abs(direction.x) >= Mathf.Abs(direction.y) ? new Vector2(Mathf.Sign(direction.x), 0f) : new Vector2(0f, Mathf.Sign(direction.y));
 
+            bool submit = (keyboard != null && (keyboard.enterKey.isPressed || keyboard.numpadEnterKey.isPressed || keyboard.spaceKey.isPressed))
+                          || (gamepad != null && gamepad.buttonSouth.isPressed);
+            // While something is typed into, the keys are its own; those held as it lets go stay its own until they
+            // are let go of too (the Enter that submitted a field does not press it again, the arrow that moved its
+            // caret does not move focus).
+            if (taken)
+            {
+                s_heldDirection = direction;
+                s_nextRepeat = double.MaxValue;
+                s_swallowing = submit;
+                if (s_submitting && Focused != null)
+                    Focused.Node.SetInteraction(InteractionStates.Pressed, false);
+                s_submitting = false;
+                return;
+            }
+            if (s_swallowing)
+            {
+                s_swallowing = submit;
+                submit = false;
+            }
+
             if (direction != s_heldDirection)
             {
                 s_heldDirection = direction;
@@ -221,8 +289,6 @@ namespace TimboJimbo.UINext
                 Move(direction);
             }
 
-            bool submit = (keyboard != null && (keyboard.enterKey.isPressed || keyboard.numpadEnterKey.isPressed || keyboard.spaceKey.isPressed))
-                          || (gamepad != null && gamepad.buttonSouth.isPressed);
             var focused = Focused;
             if (submit && !s_submitting)
             {

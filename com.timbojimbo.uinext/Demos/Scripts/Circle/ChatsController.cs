@@ -6,8 +6,8 @@ namespace TimboJimbo.UINext.Demos.Circle
     /// <summary>
     /// Circle's chats: tapping a row pushes its conversation over the list (a Cover presentation that slides in, the
     /// list culled once it is in place). Back, the back button or a swipe from anywhere in it to the right takes it
-    /// away again, following the finger. Quick replies add a bubble that pops in at the end of the thread, which
-    /// scrolls to it.
+    /// away again, following the finger. Quick replies, and what is typed in the composer, add a bubble that pops in at
+    /// the end of the thread, which scrolls to it.
     /// </summary>
     public sealed class ChatsController : MonoBehaviour
     {
@@ -24,6 +24,10 @@ namespace TimboJimbo.UINext.Demos.Circle
         [SerializeField] private ColorToken _bubble;
         [SerializeField] private ColorToken _text;
         [SerializeField] private Color _mine = new(0.2f, 0.47f, 0.96f);
+#if UINEXT_TEXTINPUT
+        [SerializeField] private TextField _composer;
+        [SerializeField] private Pressable _send;
+#endif
 
         private Draggable _swipe;
 
@@ -45,8 +49,37 @@ namespace TimboJimbo.UINext.Demos.Circle
             _mine = mine;
         }
 
+#if UINEXT_TEXTINPUT
+        public void SetupComposer(TextField composer, Pressable send)
+        {
+            _composer = composer;
+            _send = send;
+        }
+
+        // Return sends (and typing carries on, as in Messages), as does the send button, lit while there is text.
+        private void SendTyped(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            Send(text.Trim());
+            _composer.Text = "";
+        }
+
+        private void SendComposer() => SendTyped(_composer.Text);
+
+        private void OnTyped(string text) => _send.Interactable.Value = !string.IsNullOrWhiteSpace(text);
+#endif
+
         private void OnEnable()
         {
+#if UINEXT_TEXTINPUT
+            if (_composer != null && _send != null)
+            {
+                _composer.Submitted.AddListener(SendTyped);
+                _composer.TextChanged.AddListener(OnTyped);
+                _send.Tapped += SendComposer;
+                OnTyped(_composer.Text);
+            }
+#endif
             for (int i = 0; i < _rows.Count; i++)
             {
                 int index = i;
@@ -70,6 +103,14 @@ namespace TimboJimbo.UINext.Demos.Circle
 
         private void OnDisable()
         {
+#if UINEXT_TEXTINPUT
+            if (_composer != null && _send != null)
+            {
+                _composer.Submitted.RemoveListener(SendTyped);
+                _composer.TextChanged.RemoveListener(OnTyped);
+                _send.Tapped -= SendComposer;
+            }
+#endif
             _back.Tapped -= Close;
             if (_swipe != null)
             {
@@ -103,7 +144,14 @@ namespace TimboJimbo.UINext.Demos.Circle
             _threadScroll.ScrollTo(new Vector2(0f, _threadScroll.Range.y), animated: false);
         }
 
-        public void Close() => _conversation.Dismiss();
+        public void Close()
+        {
+#if UINEXT_TEXTINPUT
+            if (_composer != null)
+                _composer.EndEditing();
+#endif
+            _conversation.Dismiss();
+        }
 
         /// <summary>Sends <paramref name="text"/>: a bubble of mine pops in at the end, and the thread scrolls to it.</summary>
         public void Send(string text)

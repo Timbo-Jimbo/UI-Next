@@ -62,8 +62,12 @@ namespace TimboJimboEditor.UINext
             return tree.World[node.Index].Apply(size * 0.5f);
         }
 
+        /// <summary>Presses at <paramref name="point"/>: a finger, or the mouse or a pen for their ids (UIInput.MouseId, PenId).</summary>
         public static void Press(UIRoot root, Vector2 point, int pointer = UIInput.TouchIdBase) =>
-            UIInput.Down(pointer, PointerKind.Touch, ToScreen(root, point), s_time);
+            UIInput.Down(pointer, KindOf(pointer), ToScreen(root, point), s_time);
+
+        private static PointerKind KindOf(int pointer) =>
+            pointer == UIInput.MouseId ? PointerKind.Mouse : pointer == UIInput.PenId ? PointerKind.Pen : PointerKind.Touch;
 
         public static void Move(UIRoot root, Vector2 point, int pointer = UIInput.TouchIdBase) =>
             UIInput.Move(pointer, ToScreen(root, point), s_time);

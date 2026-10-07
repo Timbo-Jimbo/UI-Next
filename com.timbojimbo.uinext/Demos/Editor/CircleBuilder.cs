@@ -317,7 +317,11 @@ namespace TimboJimboEditor.UINext.Demos
             var thread = content.Child("Thread").Sized(Sizing.Grow(), Sizing.Grow()).Column(8f).Pad(16f);
             var threadScroll = thread.Scroll();
 
+#if UINEXT_TEXTINPUT
+            var replies = content.Child("Replies").Row(8f).Pad(new Insets(16f, 16f, 8f, 4f));
+#else
             var replies = content.Child("Replies").Row(8f).Pad(new Insets(16f, 16f, 10f, 30f));
+#endif
             replies.Width.Value = Sizing.Grow();
             var replyButtons = new List<Pressable>();
             foreach (var reply in CircleData.Replies)
@@ -331,6 +335,33 @@ namespace TimboJimboEditor.UINext.Demos
 
             controller.Setup(rows, presentation, content, backPressable, avatar.GetComponent<Box>(),
                 avatar.transform.GetChild(0).GetComponent<Label>(), name, thread, threadScroll, replyButtons, s_bubble, s_text, Accent);
+
+#if UINEXT_TEXTINPUT
+            // The composer: a pill that grows with its lines, and a send button lit while there is something to send.
+            var composer = content.Child("Composer").Row(8f).Pad(new Insets(12f, 12f, 6f, 30f)).Align(AlignX.Left, AlignY.Bottom);
+            composer.Width.Value = Sizing.Grow();
+            var input = composer.Child("Input");
+            input.Width.Value = Sizing.Grow();
+            var field = input.TextField("Message", 16f, multiline: true, maxLines: 5, padding: Insets.Symmetric(14f, 9f));
+            input.ClipRadii.Value = 18f;
+            var inputBox = input.Box(Color.white, 18f);
+            inputBox.Fill.Token = s_card;
+            inputBox.BorderWidth.Value = 1f;
+            inputBox.BorderColor.Token = s_subtle;
+            field.Color.Token = s_text;
+            field.PlaceholderColor.Token = s_secondary;
+            field.CaretColor.Value = Accent;
+            field.SelectionColor.Value = new Color(Accent.r, Accent.g, Accent.b, 0.25f);
+            var config = field.Config;
+            config.ReturnKey = TimboJimbo.UI.TextInput.TextReturnKey.Send;
+            field.Config = config;
+            var send = composer.Child("Send").Sized(Sizing.Fixed(36f), Sizing.Fixed(36f)).Center();
+            var sendBox = send.Box(Accent, 18f);
+            sendBox.Fill.When(InteractionStates.Disabled, new Color(0.47f, 0.47f, 0.5f, 0.35f));
+            sendBox.Fill.When(InteractionStates.Pressed, Color.Lerp(Accent, Color.black, 0.25f));
+            send.Child("Arrow").Label("↑", 19f, Color.white, bold: true);
+            controller.SetupComposer(field, send.Pressable());
+#endif
             return presentation;
         }
 

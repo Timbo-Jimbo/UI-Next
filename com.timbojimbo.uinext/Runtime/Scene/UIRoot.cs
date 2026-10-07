@@ -84,6 +84,10 @@ namespace TimboJimbo.UINext
         public Vector2 ScreenToRoot(Vector2 screen) =>
             new(screen.x / PixelsPerPoint, (PixelSize.y - screen.y) / PixelsPerPoint);
 
+        /// <summary>A point in its space (points, y down from the top) on screen (pixels, y up from the bottom).</summary>
+        public Vector2 RootToScreen(Vector2 point) =>
+            new(point.x * PixelsPerPoint, PixelSize.y - point.y * PixelsPerPoint);
+
         private void OnEnable()
         {
             _tracker.Add(this, Node.RectTransform, DrivenTransformProperties.Pivot | DrivenTransformProperties.SizeDelta);
