@@ -22,6 +22,8 @@ namespace TimboJimbo.UINext
         /// <summary>The same on every side.</summary>
         public static Insets All(float inset) => new(inset, inset, inset, inset);
 
+        public override string ToString() => $"(left {Left}, right {Right}, top {Top}, bottom {Bottom})";
+
         /// <summary><paramref name="horizontal"/> left and right, <paramref name="vertical"/> top and bottom.</summary>
         public static Insets Symmetric(float horizontal, float vertical) => new(horizontal, horizontal, vertical, vertical);
 

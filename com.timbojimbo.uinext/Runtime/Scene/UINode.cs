@@ -178,6 +178,26 @@ namespace TimboJimbo.UINext
         /// <summary>Its size as laid out, in points.</summary>
         public Vector2 Size => Frame.Model.size;
 
+        /// <summary>
+        /// Where it is drawn now, in its root's points: the bounds of its rect as drawn, moved, scaled and turned with
+        /// everything above it, as of the last frame. For flying something from where this is (a photo opening).
+        /// </summary>
+        public Rect DrawnRect
+        {
+            get
+            {
+                var tree = Tree;
+                if (tree == null || Index < 0 || Index >= tree.Nodes.Count) return Frame.Peek;
+                var world = tree.World[Index];
+                var size = (Vector2)tree.Slots[Index].SizeOpacity;
+                Vector2 a = world.Apply(Vector2.zero), b = world.Apply(new Vector2(size.x, 0f));
+                Vector2 c = world.Apply(size), d = world.Apply(new Vector2(0f, size.y));
+                var min = Vector2.Min(Vector2.Min(a, b), Vector2.Min(c, d));
+                var max = Vector2.Max(Vector2.Max(a, b), Vector2.Max(c, d));
+                return new Rect(min, max - min);
+            }
+        }
+
         // ── States ───────────────────────────────────────────────────────────────
 
         /// <summary>

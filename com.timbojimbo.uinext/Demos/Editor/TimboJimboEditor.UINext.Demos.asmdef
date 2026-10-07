@@ -1,0 +1,22 @@
+{
+    "name": "TimboJimboEditor.UINext.Demos",
+    "rootNamespace": "TimboJimboEditor.UINext.Demos",
+    "references": [
+        "TimboJimbo.UINext",
+        "TimboJimbo.UINext.Demos",
+        "TimboJimboEditor.UINext",
+        "TimboJimbo.UI.Text.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

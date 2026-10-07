@@ -278,8 +278,10 @@ namespace TimboJimbo.UINext
             var offset = Offset.Peek;
             if (_snap.Peek == ScrollSnap.Pages)
             {
-                Offset.SpringTo(PageFor(offset, velocity), velocity, PageTurn);
+                var page = PageFor(offset, velocity);
+                Offset.SpringTo(page, velocity, PageTurn);
                 HideIndicators();
+                Scrolled?.Invoke(page);
                 return;
             }
             var clamped = Clamp(offset);

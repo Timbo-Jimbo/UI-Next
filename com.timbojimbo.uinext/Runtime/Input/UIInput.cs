@@ -51,7 +51,6 @@ namespace TimboJimbo.UINext
         private static readonly List<IHoverHandler> s_hovering = new();
         private static readonly List<IHoverHandler> s_hoverScratch = new();
         private static readonly List<IScrollHandler> s_scrollScratch = new();
-        private static bool s_hooked;
         private static bool s_mouseDown;
         private static bool s_penDown;
 
@@ -69,10 +68,12 @@ namespace TimboJimbo.UINext
             s_mouseDown = s_penDown = false;
         }
 
+        // Hooked again on every entry to play mode, as well as when the first root wakes in the editor: without a domain
+        // reload, nothing else says the Input System still holds the callback.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         internal static void Hook()
         {
-            if (s_hooked) return;
-            s_hooked = true;
+            InputSystem.onAfterUpdate -= OnAfterUpdate;
             InputSystem.onAfterUpdate += OnAfterUpdate;
         }
 

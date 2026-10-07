@@ -46,6 +46,9 @@ namespace TimboJimbo.UINext
 
         private UINode _node;
 
+        // Its RectTransform's size and pivot are the stack's, as a canvas's are: driven, so changing them dirties nothing.
+        private DrivenRectTransformTracker _tracker;
+
         /// <summary>Its node: the top of its tree.</summary>
         public UINode Node => _node != null ? _node : _node = GetComponent<UINode>();
 
@@ -83,6 +86,7 @@ namespace TimboJimbo.UINext
 
         private void OnEnable()
         {
+            _tracker.Add(this, Node.RectTransform, DrivenTransformProperties.Pivot | DrivenTransformProperties.SizeDelta);
             Tree = new UITree(this);
             UITree.Register(Tree);
             UIFrame.EnsureHooked();
@@ -91,6 +95,7 @@ namespace TimboJimbo.UINext
 
         private void OnDisable()
         {
+            _tracker.Clear();
             if (Tree != null)
             {
                 UITree.Unregister(Tree);

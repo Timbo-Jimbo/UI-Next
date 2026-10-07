@@ -26,6 +26,15 @@ namespace TimboJimbo.UINext
         /// <summary>Whether changes animate: in play mode, or while simulating.</summary>
         internal static bool Live => Application.isPlaying || Simulating;
 
+        // A camera rendering to a texture that draws the UI all the same (a capture); every other one that renders to
+        // a texture (a minimap, a portrait) leaves it out.
+        internal static Camera CaptureCamera;
+
+        /// <summary>Whether <paramref name="camera"/> draws the UI: the scene view, and game cameras drawing to the screen.</summary>
+        internal static bool DrawsUI(Camera camera) =>
+            camera.cameraType == CameraType.SceneView
+            || (camera.cameraType == CameraType.Game && (camera.targetTexture == null || camera == CaptureCamera));
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics() => s_lastStepped = -1;
 
@@ -43,7 +52,7 @@ namespace TimboJimbo.UINext
 
         private static void OnBeginCamera(ScriptableRenderContext context, Camera camera)
         {
-            if (camera.cameraType != CameraType.Game && camera.cameraType != CameraType.SceneView) return;
+            if (!DrawsUI(camera)) return;
             if (!camera.TryGetComponent(out UniversalAdditionalCameraData data) && camera.cameraType == CameraType.Game) return;
             var renderer = data != null ? data.scriptableRenderer : null;
             if (renderer == null && camera.cameraType == CameraType.SceneView)
@@ -89,8 +98,9 @@ namespace TimboJimbo.UINext
         private static void UpdateRoots()
         {
             var pixelSize = ScreenPixelSize();
+            // The screen's safe area is in its own pixels: a size of our own (a capture) has none to speak of.
             var safeArea = Screen.safeArea;
-            if (!Application.isPlaying)
+            if (!Application.isPlaying || ScreenSizeOverride.HasValue)
                 safeArea = new Rect(0f, 0f, pixelSize.x, pixelSize.y);
             foreach (var tree in UITree.Trees)
             {

@@ -74,19 +74,4 @@ namespace TimboJimbo.UINext
             Revision.Value++;
         }
     }
-
-    [CreateAssetMenu(menuName = "Timbo Jimbo/UI Next/Tokens/Color", fileName = "Color Token")]
-    public sealed class ColorToken : UIToken<Color> { }
-
-    [CreateAssetMenu(menuName = "Timbo Jimbo/UI Next/Tokens/Number", fileName = "Number Token")]
-    public sealed class FloatToken : UIToken<float> { }
-
-    [CreateAssetMenu(menuName = "Timbo Jimbo/UI Next/Tokens/Vector2", fileName = "Vector2 Token")]
-    public sealed class Vector2Token : UIToken<Vector2> { }
-
-    [CreateAssetMenu(menuName = "Timbo Jimbo/UI Next/Tokens/Insets", fileName = "Insets Token")]
-    public sealed class InsetsToken : UIToken<Insets> { }
-
-    [CreateAssetMenu(menuName = "Timbo Jimbo/UI Next/Tokens/Corner Radii", fileName = "Corner Radii Token")]
-    public sealed class CornerRadiiToken : UIToken<CornerRadii> { }
 }

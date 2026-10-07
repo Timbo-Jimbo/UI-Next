@@ -38,6 +38,9 @@ namespace TimboJimboEditor.UINext
                 camera.targetTexture = target;
                 go.AddComponent<UniversalAdditionalCameraData>();
                 UIFrame.ScreenSizeOverride = new Vector2(width, height);
+                UIFrame.CaptureCamera = camera;
+                // Up to date at the capture's size before it renders, without stepping anything on.
+                UIFrame.Advance(0f);
                 camera.Render();
 
                 var previous = RenderTexture.active;
@@ -53,6 +56,7 @@ namespace TimboJimboEditor.UINext
             finally
             {
                 UIFrame.ScreenSizeOverride = previousSize;
+                UIFrame.CaptureCamera = null;
                 UI.RequestRepaint();
                 Object.DestroyImmediate(go);
                 target.Release();

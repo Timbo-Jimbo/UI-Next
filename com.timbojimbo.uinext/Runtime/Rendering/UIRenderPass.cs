@@ -31,6 +31,7 @@ namespace TimboJimbo.UINext
             var resourceData = frameData.Get<UniversalResourceData>();
             bool sceneView = cameraData.cameraType == CameraType.SceneView;
             if (!sceneView && (cameraData.cameraType != CameraType.Game || !cameraData.resolveFinalTarget)) return;
+            if (!UIFrame.DrawsUI(cameraData.camera)) return;
 
             using var builder = renderGraph.AddRasterRenderPass<PassData>("UINext", out var data, profilingSampler);
             data.Camera = cameraData.camera;
