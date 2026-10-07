@@ -1,0 +1,171 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace TimboJimbo.UINext
+{
+    /// <summary>
+    /// A value with two faces: its model, where it is going, and its presentation, where it is drawn right now, as
+    /// Core Animation's model and presentation layers. Code running in the draw phase sees the presentation; everything
+    /// else (layout, bindings, game code) sees the model. A change made inside <see cref="UI.Animate(UIAnimation, System.Action)"/>
+    /// springs the presentation from where it is drawn to the new model; any other change puts it there at once.
+    /// </summary>
+    public class AnimatedValue<T> : Observable, ISpringOwner
+    {
+        private static readonly IValueConverter<T> s_converter = ValueConverters.Get<T>();
+        private static readonly EqualityComparer<T> s_comparer = EqualityComparer<T>.Default;
+
+        // The model, as resolved.
+        private protected T _model;
+
+        // The presentation face, which drawing reads; and the spring slot while it moves.
+        private readonly PresentationFace _presentation = new();
+        private int _slot = -1;
+
+        // How close a spring of it has to be to its target to count as there, in converted units (the type's default when
+        // not given).
+        private readonly float _rest;
+
+        public AnimatedValue() : this(default) { }
+
+        public AnimatedValue(T value, float rest = -1f)
+        {
+            _model = value;
+            _rest = rest >= 0f ? rest : s_converter?.Rest ?? 0f;
+        }
+
+        /// <summary>Whether values of this type interpolate.</summary>
+        public static bool Interpolates => s_converter != null;
+
+        /// <summary>
+        /// The face for whoever is reading: in the draw phase where it is drawn, otherwise where it is going. Reading it
+        /// inside a computation tracks it.
+        /// </summary>
+        public T Value
+        {
+            get => Computation.CurrentPhase == Phase.Draw ? Presented : Model;
+            set => SetModel(value, null);
+        }
+
+        /// <summary>Where it is going. Tracked as a read of the model.</summary>
+        public T Model
+        {
+            get
+            {
+                Track();
+                EnsureResolved();
+                return _model;
+            }
+        }
+
+        /// <summary>Where it is going, without tracking the read.</summary>
+        public T Peek
+        {
+            get
+            {
+                EnsureResolved();
+                return _model;
+            }
+        }
+
+        /// <summary>Where it is drawn right now. Tracked as a read of the presentation.</summary>
+        public T Presented
+        {
+            get
+            {
+                _presentation.TrackRead();
+                EnsureResolved();
+                return _slot >= 0 ? s_converter.FromVector(SpringStore.Value(_slot)) : _model;
+            }
+        }
+
+        /// <summary>Whether it is moving towards its model.</summary>
+        public bool IsAnimating => _slot >= 0;
+
+        /// <summary>How fast it is moving, in converted units a second (zero at rest).</summary>
+        public Vector4 Velocity => _slot >= 0 ? SpringStore.Velocity(_slot) : Vector4.zero;
+
+        // Whether anything draws it, so springs run only for values someone sees.
+        internal bool HasPresentationReaders => _presentation.Readers.Count > 0;
+
+        /// <summary>Brings the model up to date before it is read (a value with a pending resolution resolves it now).</summary>
+        private protected virtual void EnsureResolved() { }
+
+        /// <summary>
+        /// Gives it a new model. Inside a change (<see cref="UITransaction.Current"/>) its presentation springs there on
+        /// the change's animation; outside one, <paramref name="implicitAnimation"/> (a state's) is used if given; a value
+        /// already moving with neither heads there keeping its speed; otherwise it lands at once.
+        /// </summary>
+        internal void SetModel(T value, UIAnimation? implicitAnimation, bool force = false)
+        {
+            if (!force && s_comparer.Equals(_model, value)) return;
+            var previous = _model;
+            _model = value;
+            NotifyChanged();
+            Present(previous, implicitAnimation);
+        }
+
+        /// <summary>
+        /// Moves its presentation the way it would have moved had the model just changed from <paramref name="drawnFrom"/>,
+        /// with a velocity (a fling): for gestures handing their speed on.
+        /// </summary>
+        internal void Fling(Vector4 velocity, UIAnimation animation)
+        {
+            if (s_converter == null || !Application.isPlaying) return;
+            if (_slot < 0)
+                _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, s_converter.ToVector(_model));
+            SpringStore.Retarget(_slot, s_converter.ToVector(_model), animation, null);
+            SpringStore.AddVelocity(_slot, velocity);
+            _presentation.Notify();
+        }
+
+        /// <summary>Puts its presentation where its model is, at rest, cutting short any change moving it.</summary>
+        public void Settle()
+        {
+            if (_slot < 0) return;
+            SpringStore.Stop(_slot, arrived: false);
+        }
+
+        private void Present(T previous, UIAnimation? implicitAnimation)
+        {
+            var transaction = UITransaction.Current;
+            var animation = transaction?.Animation ?? implicitAnimation;
+            bool animates = s_converter != null && Application.isPlaying && animation.HasValue && !animation.Value.AtOnce
+                            && (_slot >= 0 || HasPresentationReaders);
+            if (animates)
+            {
+                if (_slot < 0)
+                    _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, s_converter.ToVector(previous));
+                SpringStore.Retarget(_slot, s_converter.ToVector(_model), animation.Value, transaction);
+                return;
+            }
+            if (_slot >= 0 && transaction == null && implicitAnimation == null)
+            {
+                // Moving, and changed outside any change: it heads there, keeping its speed, spring and change.
+                SpringStore.SetTarget(_slot, s_converter.ToVector(_model));
+                return;
+            }
+            if (_slot >= 0)
+                SpringStore.Stop(_slot, arrived: transaction != null && SpringStore.TransactionOf(_slot) == transaction);
+            _presentation.Notify();
+        }
+
+        void ISpringOwner.OnSpringMoved() => _presentation.Notify();
+
+        void ISpringOwner.OnSpringSettled()
+        {
+            _slot = -1;
+            _presentation.Notify();
+        }
+
+        // The presentation face: an observable of its own, so drawing that reads it is told when it moves while layout,
+        // which reads the model, is not.
+        private sealed class PresentationFace : Observable
+        {
+            public void TrackRead() => Track();
+
+            public void Notify() => NotifyChanged();
+        }
+
+        public override string ToString() => _model?.ToString() ?? "null";
+    }
+}

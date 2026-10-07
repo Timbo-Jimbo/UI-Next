@@ -1,0 +1,198 @@
+// Every primitive the UI draws, from one structured buffer: the vertex shader expands each record into a quad in its
+// node's space and places it in its root's, and the fragment shader draws it as a signed distance field (shapes,
+// shadows, images cut to rounded corners, SDF glyphs) or a texture (bitmap glyphs), cut by up to four rounded-rect
+// clips, with premultiplied alpha. Colours are sRGB values and blend as they are (the project blends in gamma).
+Shader "Hidden/TimboJimbo/UINext/Primitive"
+{
+    Properties
+    {
+        _MainTex ("Texture", 2D) = "white" {}
+    }
+    SubShader
+    {
+        Tags { "RenderType" = "Transparent" "Queue" = "Transparent" "RenderPipeline" = "UniversalPipeline" }
+        Pass
+        {
+            Name "Primitive"
+            Blend One OneMinusSrcAlpha
+            ZWrite Off
+            ZTest Always
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+
+            struct Instance
+            {
+                float4 rect;
+                float4 radii;
+                float4 color;
+                float4 color2;
+                float4 params;
+                float4 uv;
+                uint slot;
+                uint type;
+                uint flags;
+                uint padding;
+            };
+
+            struct Slot
+            {
+                float4 row0;
+                float4 row1;
+                float4 sizeOpacity;
+                float4 clips;
+            };
+
+            struct Clip
+            {
+                float4 inverse0;
+                float4 inverse1;
+                float4 size;
+                float4 radii;
+            };
+
+            StructuredBuffer<Instance> _Instances;
+            StructuredBuffer<Slot> _Slots;
+            StructuredBuffer<Clip> _Clips;
+            int _InstanceOffset;
+            float4x4 _UIMatrix;
+            Texture2D _MainTex;
+            SamplerState sampler_MainTex;
+            float4 _TexSize;
+
+            static const float2 kCorners[6] =
+            {
+                float2(0, 0), float2(1, 0), float2(1, 1),
+                float2(0, 0), float2(1, 1), float2(0, 1)
+            };
+
+            struct Varyings
+            {
+                float4 position : SV_POSITION;
+                float2 local : TEXCOORD0;
+                float2 root : TEXCOORD1;
+                float2 uv : TEXCOORD2;
+                nointerpolation float2 halfSize : TEXCOORD3;
+                nointerpolation uint id : TEXCOORD4;
+            };
+
+            // Signed distance to a rounded rect centred on the origin (y down), each corner its own radius: top-left,
+            // top-right, bottom-right, bottom-left.
+            float SdRoundRect(float2 p, float2 halfSize, float4 radii)
+            {
+                float r = p.x < 0 ? (p.y < 0 ? radii.x : radii.w) : (p.y < 0 ? radii.y : radii.z);
+                r = min(r, min(halfSize.x, halfSize.y));
+                float2 q = abs(p) - halfSize + r;
+                return min(max(q.x, q.y), 0) + length(max(q, 0)) - r;
+            }
+
+            Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
+            {
+                Varyings o;
+                uint id = (uint)_InstanceOffset + instanceID;
+                Instance inst = _Instances[id];
+                Slot slot = _Slots[inst.slot];
+
+                float4 rect = inst.rect;
+                if ((inst.flags & 1u) != 0u)
+                    rect = float4(rect.x, rect.y, slot.sizeOpacity.x - rect.x - rect.z, slot.sizeOpacity.y - rect.y - rect.w);
+                rect.zw = max(rect.zw, 0);
+
+                // Room around it for anti-aliasing (a pixel and a half, in its own units) and for a shadow's blur.
+                float margin = 1.5 * max(slot.sizeOpacity.w, 0.01) + (inst.type == 1u ? inst.params.y * 2.5 : 0);
+                float2 corner = kCorners[vertexID % 6];
+                float2 p = rect.xy - margin + corner * (rect.zw + 2 * margin);
+                float2 root = float2(dot(slot.row0.xy, p) + slot.row0.z, dot(slot.row1.xy, p) + slot.row1.z);
+
+                o.position = mul(_UIMatrix, float4(root, 0, 1));
+                o.local = p - (rect.xy + rect.zw * 0.5);
+                o.root = root;
+                float2 t = (p - rect.xy) / max(rect.zw, 1e-5);
+                // Textures run up from their bottom; this space runs down.
+                o.uv = float2(inst.uv.x + t.x * inst.uv.z, inst.uv.y + (1 - t.y) * inst.uv.w);
+                o.halfSize = rect.zw * 0.5;
+                o.id = id;
+                return o;
+            }
+
+            float4 Frag(Varyings i) : SV_Target
+            {
+                Instance inst = _Instances[i.id];
+                Slot slot = _Slots[inst.slot];
+
+                // Derivatives first, outside any branch.
+                float2 localPixel = fwidth(i.local);
+                float aa = max(max(localPixel.x, localPixel.y), 1e-5);
+                float2 rootPixel = fwidth(i.root);
+                float rootAA = max(max(rootPixel.x, rootPixel.y), 1e-5);
+                float2 texelPixel = fwidth(i.uv) * _TexSize.xy;
+                float4 tex = _MainTex.Sample(sampler_MainTex, i.uv);
+
+                float4 color = inst.color;
+                float coverage = 1;
+                if (inst.type == 0u)
+                {
+                    float d = SdRoundRect(i.local, i.halfSize, inst.radii);
+                    coverage = saturate(0.5 - d / aa);
+                    if ((inst.flags & 2u) != 0u)
+                    {
+                        float angle = radians(inst.params.z);
+                        float2 direction = float2(cos(angle), sin(angle));
+                        float extent = abs(direction.x) * i.halfSize.x + abs(direction.y) * i.halfSize.y;
+                        float t = saturate(dot(i.local, direction) / max(2 * extent, 1e-5) + 0.5);
+                        color = lerp(inst.color, inst.color2, t);
+                    }
+                    else if (inst.params.x > 0)
+                    {
+                        float inner = saturate(0.5 - (d + inst.params.x) / aa);
+                        color = lerp(inst.color2, inst.color, inner);
+                    }
+                }
+                else if (inst.type == 1u)
+                {
+                    float d = SdRoundRect(i.local, i.halfSize, inst.radii);
+                    float blur = max(inst.params.y, aa);
+                    coverage = 1 - smoothstep(-blur, blur, d);
+                }
+                else if (inst.type == 2u)
+                {
+                    float d = SdRoundRect(i.local, i.halfSize, inst.radii);
+                    coverage = saturate(0.5 - d / aa);
+                    color = tex * inst.color;
+                }
+                else if (inst.type == 3u)
+                {
+                    // The distance field holds 0.5 at the glyph's edge, spanning its range in texels either side.
+                    float range = max(inst.params.x, 1);
+                    float distance = (tex.a - 0.5) * 2 * range;
+                    float texels = max(length(texelPixel) * 0.70710678, 1e-5);
+                    coverage = saturate(distance / texels + 0.5);
+                }
+                else
+                {
+                    color = float4(tex.rgb * inst.color.rgb, tex.a * inst.color.a);
+                }
+
+                [unroll]
+                for (int k = 0; k < 4; k++)
+                {
+                    float index = slot.clips[k];
+                    if (index < 0) break;
+                    Clip c = _Clips[(uint)index];
+                    float2 cp = float2(dot(c.inverse0.xy, i.root) + c.inverse0.z, dot(c.inverse1.xy, i.root) + c.inverse1.z);
+                    float2 halfSize = c.size.xy * 0.5;
+                    float d = SdRoundRect(cp - halfSize, halfSize, c.radii);
+                    float scale = sqrt(abs(c.inverse0.x * c.inverse1.y - c.inverse0.y * c.inverse1.x));
+                    coverage *= saturate(0.5 - d / max(rootAA * scale, 1e-5));
+                }
+
+                float alpha = saturate(color.a) * coverage * slot.sizeOpacity.z;
+                return float4(color.rgb * alpha, alpha);
+            }
+            ENDHLSL
+        }
+    }
+}
