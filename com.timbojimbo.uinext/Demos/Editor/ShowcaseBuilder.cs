@@ -295,6 +295,10 @@ namespace TimboJimboEditor.UINext.Demos
             segments[0].IsSelected = true;
 
             var warning = DemoKit.State(Folder + "/Warning.asset", "Warning", StateKind.State);
+            // It animates itself: quickly on, slowly off.
+            warning.Enter = UIAnimation.Snappy;
+            warning.Exit = new UIAnimation(0.8f);
+            EditorUtility.SetDirty(warning);
             var customDemo = Case(body, "A state of your own").Column(10f);
             var panel = customDemo.Child("Panel").Column(4f).Pad(14f);
             panel.Width.Value = Sizing.Grow();
@@ -310,7 +314,15 @@ namespace TimboJimboEditor.UINext.Demos
             detail.Text.When(warning, "Charge it soon.");
             var warn = Switch(customDemo, "Warning");
 
-            page.Add<StatesDemo>().Setup(button, disable, segments, pill, warn, panel, warning);
+            var holdDemo = Case(body, "Tap or long press");
+            var hold = holdDemo.Child("Tile").Pad(18f, 14f).Center();
+            hold.Width.Value = Sizing.Grow();
+            var holdBox = hold.Box(Card, 14f);
+            holdBox.Fill.When(InteractionStates.Pressed, new Color(0.9f, 0.9f, 0.93f));
+            DemoKit.FocusRing(holdBox, new Color(Accent.r, Accent.g, Accent.b, 0.55f));
+            var holdLabel = hold.Child("Text").Label("Hold me", 17f, Text, bold: true);
+
+            page.Add<StatesDemo>().Setup(button, disable, segments, pill, warn, panel, warning, hold.Pressable(), holdLabel);
         }
 
         private static void TokensPage(UINode page, UINode body)

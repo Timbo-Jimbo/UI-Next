@@ -15,14 +15,14 @@ MonoBehaviour:
   _kind: 1
   _group: 
   _enter:
-    _set: 0
+    _set: 1
     _animation:
-      Duration: 0.35
-      Bounce: 0
+      Duration: 0.3
+      Bounce: 0.15
       Delay: 0
   _exit:
-    _set: 0
+    _set: 1
     _animation:
-      Duration: 0.35
+      Duration: 0.8
       Bounce: 0
       Delay: 0

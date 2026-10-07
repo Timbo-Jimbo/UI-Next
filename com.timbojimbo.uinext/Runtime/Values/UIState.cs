@@ -25,9 +25,19 @@ namespace TimboJimbo.UINext
 
         public string Group => _group;
 
-        public UIAnimation? Enter => _enter.Value;
+        /// <summary>How values move as the state comes on, outside any Animate; null for at once.</summary>
+        public UIAnimation? Enter
+        {
+            get => _enter.Value;
+            set => _enter = new OptionalAnimation(value);
+        }
 
-        public UIAnimation? Exit => _exit.Value;
+        /// <summary>How values move as the state goes off, outside any Animate; null for at once.</summary>
+        public UIAnimation? Exit
+        {
+            get => _exit.Value;
+            set => _exit = new OptionalAnimation(value);
+        }
 
         /// <summary>Makes a state in code (for states that need no asset).</summary>
         public static UIState Create(string name, StateKind kind = StateKind.State, string group = null,
