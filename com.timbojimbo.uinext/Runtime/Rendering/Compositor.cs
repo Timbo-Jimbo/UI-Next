@@ -94,6 +94,44 @@ namespace TimboJimbo.UINext
 
         public static bool HasBatches => Batches.Count > 0;
 
+        // The GPU's copies and the groups' images outlive a script reload otherwise: let go of them before one, and on quitting.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void HookRelease()
+        {
+            Application.quitting -= ReleaseResources;
+            Application.quitting += ReleaseResources;
+        }
+
+#if UNITY_EDITOR
+        [UnityEditor.InitializeOnLoadMethod]
+        private static void HookReload()
+        {
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= ReleaseResources;
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += ReleaseResources;
+        }
+#endif
+
+        private static void ReleaseResources()
+        {
+            s_instanceBuffer?.Release();
+            s_slotBuffer?.Release();
+            s_clipBuffer?.Release();
+            s_instanceBuffer = s_slotBuffer = s_clipBuffer = null;
+            foreach (var target in s_groupTargets)
+            {
+                if (target == null) continue;
+                target.Release();
+                Object.DestroyImmediate(target);
+            }
+            s_groupTargets.Clear();
+            Groups.Clear();
+            Batches.Clear();
+            if (s_material != null)
+                Object.DestroyImmediate(s_material);
+            s_material = null;
+            s_orderDirty = s_slotsDirty = true;
+        }
+
         public static void MarkInstancesDirty(UITree tree) => s_orderDirty = true;
 
         public static void MarkOrderDirty() => s_orderDirty = true;
