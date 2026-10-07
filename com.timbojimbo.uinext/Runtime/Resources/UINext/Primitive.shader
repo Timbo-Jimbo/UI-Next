@@ -219,7 +219,11 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 }
 
                 float alpha = saturate(color.a) * coverage * slot.sizeOpacity.z;
-                return float4(color.rgb * alpha, alpha);
+                // Its colour filters, on the premultiplied colour: towards grey by its saturation, then by its brightness.
+                float3 rgb = color.rgb * alpha;
+                float luma = dot(rgb, float3(0.2126, 0.7152, 0.0722));
+                rgb = lerp(luma.xxx, rgb, slot.row0.w) * slot.row1.w;
+                return float4(rgb, alpha);
             }
             ENDHLSL
         }

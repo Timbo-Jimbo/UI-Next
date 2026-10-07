@@ -112,6 +112,22 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void SaturationAndBrightnessMultiplyDownTheTreeWithoutAnImage()
+        {
+            var outer = Root.Node.Child("Outer").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
+            var inner = outer.Child("Inner").Sized(Sizing.Fixed(50f), Sizing.Fixed(50f));
+            inner.Box(Color.red);
+            outer.Saturation.Value = 0.5f;
+            inner.Saturation.Value = 0.5f;
+            outer.Brightness.Value = 0.8f;
+            Frame();
+            var slot = inner.Tree.Slots[inner.Index];
+            Assert.AreEqual(0.25f, slot.Row0.w, 1e-5f);
+            Assert.AreEqual(0.8f, slot.Row1.w, 1e-5f);
+            Assert.AreEqual(0, Compositor.Groups.Count, "no image is made for a colour filter");
+        }
+
+        [Test]
         public void APresentedNodeIsLaidOutOverTheWholeRoot()
         {
             Root.Node.Pad(30f);

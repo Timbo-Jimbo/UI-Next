@@ -439,6 +439,9 @@ namespace TimboJimbo.UINext
                 World[i] = world;
                 Shown[i] = shown;
                 float effectiveOpacity = (p < 0 ? 1f : Slots[p].SizeOpacity.z) * opacity;
+                // Colour filters multiply down the tree, as opacity does, and every pixel drawn applies them.
+                float saturation = (p < 0 ? 1f : Slots[p].Row0.w) * Mathf.Max(0f, node.Saturation.Value);
+                float brightness = (p < 0 ? 1f : Slots[p].Row1.w) * Mathf.Max(0f, node.Brightness.Value);
                 Opacities[i] = (p < 0 ? 1f : Opacities[p]) * opacity;
                 // A group not fully opaque: what is in it is drawn at its own opacities into the group's image, which
                 // is drawn at the group's. A node a transition is fading (a page, an alert, an item going away) fades
@@ -462,8 +465,8 @@ namespace TimboJimbo.UINext
                 _clipChains[i] = chain;
                 Slots[i] = new NodeSlot
                 {
-                    Row0 = new Vector4(world.A, world.B, world.Tx, 0f),
-                    Row1 = new Vector4(world.C, world.D, world.Ty, 0f),
+                    Row0 = new Vector4(world.A, world.B, world.Tx, saturation),
+                    Row1 = new Vector4(world.C, world.D, world.Ty, brightness),
                     SizeOpacity = new Vector4(frame.width, frame.height, shown ? effectiveOpacity : 0f,
                         1f / Mathf.Max(1e-4f, Root.PixelsPerPoint * world.ScaleFactor)),
                     Clips = chain,

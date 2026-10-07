@@ -70,7 +70,8 @@ namespace TimboJimbo.UINext
     [StructLayout(LayoutKind.Sequential)]
     internal struct NodeSlot
     {
-        // Its affine transform from its own space to its root's: (a, b, tx) and (c, d, ty).
+        // Its affine transform from its own space to its root's: (a, b, tx) and (c, d, ty); and its colour filters, with
+        // everything above it: saturation in Row0.w, brightness in Row1.w.
         public Vector4 Row0;
         public Vector4 Row1;
 

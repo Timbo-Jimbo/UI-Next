@@ -50,6 +50,12 @@ namespace TimboJimbo.UINext
         [Tooltip("Blurs it and what is inside it, by this many points.")]
         [SerializeField] private UIValue<float> _blur = 0f;
 
+        [Tooltip("How saturated it and what is inside it are drawn: 1 as they are, 0 grey, more than 1 more vivid.")]
+        [SerializeField] private UIValue<float> _saturation = 1f;
+
+        [Tooltip("How bright it and what is inside it are drawn: 1 as they are, less dims them.")]
+        [SerializeField] private UIValue<float> _brightness = 1f;
+
         [Tooltip("Cuts what is inside to its rect, with its corner radii.")]
         [SerializeField] private UIValue<bool> _clips = false;
         [SerializeField] private UIValue<CornerRadii> _clipRadii = new CornerRadii();
@@ -127,6 +133,16 @@ namespace TimboJimbo.UINext
         /// so a node can blur in and out of focus.
         /// </summary>
         public UIValue<float> Blur => _blur;
+
+        /// <summary>
+        /// How saturated it and everything inside it are drawn, as CSS's filter: saturate() and grayscale(): 1 as they
+        /// are, 0 grey (a locked item), more than 1 more vivid. It multiplies down the tree and costs nothing: every pixel
+        /// drawn applies it, no image is made.
+        /// </summary>
+        public UIValue<float> Saturation => _saturation;
+
+        /// <summary>How bright it and everything inside it are drawn, as CSS's filter: brightness(): 1 as they are, less dims them. It multiplies down the tree.</summary>
+        public UIValue<float> Brightness => _brightness;
 
         /// <summary>Whether it cuts what is inside it to its rect.</summary>
         public UIValue<bool> Clips => _clips;
@@ -518,6 +534,7 @@ namespace TimboJimbo.UINext
             action(_width); action(_height); action(_padding); action(_gap); action(_direction); action(_wrap);
             action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
             action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity); action(_blur);
+            action(_saturation); action(_brightness);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable);
         }
     }

@@ -604,6 +604,18 @@ namespace TimboJimboEditor.UINext.Demos
             blurred.Pressable();
             blurred.Add<BlurToggle>().Setup(blurred, 10f);
 
+            var lockCase = Panel(Case(body, "Locked: grey and dim (tap them)").Row(14f), 16f);
+            foreach (var (emoji, colour) in new[] { ("🗡️", Palette[5]), ("🛡️", Palette[1]), ("🏹", Palette[3]) })
+            {
+                var item = lockCase.Child(emoji).Sized(Sizing.Fixed(84f), Sizing.Fixed(84f)).Center();
+                var itemBox = item.Box(colour, 18f);
+                itemBox.Gradient.Value = true;
+                itemBox.GradientTo.Value = Color.Lerp(colour, Color.black, 0.25f);
+                item.Child("Icon").Label(emoji, 40f);
+                item.Pressable();
+                item.Add<LockToggle>();
+            }
+
             var lift = Case(body, "Top layer").Column(14f);
             var clipped = lift.Child("Clipped Box").Sized(Sizing.Grow(), Sizing.Fixed(90f)).Pad(14f).Align(AlignX.Center, AlignY.Bottom);
             clipped.Box(Card, 14f);
