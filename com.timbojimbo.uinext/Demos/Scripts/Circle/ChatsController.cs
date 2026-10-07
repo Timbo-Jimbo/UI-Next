@@ -31,6 +31,9 @@ namespace TimboJimbo.UINext.Demos.Circle
 
         private Draggable _swipe;
 
+        // Around a bubble's text.
+        private static readonly Vector2 BubblePadding = new(14f, 9f);
+
         public void Setup(List<Pressable> rows, Presentation conversation, UINode content, Pressable back, Box avatar, Label initials,
             Label name, UINode thread, ScrollView threadScroll, List<Pressable> replies, ColorToken bubble, ColorToken text, Color mine)
         {
@@ -56,12 +59,45 @@ namespace TimboJimbo.UINext.Demos.Circle
             _send = send;
         }
 
-        // Return sends (and typing carries on, as in Messages), as does the send button, lit while there is text.
+        // Return sends (and typing carries on, as in Messages), as does the send button, lit while there is text. What was
+        // typed lifts out of the field into its bubble, which fills in around it, its text turning white on the way.
         private void SendTyped(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
-            Send(text.Trim());
+            var typed = _composer.TextNode.DrawnRect;
+            var typedColor = _composer.Color.Peek;
             _composer.Text = "";
+            var bubble = AddBubble(text.Trim(), mine: true);
+            UI.LayoutNow();
+            // Where the bubble's text will be drawn, in the root's points: through its line and the thread, as scrolled
+            // now (the thread scrolls on to it as it flies).
+            var landing = _thread.DrawnRect.position - _threadScroll.PresentedOffset + bubble.Parent.LaidOutRect.position
+                          + bubble.LaidOutRect.position + BubblePadding;
+            var box = bubble.GetComponent<Box>();
+            var label = bubble.GetComponentInChildren<Label>();
+            Set(bubble.Offset, typed.position - landing);
+            Set(box.Fill, new Color(_mine.r, _mine.g, _mine.b, 0f));
+            Set(label.Color, typedColor);
+            // Over everything while it flies (the thread clips what is in it), back in the thread once it lands.
+            bubble.TopLayer.Value = true;
+            UI.Animate(new UIAnimation(0.5f, 0.1f), () =>
+            {
+                bubble.Offset.Value = Vector2.zero;
+                box.Fill.Value = _mine;
+                label.Color.Value = Color.white;
+            }).Finished += () =>
+            {
+                if (bubble != null)
+                    bubble.TopLayer.Value = false;
+            };
+            _threadScroll.ScrollTo(new Vector2(0f, _threadScroll.Range.y));
+        }
+
+        // Puts a value somewhere at once, whatever was moving it.
+        private static void Set<T>(UIValue<T> value, T to)
+        {
+            value.Value = to;
+            value.Settle();
         }
 
         private void SendComposer() => SendTyped(_composer.Text);
@@ -177,7 +213,7 @@ namespace TimboJimbo.UINext.Demos.Circle
             var line = UIBuild.Node("Line", _thread.transform).Row();
             line.Width.Value = Sizing.Grow();
             line.AlignX.Value = mine ? AlignX.Right : AlignX.Left;
-            var bubble = line.Child("Bubble").Pad(14f, 9f);
+            var bubble = line.Child("Bubble").Pad(BubblePadding.x, BubblePadding.y);
             bubble.Width.Value = Sizing.Fit(0f, 260f);
             var box = bubble.Box(_mine, 18f);
             if (!mine) box.Fill.Token = _bubble;
