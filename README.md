@@ -51,5 +51,4 @@ button.Pressable(() =>
 
 - Not tried on devices yet; the native keyboards, the IME and pinch with real fingers are untested.
 - No backdrop blur (materials): the UI draws straight into the back buffer, which the render graph cannot read back.
-- Lists without scroll anchoring: rows above the view measuring differently from their estimate move what is in view.
 - Masks are layers (flattened, then masked); coverage masks in tile memory are not built. No caching layers, no accessibility yet.
