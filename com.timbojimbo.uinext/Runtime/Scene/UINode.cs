@@ -56,6 +56,9 @@ namespace TimboJimbo.UINext
         [Tooltip("How bright it and what is inside it are drawn: 1 as they are, less dims them.")]
         [SerializeField] private UIValue<float> _brightness = 1f;
 
+        [Tooltip("A texture whose alpha, stretched over its rect, cuts it and what is inside it; nothing is kept outside its rect.")]
+        [SerializeField] private UIValue<Texture> _mask = new UIValue<Texture>();
+
         [Tooltip("Cuts what is inside to its rect, with its corner radii.")]
         [SerializeField] private UIValue<bool> _clips = false;
         [SerializeField] private UIValue<CornerRadii> _clipRadii = new CornerRadii();
@@ -143,6 +146,13 @@ namespace TimboJimbo.UINext
 
         /// <summary>How bright it and everything inside it are drawn, as CSS's filter: brightness(): 1 as they are, less dims them. It multiplies down the tree.</summary>
         public UIValue<float> Brightness => _brightness;
+
+        /// <summary>
+        /// A texture whose alpha cuts it and everything inside it, stretched over its rect as it is drawn, as CSS's
+        /// mask-image: a fade at a scroll view's edges, a shape cut out of a photo. Nothing is kept outside its rect.
+        /// While it has one, it is drawn to an image of its own first (as a group), and the mask is applied to that.
+        /// </summary>
+        public UIValue<Texture> Mask => _mask;
 
         /// <summary>Whether it cuts what is inside it to its rect.</summary>
         public UIValue<bool> Clips => _clips;
@@ -534,7 +544,7 @@ namespace TimboJimbo.UINext
             action(_width); action(_height); action(_padding); action(_gap); action(_direction); action(_wrap);
             action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
             action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity); action(_blur);
-            action(_saturation); action(_brightness);
+            action(_saturation); action(_brightness); action(_mask);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable);
         }
     }

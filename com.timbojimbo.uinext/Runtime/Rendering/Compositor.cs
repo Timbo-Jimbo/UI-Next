@@ -35,6 +35,11 @@ namespace TimboJimbo.UINext
             public Rect Region;
             // How far its image is blurred, in its pixels (0: not at all).
             public float Blur;
+            // What cuts its image (null: nothing), and the masked node's size and its transform from the root's points
+            // to its own space, as it is drawn.
+            public Texture Mask;
+            public Vector2 MaskSize;
+            public Affine2 MaskInverse;
             public int FirstBatch;
             public int BatchCount;
         }
@@ -136,6 +141,9 @@ namespace TimboJimbo.UINext
             if (s_material != null)
                 Object.DestroyImmediate(s_material);
             s_material = null;
+            if (s_maskMaterial != null)
+                Object.DestroyImmediate(s_maskMaterial);
+            s_maskMaterial = null;
             UIRenderPass.ReleaseResources();
             s_orderDirty = s_slotsDirty = true;
         }
@@ -309,7 +317,17 @@ namespace TimboJimbo.UINext
             int yMax = Mathf.CeilToInt(Mathf.Min(root.Size.y * scale, bounds.yMax * scale + smoothing));
             var target = GroupTarget(Groups.Count, Mathf.Max(1, xMax - x), Mathf.Max(1, yMax - y));
             var region = new Rect(x / scale, y / scale, target.width / scale, target.height / scale);
-            Groups.Add(new Group { Tree = tree, Node = node, Target = target, Region = region, Blur = blur * scale });
+            Groups.Add(new Group
+            {
+                Tree = tree,
+                Node = node,
+                Target = target,
+                Region = region,
+                Blur = blur * scale,
+                Mask = node.Mask.Peek,
+                MaskSize = tree.Slots[node.Index].SizeOpacity,
+                MaskInverse = tree.World[node.Index].Inverse,
+            });
             EnsureInstances(s_instanceCount + 1);
             s_instances[s_instanceCount] = new PrimitiveInstance
             {
@@ -580,6 +598,38 @@ namespace TimboJimbo.UINext
             var region = group.Region;
             var matrix = GL.GetGPUProjectionMatrix(Matrix4x4.Ortho(region.xMin, region.xMax, region.yMax, region.yMin, -1f, 1f), flipped);
             Draw(cmd, GroupBatches, group.FirstBatch, group.BatchCount, null, false, flipped, matrix);
+            if (group.Mask != null)
+                DrawMask(cmd, group, matrix);
+        }
+
+        private static readonly MaterialPropertyBlock s_maskProperties = new();
+        private static readonly int s_maskTexture = Shader.PropertyToID("_MaskTexture");
+        private static readonly int s_maskMatrix = Shader.PropertyToID("_MaskMatrix");
+        private static readonly int s_maskRegion = Shader.PropertyToID("_MaskRegion");
+        private static readonly int s_maskInverse0 = Shader.PropertyToID("_MaskInverse0");
+        private static readonly int s_maskInverse1 = Shader.PropertyToID("_MaskInverse1");
+        private static readonly int s_maskSize = Shader.PropertyToID("_MaskSize");
+        private static Material s_maskMaterial;
+
+        // Multiplies a group's image by its mask's alpha, over the whole image.
+        private static void DrawMask(RasterCommandBuffer cmd, in Group group, Matrix4x4 matrix)
+        {
+            if (s_maskMaterial == null)
+            {
+                var shader = Resources.Load<Shader>("UINext/Mask");
+                if (shader == null) return;
+                s_maskMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            }
+            var inverse = group.MaskInverse;
+            var region = group.Region;
+            s_maskProperties.Clear();
+            s_maskProperties.SetTexture(s_maskTexture, group.Mask);
+            s_maskProperties.SetMatrix(s_maskMatrix, matrix);
+            s_maskProperties.SetVector(s_maskRegion, new Vector4(region.x, region.y, region.width, region.height));
+            s_maskProperties.SetVector(s_maskInverse0, new Vector4(inverse.A, inverse.B, inverse.Tx, 0f));
+            s_maskProperties.SetVector(s_maskInverse1, new Vector4(inverse.C, inverse.D, inverse.Ty, 0f));
+            s_maskProperties.SetVector(s_maskSize, new Vector4(group.MaskSize.x, group.MaskSize.y, 0f, 0f));
+            cmd.DrawProcedural(Matrix4x4.identity, s_maskMaterial, 0, MeshTopology.Triangles, 6, 1, s_maskProperties);
         }
 
         private static void Draw(RasterCommandBuffer cmd, List<Batch> batches, int first, int count, Camera camera, bool sceneView, bool flipped,

@@ -449,7 +449,8 @@ namespace TimboJimbo.UINext
                 bool fadingIn = transition != null && transition.Opacity.Value < 0.999f;
                 // A blurred node is a group however opaque it is: its image is what is blurred.
                 float blur = node.Blur.Value;
-                bool group = shown && (((node.GroupOpacity.Value || fadingIn) && opacity < 0.999f) || blur > 0.01f);
+                bool group = shown && (((node.GroupOpacity.Value || fadingIn) && opacity < 0.999f) || blur > 0.01f
+                                       || node.Mask.Value != null);
                 GroupOpacities[i] = group ? effectiveOpacity : 0f;
                 Blurs[i] = group ? Mathf.Max(0f, blur) : 0f;
                 if (group) effectiveOpacity = 1f;

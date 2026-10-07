@@ -128,6 +128,28 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void AMaskedNodeIsDrawnAsAnImageTheMaskCuts()
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(60f));
+            card.Box(Color.white);
+            Frame();
+            Assert.AreEqual(0, Compositor.Groups.Count);
+            var mask = new Texture2D(4, 4);
+            try
+            {
+                card.Mask.Value = mask;
+                Frame();
+                Assert.AreEqual(1, Compositor.Groups.Count, "however opaque, a masked node is drawn as an image first");
+                Assert.AreSame(mask, Compositor.Groups[0].Mask);
+                Assert.AreEqual(new Vector2(100f, 60f), Compositor.Groups[0].MaskSize);
+            }
+            finally
+            {
+                Object.DestroyImmediate(mask);
+            }
+        }
+
+        [Test]
         public void APresentedNodeIsLaidOutOverTheWholeRoot()
         {
             Root.Node.Pad(30f);

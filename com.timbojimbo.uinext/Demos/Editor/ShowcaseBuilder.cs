@@ -568,6 +568,21 @@ namespace TimboJimboEditor.UINext.Demos
             tilted.Offset.Value = new Vector2(-25f, 25f);
             tilted.Child("Text").Label("Clipped", 18f, Color.white, bold: true);
 
+            // Masks: a row that fades out at its edges as it scrolls, and a photo cut to a star.
+            var masks = Case(body, "Masks (a texture's alpha cuts it)").Row(16f).Align(AlignX.Left, AlignY.Center);
+            var faded = masks.Child("Faded edges").Row(10f).Sized(Sizing.Grow(), Sizing.Fixed(90f));
+            faded.Scroll(ScrollAxis.Horizontal);
+            faded.Mask.Value = MaskTexture("Edge Fade", 256, 4, (x, y) => Mathf.Clamp01(Mathf.Min(x, 1f - x) / 0.15f));
+            for (int i = 0; i < 12; i++)
+            {
+                var tile = faded.Child("Tile").Sized(Sizing.Fixed(90f), Sizing.Fixed(90f)).Center();
+                tile.Box(Palette[i % Palette.Length], 18f);
+                tile.Child("Number").Label((i + 1).ToString(), 22f, Color.white, bold: true);
+            }
+            var star = masks.Child("Star").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
+            star.Add<ScenePhoto>().Show(1);
+            star.Mask.Value = MaskTexture("Star", 256, 256, Star);
+
             var stack = Case(body, "ZIndex (tap a card)");
             stack.Height.Value = Sizing.Fixed(170f);
             var cards = new List<Pressable>();
@@ -627,6 +642,48 @@ namespace TimboJimboEditor.UINext.Demos
             var liftSwitch = Switch(lift, "Lift it into the top layer");
 
             page.Add<OrderDemo>().Setup(cards, liftSwitch, tooltip);
+        }
+
+        // A mask texture for the showcase, made once as a PNG beside its scene: white, its alpha from `alpha` at each
+        // pixel's centre (0 to 1 across, 0 to 1 up).
+        private static Texture2D MaskTexture(string name, int width, int height, System.Func<float, float, float> alpha)
+        {
+            string path = Folder + "/" + name + ".png";
+            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (existing != null) return existing;
+            var pixels = new Color32[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    pixels[y * width + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(255f * Mathf.Clamp01(alpha((x + 0.5f) / width, (y + 0.5f) / height))));
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            System.IO.File.WriteAllBytes(FileUtil.GetPhysicalPath(path), texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        // A five-pointed star's coverage at a point (0 to 1 each way), smoothed over about a texel at 256.
+        private static float Star(float x, float y)
+        {
+            var p = new Vector2(x - 0.5f, y - 0.5f);
+            float angle = Mathf.Atan2(p.y, p.x) + Mathf.PI / 2f;
+            float sector = Mathf.PI * 2f / 5f;
+            float a = Mathf.Repeat(angle, sector) - sector / 2f;
+            // The star's edge: between its points (radius 0.48) and its notches (0.2), straight between them.
+            float outer = 0.48f, inner = 0.2f;
+            var tip = new Vector2(outer, 0f);
+            var notch = new Vector2(Mathf.Cos(sector / 2f), Mathf.Sin(sector / 2f)) * inner;
+            var q = new Vector2(Mathf.Cos(a), Mathf.Abs(Mathf.Sin(a))) * p.magnitude;
+            var edge = notch - tip;
+            float side = (edge.x * (q.y - tip.y) - edge.y * (q.x - tip.x)) / edge.magnitude;
+            return Mathf.Clamp01(0.5f + side * 256f / 1.5f);
         }
 
         private static void BindingsPage(UINode page, UINode body)
