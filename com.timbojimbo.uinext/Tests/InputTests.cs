@@ -42,6 +42,38 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void APressOnAGlidingScrollCatchesItAndPressesNothing()
+        {
+            var scroll = Root.Node.Child("Scroll").Sized(Sizing.Fixed(300f), Sizing.Fixed(300f)).Column();
+            var view = scroll.Scroll();
+            int taps = 0;
+            for (int i = 0; i < 30; i++)
+            {
+                var row = scroll.Child("Row").Sized(Sizing.Fixed(300f), Sizing.Fixed(60f));
+                row.Box(Color.white);
+                row.Pressable(() => taps++);
+            }
+            Frame();
+            var center = Center(scroll);
+            // A flick up sets it gliding.
+            Down(center);
+            Move(center + new Vector2(0f, -40f), 0.02);
+            Move(center + new Vector2(0f, -120f), 0.04);
+            Up(center + new Vector2(0f, -120f), 0.05);
+            Run(0.1f);
+            Assert.IsTrue(view.IsDecelerating, "gliding");
+
+            // A press catches it (the scroll view claims the pointer as it goes down) and the row under it is not tapped.
+            Down(center);
+            Run(0.2f);
+            float caught = view.PresentedOffset.y;
+            Run(0.3f);
+            Up(center, 1.0);
+            Assert.AreEqual(caught, view.PresentedOffset.y, 0.5f, "it stopped where it was caught");
+            Assert.AreEqual(0, taps);
+        }
+
+        [Test]
         public void HeldLongEnoughItIsALongPressAndNoTap()
         {
             var button = Root.Node.Child("Button").Sized(Sizing.Fixed(100f), Sizing.Fixed(40f));

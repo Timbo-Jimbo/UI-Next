@@ -93,17 +93,17 @@ namespace TimboJimbo.UINext
             if (track.Owner != null) return track.Owner == handler;
             if (!track.Handlers.Contains(handler)) return false;
             track.Owner = handler;
-            s_calling.Clear();
+            // A list of its own: a claim is often made from inside a handler Down is calling, from s_calling.
+            var others = new List<IPointerHandler>(track.Handlers.Count);
             foreach (var other in track.Handlers)
                 if (other != handler)
-                    s_calling.Add(other);
+                    others.Add(other);
             track.Handlers.Clear();
             track.Handlers.Add(handler);
             var e = track.Event(track.Last, track.LastTime);
-            foreach (var other in s_calling)
+            foreach (var other in others)
                 if (Alive(other))
                     other.OnPointerCancel(in e);
-            s_calling.Clear();
             return true;
         }
 
