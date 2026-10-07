@@ -14,6 +14,9 @@ namespace TimboJimbo.UINext
     {
         private static bool s_hooked;
         private static int s_lastStepped = -1;
+
+        // Frames run so far: changes held for drawing are told which frame drew them.
+        internal static int FrameIndex { get; private set; }
         private static UIRenderPass s_pass;
 
         // A screen size to lay roots out at instead of the screen's (captures at a size of their own).
@@ -77,6 +80,7 @@ namespace TimboJimbo.UINext
 
         private static void Frame(float dt)
         {
+            FrameIndex++;
             UpdateRoots();
             UIScheduler.Flush(Phase.Layout);
             if (dt > 0f)
@@ -94,6 +98,7 @@ namespace TimboJimbo.UINext
             if (UITransaction.FlushFinished())
                 UIScheduler.Flush(Phase.Draw);
             Compositor.Build();
+            PendingSprings.LandUnread(FrameIndex);
         }
 
         private static void UpdateRoots()

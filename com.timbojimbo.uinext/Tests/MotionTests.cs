@@ -141,6 +141,37 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void ANodeMadeAndAnimatedInOneGoSpringsFromWhereItWasPut()
+        {
+            // As a layer added and changed in one go animates in Core Animation: nothing has drawn it yet, and its first
+            // drawing starts the spring from where it was put.
+            var node = Root.Node.Child("New").Sized(Sizing.Fixed(50f), Sizing.Fixed(50f));
+            node.Box(Color.white);
+            node.Offset.Value = new Vector2(0f, 200f);
+            node.Offset.Settle();
+            var change = UI.Animate(new UIAnimation(0.5f), () => node.Offset.Value = Vector2.zero);
+            Assert.IsFalse(change.IsFinished, "held open for its first drawing");
+            Frame(1f / 60f);
+            Assert.Greater(node.Offset.Presented.y, 150f, "drawn where it was put, on its way");
+            Run(1f);
+            Assert.AreEqual(0f, node.Offset.Presented.y, 0.5f);
+            Assert.IsTrue(change.IsFinished);
+            Assert.IsTrue(change.Completed);
+        }
+
+        [Test]
+        public void AChangeNothingDrawsLandsAndFinishes()
+        {
+            var value = new AnimatedValue<float>(0f);
+            var change = UI.Animate(new UIAnimation(0.5f), () => value.Value = 1f);
+            Frame(1f / 60f);
+            Frame(1f / 60f);
+            Assert.IsFalse(value.IsAnimating);
+            Assert.AreEqual(1f, value.Presented);
+            Assert.IsTrue(change.IsFinished);
+        }
+
+        [Test]
         public void AChangeFinishesWhenEverythingItMovedHasLanded()
         {
             var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));
