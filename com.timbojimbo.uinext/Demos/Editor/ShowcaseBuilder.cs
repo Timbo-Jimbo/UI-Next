@@ -524,6 +524,19 @@ namespace TimboJimboEditor.UINext.Demos
                 cards.Add(card.Pressable());
             }
 
+            var fading = Panel(Case(body, "Fading as one image (group opacity)").Row(24f), 16f);
+            foreach (var (title, group) in new[] { ("Each part", false), ("As one", true) })
+            {
+                var pair = fading.Child(title).Sized(Sizing.Fixed(140f), Sizing.Fixed(130f));
+                pair.Opacity.Value = 0.5f;
+                pair.GroupOpacity.Value = group;
+                pair.Child("Back").Sized(Sizing.Fixed(90f), Sizing.Fixed(90f)).Box(Palette[1], 16f);
+                var front = pair.Child("Front").Sized(Sizing.Fixed(90f), Sizing.Fixed(90f))
+                    .Float(AttachPoint.LeftTop, AttachPoint.LeftTop, new Vector2(45f, 40f)).Center();
+                front.Box(Palette[5], 16f);
+                front.Child("Title").Label(title, 14f, Color.white, bold: true);
+            }
+
             var lift = Case(body, "Top layer").Column(14f);
             var clipped = lift.Child("Clipped Box").Sized(Sizing.Grow(), Sizing.Fixed(90f)).Pad(14f).Align(AlignX.Center, AlignY.Bottom);
             clipped.Box(Card, 14f);

@@ -20,6 +20,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>A glyph from a bitmap or colour atlas (emoji).</summary>
         GlyphBitmap = 4,
+
+        /// <summary>A group's image, already premultiplied, drawn at its group's opacity.</summary>
+        Group = 5,
     }
 
     /// <summary>Flags a primitive carries.</summary>

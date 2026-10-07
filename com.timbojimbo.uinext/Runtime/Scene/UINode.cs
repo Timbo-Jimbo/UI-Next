@@ -44,6 +44,9 @@ namespace TimboJimbo.UINext
         [SerializeField] private UIValue<float> _rotation = 0f;
         [SerializeField] private UIValue<int> _zIndex = 0;
 
+        [Tooltip("Its opacity fades it and what is inside it as one image, so overlapping parts do not show through each other.")]
+        [SerializeField] private UIValue<bool> _groupOpacity = false;
+
         [Tooltip("Cuts what is inside to its rect, with its corner radii.")]
         [SerializeField] private UIValue<bool> _clips = false;
         [SerializeField] private UIValue<CornerRadii> _clipRadii = new CornerRadii();
@@ -107,6 +110,13 @@ namespace TimboJimbo.UINext
 
         /// <summary>Its drawing order among its siblings: higher draws above. Does not affect layout.</summary>
         public UIValue<int> ZIndex => _zIndex;
+
+        /// <summary>
+        /// Whether its opacity fades it and everything inside it as one image, as Core Animation's group opacity and
+        /// SwiftUI's compositingGroup do: while it is not fully opaque, it is drawn to an image of its own first, so
+        /// overlapping children do not show through each other. Fully opaque, it costs nothing.
+        /// </summary>
+        public UIValue<bool> GroupOpacity => _groupOpacity;
 
         /// <summary>Whether it cuts what is inside it to its rect.</summary>
         public UIValue<bool> Clips => _clips;
@@ -408,7 +418,7 @@ namespace TimboJimbo.UINext
         {
             action(_width); action(_height); action(_padding); action(_gap); action(_direction); action(_wrap);
             action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
-            action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex);
+            action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable);
         }
     }

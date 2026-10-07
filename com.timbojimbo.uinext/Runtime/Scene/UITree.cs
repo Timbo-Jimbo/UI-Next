@@ -31,6 +31,11 @@ namespace TimboJimbo.UINext
         public NodeSlot[] Slots = new NodeSlot[32];
         public Affine2[] World = new Affine2[32];
         public bool[] Shown = new bool[32];
+
+        // How opaque each node is drawn, all told; and, for a node drawn as a group (GroupOpacity, not fully opaque),
+        // the opacity its image is drawn at (0 for the rest). Inside a group, slots' opacities are the group's own.
+        public float[] Opacities = new float[32];
+        public float[] GroupOpacities = new float[32];
         public readonly List<ClipShape> ClipShapes = new();
         private Vector4[] _clipChains = new Vector4[32];
 
@@ -203,7 +208,7 @@ namespace TimboJimbo.UINext
                 int i = DrawOrder[k];
                 if (i >= Nodes.Count) continue;
                 var node = Nodes[i];
-                if (node == null || !Shown[i] || Slots[i].SizeOpacity.z <= 0.001f) continue;
+                if (node == null || !Shown[i] || Opacities[i] <= 0.001f) continue;
                 if (!node.HitTestable.Peek || node.Leaving.Peek) continue;
                 if (node.Drawables.Count == 0 && !node.TryGetComponent<IPointerHandler>(out _)) continue;
                 if (Contains(i, point, 0f) && InsideClips(i, point))
@@ -431,6 +436,12 @@ namespace TimboJimbo.UINext
                 World[i] = world;
                 Shown[i] = shown;
                 float effectiveOpacity = (p < 0 ? 1f : Slots[p].SizeOpacity.z) * opacity;
+                Opacities[i] = (p < 0 ? 1f : Opacities[p]) * opacity;
+                // A group not fully opaque: what is in it is drawn at its own opacities into the group's image, which
+                // is drawn at the group's.
+                bool group = node.GroupOpacity.Value && opacity < 0.999f && shown;
+                GroupOpacities[i] = group ? effectiveOpacity : 0f;
+                if (group) effectiveOpacity = 1f;
 
                 // Its clips: its parent's, and its parent's own clip; none for a node in the top layer.
                 var chain = new Vector4(-1f, -1f, -1f, -1f);
@@ -493,6 +504,8 @@ namespace TimboJimbo.UINext
             Array.Resize(ref Slots, size);
             Array.Resize(ref World, size);
             Array.Resize(ref Shown, size);
+            Array.Resize(ref Opacities, size);
+            Array.Resize(ref GroupOpacities, size);
             Array.Resize(ref _clipChains, size);
         }
 

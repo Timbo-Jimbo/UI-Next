@@ -25,6 +25,25 @@ namespace TimboJimbo.UINext
         // Every batch's textures, TexturesPerBatch to a batch.
         private static readonly List<Texture> s_batchTextures = new();
 
+        /// <summary>A node drawn as a group: its primitives drawn to an image of its own, which a quad in its place draws.</summary>
+        internal struct Group
+        {
+            public UITree Tree;
+            public UINode Node;
+            public RenderTexture Target;
+            public int FirstBatch;
+            public int BatchCount;
+        }
+
+        // The groups of this build, outermost first (draw them last first), and their batches.
+        internal static readonly List<Group> Groups = new();
+        internal static readonly List<Batch> GroupBatches = new();
+        private static readonly List<RenderTexture> s_groupTargets = new();
+
+        // While a group is walked: the node it is of (drawn whole, not as another quad), and whether a node in the top
+        // layer inside it is drawn in place (a group is one image).
+        private static UINode s_groupRoot;
+
         private static PrimitiveInstance[] s_instances = new PrimitiveInstance[256];
         private static Texture[] s_textures = new Texture[256];
         private static int s_instanceCount;
@@ -116,6 +135,8 @@ namespace TimboJimbo.UINext
                 s_instanceCount = 0;
                 Batches.Clear();
                 s_batchTextures.Clear();
+                Groups.Clear();
+                GroupBatches.Clear();
                 for (int t = 0; t < trees.Count; t++)
                 {
                     var tree = trees[t];
@@ -143,7 +164,8 @@ namespace TimboJimbo.UINext
                         for (int i = 0; i < s_topLayer.Count; i++)
                             Walk(tree, s_topLayer[i], s_slotBase[tree], true, level);
                     }
-                    MakeBatches(tree, start, s_instanceCount);
+                    MakeBatches(Batches, tree, start, s_instanceCount);
+                    WalkGroups(tree);
                 }
             }
 
@@ -182,14 +204,26 @@ namespace TimboJimbo.UINext
         {
             if (node.Index < 0 || node.Tree != tree) return;
             if (node != level && node.PresentationLevel.Peek != 0) return;
-            if (!lifted && node.TopLayer.Peek)
+            // Inside a group it is drawn in place: a group is one image.
+            if (!lifted && s_groupRoot == null && node.TopLayer.Peek)
             {
                 s_topLayer.Add(node);
                 return;
             }
             if (!tree.Shown[node.Index]) return;
 
-            tree.DrawOrder.Add(node.Index);
+            // A group: a quad over the root draws its image here; what is in it is walked into a range of its own
+            // later. It still takes its place in drawing order for hit testing.
+            if (node != s_groupRoot && tree.GroupOpacities[node.Index] > 0f)
+            {
+                if (s_groupRoot == null)
+                    AddDrawOrder(tree, node);
+                EmitGroupQuad(tree, node, slotBase);
+                return;
+            }
+
+            if (s_groupRoot == null)
+                tree.DrawOrder.Add(node.Index);
             uint slot = (uint)(slotBase + node.Index);
             Emit(node.Instances, node.InstanceTextures, slot);
 
@@ -204,6 +238,82 @@ namespace TimboJimbo.UINext
                 Walk(tree, s_children[first + i], slotBase, false, level);
             s_children.RemoveRange(first, count);
             Emit(node.OverlayInstances, node.OverlayTextures, slot);
+        }
+
+        // A group's quad: covering its root (its slot is the root's), sampling the group's image at the group's opacity.
+        private static void EmitGroupQuad(UITree tree, UINode node, int slotBase)
+        {
+            var target = GroupTarget(Groups.Count, tree.Root);
+            Groups.Add(new Group { Tree = tree, Node = node, Target = target });
+            EnsureInstances(s_instanceCount + 1);
+            s_instances[s_instanceCount] = new PrimitiveInstance
+            {
+                Color = new Color(1f, 1f, 1f, tree.GroupOpacities[node.Index]),
+                Uv = new Vector4(0f, 0f, 1f, 1f),
+                Slot = (uint)slotBase,
+                Type = (uint)PrimitiveType.Group,
+                Flags = (uint)PrimitiveFlags.RelativeToNode,
+            };
+            s_textures[s_instanceCount] = target;
+            s_instanceCount++;
+        }
+
+        // The nodes of a group in drawing order, for hit testing, without drawing them.
+        private static void AddDrawOrder(UITree tree, UINode node)
+        {
+            int end = tree.SubtreeEnd[node.Index];
+            for (int i = node.Index; i < end; i++)
+                if (tree.Shown[i] && tree.Nodes[i].PresentationLevel.Peek == 0)
+                    tree.DrawOrder.Add(i);
+        }
+
+        // Walks each group found in the tree into a range of its own and batches it; groups inside groups are found as
+        // their group is walked, and walked after it.
+        private static void WalkGroups(UITree tree)
+        {
+            for (int g = 0; g < Groups.Count; g++)
+            {
+                var group = Groups[g];
+                if (group.Tree != tree) continue;
+                int start = s_instanceCount;
+                s_groupRoot = group.Node;
+                try
+                {
+                    Walk(tree, group.Node, s_slotBase[tree], true, group.Node);
+                }
+                finally
+                {
+                    s_groupRoot = null;
+                }
+                group.FirstBatch = GroupBatches.Count;
+                MakeBatches(GroupBatches, tree, start, s_instanceCount);
+                group.BatchCount = GroupBatches.Count - group.FirstBatch;
+                Groups[g] = group;
+            }
+        }
+
+        // The image the index-th group of a build is drawn to, at its root's size in pixels.
+        private static RenderTexture GroupTarget(int index, UIRoot root)
+        {
+            int width = Mathf.Max(1, Mathf.RoundToInt(root.PixelSize.x));
+            int height = Mathf.Max(1, Mathf.RoundToInt(root.PixelSize.y));
+            while (s_groupTargets.Count <= index)
+                s_groupTargets.Add(null);
+            var target = s_groupTargets[index];
+            if (target != null && target.width == width && target.height == height) return target;
+            if (target != null)
+            {
+                target.Release();
+                Object.DestroyImmediate(target);
+            }
+            target = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32)
+            {
+                name = "UINext Group " + index,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            target.Create();
+            s_groupTargets[index] = target;
+            return target;
         }
 
         private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot)
@@ -239,7 +349,7 @@ namespace TimboJimbo.UINext
         // Runs of primitives drawn in one call, each with up to eight textures that its primitives say which of they
         // sample: a run ends only when a ninth texture turns up. A primitive that samples nothing (a shape, a shadow)
         // goes with any run.
-        private static void MakeBatches(UITree tree, int start, int end)
+        private static void MakeBatches(List<Batch> batches, UITree tree, int start, int end)
         {
             int batchStart = start;
             int first = s_batchTextures.Count;
@@ -257,7 +367,7 @@ namespace TimboJimbo.UINext
                 {
                     if (used == TexturesPerBatch)
                     {
-                        CloseBatch(tree, batchStart, i, first);
+                        CloseBatch(batches, tree, batchStart, i, first);
                         batchStart = i;
                         first = s_batchTextures.Count;
                         used = 0;
@@ -268,15 +378,15 @@ namespace TimboJimbo.UINext
                 s_instances[i].Texture = (uint)(slot - first);
             }
             if (end > batchStart)
-                CloseBatch(tree, batchStart, end, first);
+                CloseBatch(batches, tree, batchStart, end, first);
         }
 
-        private static void CloseBatch(UITree tree, int start, int end, int firstTexture)
+        private static void CloseBatch(List<Batch> batches, UITree tree, int start, int end, int firstTexture)
         {
             // Unused slots hold the white texture, so every slot is bound.
             while (s_batchTextures.Count < firstTexture + TexturesPerBatch)
                 s_batchTextures.Add(null);
-            Batches.Add(new Batch { Tree = tree, Start = start, Count = end - start, Textures = firstTexture });
+            batches.Add(new Batch { Tree = tree, Start = start, Count = end - start, Textures = firstTexture });
         }
 
         private static Vector4 OffsetChain(Vector4 chain, int clipBase)
@@ -341,21 +451,36 @@ namespace TimboJimbo.UINext
         /// Draws every batch with <paramref name="cmd"/>. In the game view a root covers the screen; in the scene view it
         /// is drawn where its RectTransform is, seen by <paramref name="camera"/>.
         /// </summary>
-        public static void Render(RasterCommandBuffer cmd, Camera camera, bool sceneView, bool flipped)
+        public static void Render(RasterCommandBuffer cmd, Camera camera, bool sceneView, bool flipped) =>
+            Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped);
+
+        /// <summary>Draws the index-th group's image: what is in it, in its root's space, over a clear image.</summary>
+        public static void RenderGroup(RasterCommandBuffer cmd, int index, bool flipped)
+        {
+            var group = Groups[index];
+            cmd.ClearRenderTarget(false, true, Color.clear);
+            Draw(cmd, GroupBatches, group.FirstBatch, group.BatchCount, null, false, flipped);
+        }
+
+        private static void Draw(RasterCommandBuffer cmd, List<Batch> batches, int first, int count, Camera camera, bool sceneView, bool flipped)
         {
             var material = Material;
-            if (material == null || Batches.Count == 0 || s_instanceBuffer == null) return;
+            if (material == null || count == 0 || s_instanceBuffer == null) return;
             UITree currentTree = null;
+            bool skip = false;
             Matrix4x4 matrix = Matrix4x4.identity;
-            for (int b = 0; b < Batches.Count; b++)
+            for (int b = first; b < first + count; b++)
             {
-                var batch = Batches[b];
+                var batch = batches[b];
                 if (batch.Tree != currentTree)
                 {
                     currentTree = batch.Tree;
-                    if (currentTree.Root == null) continue;
-                    matrix = MatrixFor(currentTree.Root, camera, sceneView, flipped);
+                    // A root gone since the build: none of its batches are drawn.
+                    skip = currentTree.Root == null;
+                    if (!skip)
+                        matrix = MatrixFor(currentTree.Root, camera, sceneView, flipped);
                 }
+                if (skip) continue;
                 var properties = s_properties;
                 properties.Clear();
                 properties.SetBuffer(InstancesId, s_instanceBuffer);

@@ -54,6 +54,24 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void AGroupNotFullyOpaqueIsDrawnAsOneImage()
+        {
+            var group = Root.Node.Child("Group").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
+            group.GroupOpacity.Value = true;
+            var child = group.Child("Child").Sized(Sizing.Fixed(50f), Sizing.Fixed(50f));
+            child.Box(Color.white);
+            Frame();
+            Assert.AreEqual(0, Compositor.Groups.Count, "fully opaque, it is drawn as usual");
+
+            group.Opacity.Value = 0.5f;
+            Frame();
+            Assert.AreEqual(1, Compositor.Groups.Count);
+            Assert.AreEqual(0.5f, group.Tree.GroupOpacities[group.Index], 1e-5f);
+            Assert.AreEqual(1f, group.Tree.Slots[child.Index].SizeOpacity.z, 1e-5f, "what is in it is drawn at its own opacity into the image");
+            Assert.AreEqual(0.5f, group.Tree.Opacities[child.Index], 1e-5f, "while it counts as half there for the pointer");
+        }
+
+        [Test]
         public void APresentedNodeIsLaidOutOverTheWholeRoot()
         {
             Root.Node.Pad(30f);

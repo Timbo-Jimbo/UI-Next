@@ -157,6 +157,10 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 float4 tex = SampleTexture(inst.textureIndex, clamp(i.uv, uvMin, uvMax), uvDx, uvDy);
                 float fieldPixel = max(fwidth(tex.a), 1e-4);
 
+                // A group's image: premultiplied already, drawn at the group's opacity, covering the root.
+                if (inst.type == 5u)
+                    return tex * (inst.color.a * slot.sizeOpacity.z);
+
                 float4 color = inst.color;
                 float coverage = 1;
                 if (inst.type == 0u)
