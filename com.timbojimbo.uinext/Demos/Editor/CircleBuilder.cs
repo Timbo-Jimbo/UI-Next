@@ -282,6 +282,7 @@ namespace TimboJimboEditor.UINext.Demos
             photo.CornerRadius.Value = 0f;
             photoNode.Pressable();
             photoNode.Add<Draggable>().Axis = ScrollAxis.Vertical;
+            photoNode.Add<Pinchable>();
             var caption = host.Child("Caption").Pad(24f, 0f).Label("", 16f, Color.white);
             caption.Alignment.Value = TextAnchor.UpperCenter;
             var viewer = host.Add<PhotoViewer>();

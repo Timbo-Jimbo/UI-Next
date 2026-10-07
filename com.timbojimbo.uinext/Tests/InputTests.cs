@@ -74,6 +74,37 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void TwoFingersSpreadingAndTurningPinch()
+        {
+            var photo = Root.Node.Child("Photo").Sized(Sizing.Fixed(300f), Sizing.Fixed(300f));
+            photo.Box(Color.white);
+            var pinchable = photo.Add<Pinchable>();
+            int began = 0, ended = 0;
+            PinchEvent last = default;
+            pinchable.Began += e => began++;
+            pinchable.Changed += e => last = e;
+            pinchable.Ended += e => ended++;
+            Frame();
+            var c = Center(photo);
+            UIInput.Down(Finger, PointerKind.Touch, Screen(c - new Vector2(50f, 0f)), 0);
+            Assert.AreEqual(0, began, "one finger is no pinch");
+            UIInput.Down(Finger + 1, PointerKind.Touch, Screen(c + new Vector2(50f, 0f)), 0);
+            Assert.AreEqual(1, began);
+            UIInput.Move(Finger, Screen(c - new Vector2(100f, 0f)), 0.1);
+            UIInput.Move(Finger + 1, Screen(c + new Vector2(100f, 0f)), 0.1);
+            Assert.AreEqual(2f, last.Scale, 0.01f);
+            Assert.AreEqual(0f, last.Rotation, 0.5f);
+            // A quarter turn clockwise about the centre, a little apart.
+            UIInput.Move(Finger, Screen(c - new Vector2(0f, 100f)), 0.2);
+            UIInput.Move(Finger + 1, Screen(c + new Vector2(0f, 100f)), 0.2);
+            Assert.AreEqual(90f, last.Rotation, 0.5f);
+            Assert.Less(last.Translation.magnitude, 0.01f);
+            UIInput.Up(Finger, Screen(c - new Vector2(0f, 100f)), 0.3);
+            Assert.AreEqual(1, ended);
+            UIInput.Up(Finger + 1, Screen(c + new Vector2(0f, 100f)), 0.3);
+        }
+
+        [Test]
         public void HeldLongEnoughItIsALongPressAndNoTap()
         {
             var button = Root.Node.Child("Button").Sized(Sizing.Fixed(100f), Sizing.Fixed(40f));

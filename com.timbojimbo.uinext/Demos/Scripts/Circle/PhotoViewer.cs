@@ -5,8 +5,9 @@ namespace TimboJimbo.UINext.Demos.Circle
     /// <summary>
     /// A photo opened full screen. It flies out of the feed from where it is drawn (its Offset and Scale set to match,
     /// then animated to nothing, so layout never moves), the backdrop fading in behind it. Drag it away to close it
-    /// (the backdrop fading as it goes) or let go to have it spring back; tap it, the backdrop or back to close it, and
-    /// it flies home to wherever its photo in the feed is drawn by then.
+    /// (the backdrop fading as it goes) or let go to have it spring back; pinch it to zoom in under the fingers, and it
+    /// springs back as they let go, as Instagram's photos do; tap it, the backdrop or back to close it, and it flies home
+    /// to wherever its photo in the feed is drawn by then.
     /// </summary>
     [RequireComponent(typeof(Presentation))]
     public sealed class PhotoViewer : MonoBehaviour
@@ -20,6 +21,8 @@ namespace TimboJimbo.UINext.Demos.Circle
         private Presentation _presentation;
         private ScenePhoto _source;
         private Draggable _drag;
+        private Pinchable _pinch;
+        private Vector2 _pinchCenter;
         private Pressable _tapPhoto;
         private Pressable _tapBackdrop;
         private bool _closing;
@@ -41,6 +44,14 @@ namespace TimboJimbo.UINext.Demos.Circle
             _drag.Changed += OnDrag;
             _drag.Ended += OnRelease;
             _drag.Cancelled += SpringBack;
+            _pinch = _photo.GetComponent<Pinchable>();
+            if (_pinch != null)
+            {
+                _pinch.Began += OnPinchBegan;
+                _pinch.Changed += OnPinch;
+                _pinch.Ended += OnPinchEnded;
+                _pinch.Cancelled += SpringBack;
+            }
             _tapPhoto.Tapped += Close;
             _tapBackdrop.Tapped += Close;
             UIInput.Back += OnBack;
@@ -51,10 +62,35 @@ namespace TimboJimbo.UINext.Demos.Circle
             _drag.Changed -= OnDrag;
             _drag.Ended -= OnRelease;
             _drag.Cancelled -= SpringBack;
+            if (_pinch != null)
+            {
+                _pinch.Began -= OnPinchBegan;
+                _pinch.Changed -= OnPinch;
+                _pinch.Ended -= OnPinchEnded;
+                _pinch.Cancelled -= SpringBack;
+            }
             _tapPhoto.Tapped -= Close;
             _tapBackdrop.Tapped -= Close;
             UIInput.Back -= OnBack;
         }
+
+        private void OnPinchBegan(PinchEvent e)
+        {
+            _pinchCenter = _photo.Node.DrawnRect.center;
+            OnPinch(e);
+        }
+
+        // Zoomed about the point between the fingers, which stays under them as they spread and move.
+        private void OnPinch(PinchEvent e)
+        {
+            if (_closing) return;
+            var node = _photo.Node;
+            float scale = Mathf.Clamp(e.Scale, 0.6f, 4f);
+            Set(node.Scale, scale);
+            Set(node.Offset, e.Translation + (1f - scale) * (e.StartCenter - _pinchCenter));
+        }
+
+        private void OnPinchEnded(PinchEvent e) => SpringBack();
 
         /// <summary>Opens <paramref name="source"/>, flying out of where it is drawn.</summary>
         public void Open(ScenePhoto source, string caption)
