@@ -161,6 +161,26 @@ namespace TimboJimbo.UINext
             _presentation.Notify();
         }
 
+        /// <summary>
+        /// Moves it by <paramref name="delta"/>, model and presentation alike, keeping any motion under way (a spring heads
+        /// on to its moved target at the speed it had): what a scroll offset does as the content under it moves.
+        /// </summary>
+        internal void Shift(T delta)
+        {
+            if (s_converter == null) return;
+            var d = s_converter.ToVector(delta);
+            _model = s_converter.FromVector(s_converter.ToVector(_model) + d);
+            NotifyChanged();
+            if (_slot >= 0)
+            {
+                SpringStore.SetValue(_slot, SpringStore.Value(_slot) + d);
+                SpringStore.SetTarget(_slot, SpringStore.Target(_slot) + d);
+            }
+            if (_pending)
+                _pendingFrom += d;
+            _presentation.Notify();
+        }
+
         /// <summary>Puts it at <paramref name="value"/> at once, model and presentation, whatever change is being made.</summary>
         internal void Jump(T value)
         {

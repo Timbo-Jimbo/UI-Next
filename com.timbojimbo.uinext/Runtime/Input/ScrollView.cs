@@ -114,6 +114,19 @@ namespace TimboJimbo.UINext
         /// <summary>Scrolls back to its start.</summary>
         public void ScrollToTop(bool animated = true) => ScrollTo(Vector2.zero, animated);
 
+        /// <summary>
+        /// Moves the offset by <paramref name="delta"/> without changing how it moves (a glide, a spring or a drag carries
+        /// on from there): a list whose rows above the view changed height keeps what is in view where it is, as
+        /// UITableView adjusts its offset as estimated rows are measured.
+        /// </summary>
+        internal void ShiftBy(Vector2 delta)
+        {
+            if (delta == Vector2.zero) return;
+            Offset.Shift(delta);
+            _dragFrom += delta;
+            _pageFrom += delta;
+        }
+
         /// <summary>Scrolls the least it takes to show <paramref name="node"/>, a node inside it, whole (or its start, if it is bigger).</summary>
         public void ScrollIntoView(UINode node, bool animated = true)
         {

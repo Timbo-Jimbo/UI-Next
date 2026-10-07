@@ -9,8 +9,9 @@ namespace TimboJimbo.UINext
     /// vertical <see cref="ScrollView"/>, it keeps a node inside it as tall as all its rows, and the rows near view
     /// floating in it where they go: made by <see cref="CreateCell"/>, filled for their row by <see cref="BindCell"/>, and
     /// reused as they scroll away. A row is as tall as its cell lays out to; until it has been made, it counts as
-    /// <see cref="EstimatedRowHeight"/>. Rows are kept made <see cref="Overscan"/> viewports past what is in view, so a
-    /// quick scroll never shows one not laid out yet.
+    /// <see cref="EstimatedRowHeight"/>; as rows above the view are measured, the offset moves with them, so what is in
+    /// view stays put. Rows are kept made <see cref="Overscan"/> viewports past what is in view, so a quick scroll never
+    /// shows one not laid out yet.
     /// </summary>
     [ExecuteAlways]
     [DisallowMultipleComponent]
@@ -157,6 +158,13 @@ namespace TimboJimbo.UINext
             if (CreateCell == null || BindCell == null || node == null || !isActiveAndEnabled) return;
             EnsureRows();
 
+            // What is in view is anchored to the row at its top: rows above it measuring other than they were counted
+            // move the offset with them, not what is in view.
+            EnsureTops();
+            float offset = _scroll.PresentedOffset.y;
+            int anchor = _count > 0 ? RowAt(offset) : -1;
+            float intoAnchor = anchor >= 0 ? offset - _tops[anchor] : 0f;
+
             foreach (var pair in _cells)
             {
                 float height = pair.Value.LaidOutRect.height;
@@ -167,9 +175,17 @@ namespace TimboJimbo.UINext
                 }
             }
             EnsureTops();
+            if (anchor >= 0 && anchor < _count)
+            {
+                float shift = _tops[anchor] + intoAnchor - offset;
+                if (Mathf.Abs(shift) > 0.01f)
+                {
+                    _scroll.ShiftBy(new Vector2(0f, shift));
+                    offset += shift;
+                }
+            }
 
             float viewport = _scroll.Viewport.y > 0f ? _scroll.Viewport.y : node.Size.y;
-            float offset = _scroll.PresentedOffset.y;
             int first = RowAt(offset - viewport * _overscan);
             int last = _count == 0 ? -1 : RowAt(offset + viewport * (1f + _overscan));
 

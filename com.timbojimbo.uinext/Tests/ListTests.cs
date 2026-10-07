@@ -40,6 +40,26 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void WhatIsInViewStaysPutAsRowsAboveItAreMeasured()
+        {
+            var list = List(400f, out var scroll);
+            list.EstimatedRowHeight = 40f;
+            // Every row is taller than estimated: as those above the view are made and measured, they push down the row
+            // at its top, unless the offset moves with them.
+            list.CreateCell = rows => rows.Child("Row").Sized(Sizing.Percent(1f), Sizing.Fixed(60f));
+            list.BindCell = (cell, index) => { };
+            list.SetCount(1000);
+            Frame();
+            Frame();
+            list.ScrollTo(500, animated: false);
+            Frame();
+            Frame();
+            Frame();
+            Assert.IsTrue(list.TryGetCell(500, out var cell));
+            Assert.AreEqual(scroll.PresentedOffset.y, cell.LaidOutRect.y, 1f, "row 500 is still at the top of the view");
+        }
+
+        [Test]
         public void RowsAreAsTallAsTheirCellsLayOut()
         {
             var list = List(600f, out _);
