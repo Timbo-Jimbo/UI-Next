@@ -438,8 +438,10 @@ namespace TimboJimbo.UINext
                 float effectiveOpacity = (p < 0 ? 1f : Slots[p].SizeOpacity.z) * opacity;
                 Opacities[i] = (p < 0 ? 1f : Opacities[p]) * opacity;
                 // A group not fully opaque: what is in it is drawn at its own opacities into the group's image, which
-                // is drawn at the group's.
-                bool group = node.GroupOpacity.Value && opacity < 0.999f && shown;
+                // is drawn at the group's. A node a transition is fading (a page, an alert, an item going away) fades
+                // as a group too, so its parts never show through each other on the way.
+                bool fadingIn = transition != null && transition.Opacity.Value < 0.999f;
+                bool group = (node.GroupOpacity.Value || fadingIn) && opacity < 0.999f && shown;
                 GroupOpacities[i] = group ? effectiveOpacity : 0f;
                 if (group) effectiveOpacity = 1f;
 

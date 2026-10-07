@@ -98,7 +98,8 @@ namespace TimboJimboTests.UINext
             Assert.IsTrue(first.Leaving.Peek);
             int index = first.Index;
             Assert.IsTrue(first.Tree.Shown[index], "still drawn while it goes");
-            Assert.Less(first.Tree.Slots[index].SizeOpacity.z, 1f, "fading");
+            Assert.Less(first.Tree.Opacities[index], 1f, "fading");
+            Assert.Greater(first.Tree.GroupOpacities[index], 0f, "as one image");
             Assert.Greater(second.PresentedRect.y, 0f, "and what was below springs up");
             Run(2f);
             Assert.IsFalse(first.Leaving.Peek);
@@ -108,9 +109,10 @@ namespace TimboJimboTests.UINext
             Assert.AreEqual(new Rect(0f, 0f, 100f, 50f), first.PresentedRect, "it comes back where it goes, not from where it was");
             Frame(1f / 60f);
             Frame(0.1f);
-            Assert.Less(first.Tree.Slots[first.Index].SizeOpacity.z, 1f, "fading in");
+            Assert.Less(first.Tree.Opacities[first.Index], 1f, "fading in");
             Run(2f);
-            Assert.AreEqual(1f, first.Tree.Slots[first.Index].SizeOpacity.z);
+            Assert.AreEqual(1f, first.Tree.Opacities[first.Index]);
+            Assert.AreEqual(0f, first.Tree.GroupOpacities[first.Index], "no image of its own once it is in");
             Object.DestroyImmediate(transition);
         }
 
