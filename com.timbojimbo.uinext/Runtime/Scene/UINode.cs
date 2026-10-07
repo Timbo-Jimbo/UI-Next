@@ -228,6 +228,13 @@ namespace TimboJimbo.UINext
         public void SetState(UIState state, bool on = true)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
+            // Outside a change, a state with an animation for coming on (or going off) moves everything it changes by
+            // it: variants, and token values that follow a mode, alike.
+            if (UITransaction.Current == null && (on ? state.Enter : state.Exit) is { } animation)
+            {
+                UI.Animate(animation, () => SetState(state, on));
+                return;
+            }
             _states ??= new Dictionary<UIState, bool>();
             bool changed = !_states.TryGetValue(state, out var was) || was != on;
             if (on && !string.IsNullOrEmpty(state.Group))

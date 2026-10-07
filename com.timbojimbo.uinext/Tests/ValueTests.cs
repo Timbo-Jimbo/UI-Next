@@ -80,6 +80,29 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void AModeWithAnAnimationMovesItsTokensByIt()
+        {
+            var dark = UIState.Create("Dark", StateKind.Mode, enter: new UIAnimation(0.5f), exit: new UIAnimation(0.5f));
+            var token = ScriptableObject.CreateInstance<ColorToken>();
+            token.Default = Color.white;
+            token.SetMode(dark, Color.black);
+            var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));
+            var box = node.Box(Color.gray);
+            box.Fill.Token = token;
+            Frame();
+            Root.Node.SetState(dark);
+            Assert.AreEqual(Color.black, box.Fill.Peek, "where it is going, at once");
+            Frame(1f / 60f);
+            Frame(0.1f);
+            var drawn = box.Fill.Presented;
+            Assert.Greater(drawn.r, 0.05f, "on its way");
+            Assert.Less(drawn.r, 0.95f);
+            Run(2f);
+            Assert.AreEqual(Color.black, box.Fill.Presented);
+            Object.DestroyImmediate(token);
+        }
+
+        [Test]
         public void ASetMadeInAnimateSpringsWhereItIsDrawn()
         {
             var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));
