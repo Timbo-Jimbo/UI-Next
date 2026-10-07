@@ -106,6 +106,11 @@ namespace TimboJimbo.UINext
 
         public static bool HasBatches => Batches.Count > 0;
 
+        // What the last build made, for the editor's readout: primitives (groups' included), draw calls in the main pass
+        // and in groups' images, and groups.
+        internal static int PrimitiveCount => s_instanceCount;
+        internal static int DrawCalls => Batches.Count + GroupBatches.Count;
+
         // The GPU's copies and the groups' images outlive a script reload otherwise: let go of them before one, and on quitting.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void HookRelease()

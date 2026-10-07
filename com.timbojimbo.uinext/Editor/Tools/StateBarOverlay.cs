@@ -80,6 +80,12 @@ namespace TimboJimboEditor.UINext
             var clear = new Button(UIStatePreview.Clear) { text = "Clear" };
             clear.style.marginTop = 4;
             _root.Add(clear);
+
+            // What drawing the UI costs this frame, kept up to date twice a second.
+            var stats = new Label { style = { marginTop = 4, opacity = 0.7f } };
+            _root.Add(stats);
+            stats.schedule.Execute(() => stats.text = Stats()).Every(500);
+            stats.text = Stats();
             Refresh();
         }
 
@@ -122,6 +128,9 @@ namespace TimboJimboEditor.UINext
                 button.style.backgroundColor = lit ? new StyleColor(s_lit) : new StyleColor(StyleKeyword.Null);
             }
         }
+
+        private static string Stats() =>
+            $"{Compositor.DrawCalls} draw calls · {Compositor.PrimitiveCount} primitives · {Compositor.Groups.Count} layers";
 
         private static UINode Selected()
         {
