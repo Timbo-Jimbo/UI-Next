@@ -11,13 +11,19 @@ namespace TimboJimbo.UINext
     /// </summary>
     internal static class Compositor
     {
+        // A batch's textures: up to this many, each primitive sampling one of them by index.
+        private const int TexturesPerBatch = 8;
+
         internal struct Batch
         {
             public UITree Tree;
             public int Start;
             public int Count;
-            public Texture Texture;
+            public int Textures;
         }
+
+        // Every batch's textures, TexturesPerBatch to a batch.
+        private static readonly List<Texture> s_batchTextures = new();
 
         private static PrimitiveInstance[] s_instances = new PrimitiveInstance[256];
         private static Texture[] s_textures = new Texture[256];
@@ -52,7 +58,11 @@ namespace TimboJimbo.UINext
         private static readonly int ClipsId = Shader.PropertyToID("_Clips");
         private static readonly int InstanceOffsetId = Shader.PropertyToID("_InstanceOffset");
         private static readonly int MatrixId = Shader.PropertyToID("_UIMatrix");
-        private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+        private static readonly int[] TextureIds =
+        {
+            Shader.PropertyToID("_Texture0"), Shader.PropertyToID("_Texture1"), Shader.PropertyToID("_Texture2"), Shader.PropertyToID("_Texture3"),
+            Shader.PropertyToID("_Texture4"), Shader.PropertyToID("_Texture5"), Shader.PropertyToID("_Texture6"), Shader.PropertyToID("_Texture7"),
+        };
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
@@ -105,6 +115,7 @@ namespace TimboJimbo.UINext
             {
                 s_instanceCount = 0;
                 Batches.Clear();
+                s_batchTextures.Clear();
                 for (int t = 0; t < trees.Count; t++)
                 {
                     var tree = trees[t];
@@ -225,26 +236,47 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // Runs of primitives drawn in one call: a texture change starts a new one, but a primitive that samples nothing
-        // (a shape, a shadow) goes with whatever texture its run has, so text between boxes does not split them.
+        // Runs of primitives drawn in one call, each with up to eight textures that its primitives say which of they
+        // sample: a run ends only when a ninth texture turns up. A primitive that samples nothing (a shape, a shadow)
+        // goes with any run.
         private static void MakeBatches(UITree tree, int start, int end)
         {
             int batchStart = start;
-            Texture texture = null;
+            int first = s_batchTextures.Count;
+            int used = 0;
             for (int i = start; i < end; i++)
             {
-                var next = s_textures[i];
-                if (next == null || next == texture || texture == null)
+                var texture = s_textures[i];
+                if (texture == null)
                 {
-                    texture ??= next;
+                    s_instances[i].Texture = 0;
                     continue;
                 }
-                Batches.Add(new Batch { Tree = tree, Start = batchStart, Count = i - batchStart, Texture = texture });
-                batchStart = i;
-                texture = next;
+                int slot = s_batchTextures.IndexOf(texture, first, used);
+                if (slot < 0)
+                {
+                    if (used == TexturesPerBatch)
+                    {
+                        CloseBatch(tree, batchStart, i, first);
+                        batchStart = i;
+                        first = s_batchTextures.Count;
+                        used = 0;
+                    }
+                    s_batchTextures.Add(texture);
+                    slot = first + used++;
+                }
+                s_instances[i].Texture = (uint)(slot - first);
             }
             if (end > batchStart)
-                Batches.Add(new Batch { Tree = tree, Start = batchStart, Count = end - batchStart, Texture = texture });
+                CloseBatch(tree, batchStart, end, first);
+        }
+
+        private static void CloseBatch(UITree tree, int start, int end, int firstTexture)
+        {
+            // Unused slots hold the white texture, so every slot is bound.
+            while (s_batchTextures.Count < firstTexture + TexturesPerBatch)
+                s_batchTextures.Add(null);
+            Batches.Add(new Batch { Tree = tree, Start = start, Count = end - start, Textures = firstTexture });
         }
 
         private static Vector4 OffsetChain(Vector4 chain, int clipBase)
@@ -331,8 +363,11 @@ namespace TimboJimbo.UINext
                 properties.SetBuffer(ClipsId, s_clipBuffer);
                 properties.SetInt(InstanceOffsetId, batch.Start);
                 properties.SetMatrix(MatrixId, matrix);
-                var texture = batch.Texture != null ? batch.Texture : Texture2D.whiteTexture;
-                properties.SetTexture(MainTexId, texture);
+                for (int t = 0; t < TexturesPerBatch; t++)
+                {
+                    var texture = s_batchTextures[batch.Textures + t];
+                    properties.SetTexture(TextureIds[t], texture != null ? texture : Texture2D.whiteTexture);
+                }
                 cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, batch.Count, properties);
             }
         }

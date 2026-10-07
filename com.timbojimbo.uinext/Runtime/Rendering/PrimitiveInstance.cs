@@ -57,7 +57,8 @@ namespace TimboJimbo.UINext
         public uint Slot;
         public uint Type;
         public uint Flags;
-        public uint Padding;
+        // Which of its batch's textures it samples; set by the compositor.
+        public uint Texture;
 
         public const int Stride = 6 * 16 + 4 * 4;
     }

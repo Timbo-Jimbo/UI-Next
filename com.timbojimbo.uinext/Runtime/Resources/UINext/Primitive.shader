@@ -6,7 +6,7 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
+        _Texture0 ("Texture 0", 2D) = "white" {}
     }
     SubShader
     {
@@ -35,7 +35,7 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 uint slot;
                 uint type;
                 uint flags;
-                uint padding;
+                uint textureIndex;
             };
 
             struct Slot
@@ -59,8 +59,25 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
             StructuredBuffer<Clip> _Clips;
             int _InstanceOffset;
             float4x4 _UIMatrix;
-            Texture2D _MainTex;
-            SamplerState sampler_MainTex;
+            // A batch draws with up to eight textures (atlases of different fonts, emoji, images); each primitive says
+            // which it samples.
+            Texture2D _Texture0, _Texture1, _Texture2, _Texture3, _Texture4, _Texture5, _Texture6, _Texture7;
+            SamplerState sampler_linear_clamp;
+
+            float4 SampleTexture(uint index, float2 uv, float2 dx, float2 dy)
+            {
+                switch (index)
+                {
+                    case 1: return _Texture1.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                    case 2: return _Texture2.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                    case 3: return _Texture3.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                    case 4: return _Texture4.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                    case 5: return _Texture5.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                    case 6: return _Texture6.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                    case 7: return _Texture7.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                    default: return _Texture0.SampleGrad(sampler_linear_clamp, uv, dx, dy);
+                }
+            }
 
             static const float2 kCorners[6] =
             {
@@ -135,7 +152,9 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 // Kept inside its own part of the texture: an image's crop or a glyph's cell in its atlas.
                 float2 uvMin = min(inst.uv.xy, inst.uv.xy + inst.uv.zw);
                 float2 uvMax = max(inst.uv.xy, inst.uv.xy + inst.uv.zw);
-                float4 tex = _MainTex.Sample(sampler_MainTex, clamp(i.uv, uvMin, uvMax));
+                // Gradients taken before choosing the texture, so the choice is free to branch.
+                float2 uvDx = ddx(i.uv), uvDy = ddy(i.uv);
+                float4 tex = SampleTexture(inst.textureIndex, clamp(i.uv, uvMin, uvMax), uvDx, uvDy);
                 float fieldPixel = max(fwidth(tex.a), 1e-4);
 
                 float4 color = inst.color;
