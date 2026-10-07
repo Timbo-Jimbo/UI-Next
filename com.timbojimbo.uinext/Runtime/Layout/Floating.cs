@@ -32,7 +32,7 @@ namespace TimboJimbo.UINext
         [Tooltip("The point on what it is attached to that it is placed at.")]
         public AttachPoint TargetPoint;
 
-        [Tooltip("How far it is moved from there, x right and y up.")]
+        [Tooltip("How far it is moved from there, in points, x right and y down.")]
         public Vector2 Offset;
 
         /// <summary>Whether it floats at all.</summary>

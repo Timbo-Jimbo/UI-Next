@@ -33,6 +33,9 @@ namespace TimboJimbo.UINext
         [SerializeField] private UIValue<Floating> _floating = new Floating();
         [SerializeField] private UIValue<DisplayMode> _display = DisplayMode.Visible;
 
+        [Tooltip("The edges it reaches out to its root's edge on where it lies against the safe area: a backdrop under the notch and home bar, its content staying clear of them.")]
+        [SerializeField] private UIValue<Edges> _ignoresSafeArea = Edges.None;
+
         // ── Drawn ────────────────────────────────────────────────────────────────
 
         [SerializeField] private UIValue<float> _opacity = 1f;
@@ -83,6 +86,12 @@ namespace TimboJimbo.UINext
 
         /// <summary>Visible, Hidden (keeps its space, drawn and hit by nothing) or None (leaves layout).</summary>
         public UIValue<DisplayMode> Display => _display;
+
+        /// <summary>
+        /// The edges it reaches out to its root's edge on, where it lies against the safe area, as SwiftUI's
+        /// ignoresSafeArea: it grows by as much, its padding with it, so what is inside stays clear.
+        /// </summary>
+        public UIValue<Edges> IgnoresSafeArea => _ignoresSafeArea;
 
         /// <summary>How opaque it is drawn, 0 to 1, with everything inside it.</summary>
         public UIValue<float> Opacity => _opacity;
@@ -337,7 +346,7 @@ namespace TimboJimbo.UINext
         private void ForEachValue(Action<IUIValue> action)
         {
             action(_width); action(_height); action(_padding); action(_gap); action(_direction); action(_wrap);
-            action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display);
+            action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
             action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable);
         }

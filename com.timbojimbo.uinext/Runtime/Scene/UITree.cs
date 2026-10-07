@@ -215,6 +215,7 @@ namespace TimboJimbo.UINext
                     AspectRatio = node.AspectRatio.Value,
                     Floating = node.Floating.Value,
                     Element = -1,
+                    Ignores = node.IgnoresSafeArea.Value,
                     Scroll = node.Scroller != null && node.Scroller.isActiveAndEnabled ? node.Scroller.Axis.Value : ScrollAxis.None,
                     Content = node.Content,
                 };

@@ -16,6 +16,9 @@ namespace TimboJimbo.UINext
         private static int s_lastStepped = -1;
         private static UIRenderPass s_pass;
 
+        // A screen size to lay roots out at instead of the screen's (captures at a size of their own).
+        internal static Vector2? ScreenSizeOverride;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics() => s_lastStepped = -1;
 
@@ -81,6 +84,7 @@ namespace TimboJimbo.UINext
         // The game view's size: in the editor the main game view's (Screen reports whichever view is rendering).
         internal static Vector2 ScreenPixelSize()
         {
+            if (ScreenSizeOverride is { } overridden) return overridden;
 #if UNITY_EDITOR
             var size = UnityEditor.Handles.GetMainGameViewSize();
             if (size.x >= 1f && size.y >= 1f) return size;

@@ -1193,13 +1193,13 @@ namespace TimboJimbo.UINext
 
         // Where a floating child's top-left goes in its parent's layout space: its own point put on the target point of
         // what it is attached to (a rect at `targetMin`, sized `targetSize`, in its parent's space), then moved by its
-        // offset (given y up, so flipped).
+        // offset.
         private static Vector2 FloatingTopLeft(in SolverNode child, Vector2 targetMin, Vector2 targetSize)
         {
             var floating = child.Floating;
             Vector2 target = targetMin + Vector2.Scale(targetSize, PointFraction(floating.TargetPoint));
             Vector2 own = Vector2.Scale(child.Size, PointFraction(floating.Point));
-            return target - own + new Vector2(floating.Offset.x, -floating.Offset.y);
+            return target - own + floating.Offset;
         }
 
         // ── Axis helpers (axis 0 is x, 1 is y) ───────────────────────────────────
