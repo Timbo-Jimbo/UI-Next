@@ -347,6 +347,9 @@ namespace TimboJimbo.UINext
         /// <summary>The interaction states this node provides itself.</summary>
         public InteractionStates Interaction => _interaction.Peek;
 
+        // Whether it provides interaction states to itself and what is inside it (a button does).
+        internal bool ProvidesInteraction => _interactionProviders > 0;
+
         internal void AddInteractionProvider()
         {
             _interactionProviders++;
