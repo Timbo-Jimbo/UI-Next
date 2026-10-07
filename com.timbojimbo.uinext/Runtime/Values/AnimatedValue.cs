@@ -25,6 +25,10 @@ namespace TimboJimbo.UINext
         // not given).
         private readonly float _rest;
 
+        // Whether a change animates it even before anything has drawn it: for values made to be animated, such as a
+        // presentation's transition, set and animated before their first frame.
+        private readonly bool _alwaysAnimates;
+
         public AnimatedValue() : this(default) { }
 
         public AnimatedValue(T value, float rest = -1f)
@@ -32,6 +36,8 @@ namespace TimboJimbo.UINext
             _model = value;
             _rest = rest >= 0f ? rest : s_converter?.Rest ?? 0f;
         }
+
+        internal AnimatedValue(T value, float rest, bool alwaysAnimates) : this(value, rest) => _alwaysAnimates = alwaysAnimates;
 
         /// <summary>Whether values of this type interpolate.</summary>
         public static bool Interpolates => s_converter != null;
@@ -154,7 +160,7 @@ namespace TimboJimbo.UINext
             var transaction = UITransaction.Current;
             var animation = transaction?.Animation ?? implicitAnimation;
             bool animates = s_converter != null && UIFrame.Live && animation.HasValue && !animation.Value.AtOnce
-                            && (_slot >= 0 || HasPresentationReaders);
+                            && (_slot >= 0 || HasPresentationReaders || _alwaysAnimates);
             if (animates)
             {
                 if (_slot < 0)

@@ -34,8 +34,11 @@ namespace TimboJimbo.UINext
         public readonly List<ClipShape> ClipShapes = new();
         private Vector4[] _clipChains = new Vector4[32];
 
-        // The nodes shown, in the order they are drawn (the compositor's), which hit testing walks backwards.
+        // The nodes shown, in the order they are drawn (the compositor's), which hit testing walks backwards; and where
+        // each presentation level starts in it, and whether that level takes pointers.
         public readonly List<int> DrawOrder = new();
+        public readonly List<int> LevelStarts = new();
+        public readonly List<bool> LevelInteractive = new();
 
         private readonly LayoutComputation _layout;
         private readonly CompositeComputation _composite;
@@ -92,6 +95,8 @@ namespace TimboJimbo.UINext
         }
 
         public void InvalidateLayout() => _layout.Invalidate();
+
+        public void InvalidateComposite() => _composite.Invalidate();
 
         public void Remove(UINode node)
         {
@@ -188,8 +193,12 @@ namespace TimboJimbo.UINext
         /// </summary>
         public int HitTest(Vector2 point)
         {
+            int level = LevelStarts.Count - 1;
             for (int k = DrawOrder.Count - 1; k >= 0; k--)
             {
+                while (level > 0 && k < LevelStarts[level]) level--;
+                // A presentation on its way out takes no pointers: what it uncovers does.
+                if (level >= 0 && level < LevelInteractive.Count && !LevelInteractive[level]) continue;
                 int i = DrawOrder[k];
                 if (i >= Nodes.Count) continue;
                 var node = Nodes[i];
@@ -240,15 +249,35 @@ namespace TimboJimbo.UINext
             var rootSize = Root.SizeObservable.Value;
             var safeArea = Root.SafeAreaObservable.Value;
 
+            // The tree, then every presented node in it on its own: a presented screen is laid out as a root is,
+            // covering the root whatever its place in the hierarchy, its padding kept clear of the safe area.
+            Solve(0, rootSize, safeArea);
+            for (int i = 1; i < nodeCount; i++)
+            {
+                var node = Nodes[i];
+                if (node.PresentationLevel.Value != 0 && node.Display.Value != DisplayMode.None)
+                    Solve(i, rootSize, safeArea);
+            }
+        }
+
+        // Lays out the subtree under node `start` as a tree of its own over the root's rect, leaving out what is not
+        // laid out (Display None) and the presented nodes in it (laid out on their own).
+        private void Solve(int start, Vector2 rootSize, Insets safeArea)
+        {
+            int end = SubtreeEnd[start];
             int count = 0;
-            for (int i = 0; i < nodeCount; i++)
+            for (int i = start; i < end; i++)
             {
                 var node = Nodes[i];
                 _solverIndex[i] = -1;
-                var parent = node.ParentNode;
-                int parentIndex = parent != null ? _solverIndex[parent.Index] : -1;
-                if (parent != null && parentIndex < 0) continue;
-                if (parent != null && node.Display.Value == DisplayMode.None) continue;
+                int parentIndex = -1;
+                if (i != start)
+                {
+                    var parent = node.ParentNode;
+                    parentIndex = parent != null ? _solverIndex[parent.Index] : -1;
+                    if (parentIndex < 0) continue;
+                    if (node.Display.Value == DisplayMode.None || node.PresentationLevel.Value != 0) continue;
+                }
 
                 _solverIndex[i] = count;
                 _solverToNode[count] = i;
@@ -268,7 +297,7 @@ namespace TimboJimbo.UINext
                     AlignX = node.AlignX.Value,
                     AlignY = node.AlignY.Value,
                     AspectRatio = node.AspectRatio.Value,
-                    Floating = node.Floating.Value,
+                    Floating = i == start ? default : node.Floating.Value,
                     Element = -1,
                     Ignores = node.IgnoresSafeArea.Value,
                     Scroll = node.Scroller != null && node.Scroller.isActiveAndEnabled ? node.Scroller.Axis.Value : ScrollAxis.None,
@@ -284,13 +313,14 @@ namespace TimboJimbo.UINext
                 count++;
             }
 
-            // Floating against an element: the element's solver index, or against the parent when it is not laid out here.
+            // Floating against an element: the element's solver index, or against the parent when it is not laid out
+            // in this solve.
             for (int k = 1; k < count; k++)
             {
                 ref var s = ref _solver[k];
                 if (s.Floating.AttachTo != FloatingAttach.Element) continue;
                 var element = s.Floating.Element;
-                if (element != null && element.Tree == this && element.Index >= 0 && _solverIndex[element.Index] >= 0)
+                if (element != null && element.Tree == this && element.Index >= start && element.Index < end && _solverIndex[element.Index] >= 0)
                     s.Element = _solverIndex[element.Index];
                 else
                     s.Floating.AttachTo = FloatingAttach.Parent;
@@ -306,9 +336,23 @@ namespace TimboJimbo.UINext
                 node.Frame.SetModel(rect, null);
                 if (k > 0)
                     WriteRectTransform(node.RectTransform, rect);
+                else if (start > 0)
+                    WriteRectTransform(node.RectTransform, new Rect(-RootPosition(node.ParentNode), rootSize));
                 if (node.Scroller != null)
                     node.Scroller.SetExtent(s.Rect.size, s.ContentSize, s.Reach);
             }
+        }
+
+        // Where a node is laid out in its root's space, by its frames up the tree.
+        private static Vector2 RootPosition(UINode node)
+        {
+            var position = Vector2.zero;
+            for (; node != null && node.ParentNode != null; node = node.ParentNode)
+            {
+                if (node.PresentationLevel.Peek != 0) break;
+                position += node.Frame.Peek.position;
+            }
+            return position;
         }
 
         // The model, for the scene view and for code reading transforms: anchored and pivoted at the parent's top-left.
@@ -335,7 +379,8 @@ namespace TimboJimbo.UINext
             for (int i = 0; i < nodeCount; i++)
             {
                 var node = Nodes[i];
-                var parent = node.ParentNode;
+                // A presented node hangs off the root, whatever its place in the hierarchy.
+                var parent = i > 0 && node.PresentationLevel.Value != 0 ? RootNode : node.ParentNode;
                 int p = parent != null ? parent.Index : -1;
 
                 var frame = p < 0 ? new Rect(0f, 0f, rootSize.x, rootSize.y) : node.Frame.Value;
@@ -343,8 +388,16 @@ namespace TimboJimbo.UINext
                 float scale = node.Scale.Value;
                 float rotation = node.Rotation.Value;
                 float opacity = Mathf.Clamp01(node.Opacity.Value);
+                var transition = node.Transition;
+                if (transition != null)
+                {
+                    offset += transition.Offset.Value;
+                    scale *= transition.Scale.Value;
+                    opacity *= Mathf.Clamp01(transition.Opacity.Value);
+                }
                 bool shown = node.Display.Value == DisplayMode.Visible && (p < 0 || Shown[p]);
-                bool topLayer = node.TopLayer.Value;
+                // Lifted into the top layer or presented: out of its ancestors' clips.
+                bool topLayer = node.TopLayer.Value || node.PresentationLevel.Value != 0;
                 _ = node.ZIndex.Value;
 
                 var local = Affine2.Translate(frame.position + offset)

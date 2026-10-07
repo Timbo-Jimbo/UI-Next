@@ -144,6 +144,14 @@ namespace TimboJimbo.UINext
         // Its scroll container behaviour, if any, which offsets what is inside it.
         [NonSerialized] internal ScrollView Scroller;
 
+        // Moved, scaled and faded on top of its own drawn values by a presentation bringing it in or taking it away;
+        // made the first time one does.
+        [NonSerialized] internal NodeTransition Transition;
+
+        // Above 0, it is presented: drawn at that level of its root's presentation stack, above what is below, out of
+        // its ancestors' clips. Negative while it is being dismissed (drawn, but taking no pointers).
+        [NonSerialized] internal readonly Observable<int> PresentationLevel = new();
+
         // States it provides to itself and what is inside it.
         [NonSerialized] private Dictionary<UIState, bool> _states;
         [NonSerialized] private readonly Observable<int> _stateRevision = new();
@@ -279,6 +287,15 @@ namespace TimboJimbo.UINext
             if (Tree != null) return ParentNode;
             var parent = transform.parent;
             return parent != null && parent.TryGetComponent(out UINode node) && node.isActiveAndEnabled ? node : null;
+        }
+
+        /// <summary>Its transition values, made if it has none yet (the tree composites it with them from now on).</summary>
+        internal NodeTransition EnsureTransition()
+        {
+            if (Transition != null) return Transition;
+            Transition = new NodeTransition();
+            Tree?.InvalidateComposite();
+            return Transition;
         }
 
         // ── Lifecycle ────────────────────────────────────────────────────────────

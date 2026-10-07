@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -39,7 +40,7 @@ namespace TimboJimbo.UINext
             public readonly VelocityTracker Velocity = new();
 
             public PointerEvent Event(Vector2 point, double time) =>
-                new(PointerId, Kind, Root, point, Start, time, Velocity.Velocity);
+                new(PointerId, Kind, Root, point, Start, time, Velocity.Velocity, Node);
         }
 
         private static readonly Dictionary<int, Track> s_tracks = new();
@@ -53,6 +54,12 @@ namespace TimboJimbo.UINext
         private static bool s_hooked;
         private static bool s_mouseDown;
         private static bool s_penDown;
+
+        /// <summary>
+        /// Raised when back is asked for: Escape, a gamepad's East button (B), Android's back. Handlers that act on it
+        /// (the topmost presentation dismissing) set the flag so the rest leave it; the latest added hears it first.
+        /// </summary>
+        public static event Func<bool> Back;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
@@ -152,6 +159,11 @@ namespace TimboJimbo.UINext
                 if (scroll != Vector2.zero && OnScreen(screen))
                     Scroll(screen, scroll);
             }
+
+            var keyboard = Keyboard.current;
+            var gamepad = Gamepad.current;
+            if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame) || (gamepad != null && gamepad.buttonEast.wasPressedThisFrame))
+                GoBack();
 
             var pen = Pen.current;
             if (pen != null)
@@ -285,6 +297,17 @@ namespace TimboJimbo.UINext
             foreach (var handler in track.Handlers.ToArray())
                 if (Alive(handler))
                     handler.OnPointerCancel(in e);
+        }
+
+        /// <summary>Asks for back, as Escape does: the latest handler that takes it acts on it.</summary>
+        public static bool GoBack()
+        {
+            if (Back == null) return false;
+            var handlers = Back.GetInvocationList();
+            for (int i = handlers.Length - 1; i >= 0; i--)
+                if (((Func<bool>)handlers[i])())
+                    return true;
+            return false;
         }
 
         /// <summary>Cuts short every pointer that is down (a screen covering everything, focus lost).</summary>

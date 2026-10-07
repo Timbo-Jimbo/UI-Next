@@ -33,8 +33,12 @@ namespace TimboJimbo.UINext
         /// <summary>How fast it is moving, in its root's points a second.</summary>
         public readonly Vector2 Velocity;
 
-        internal PointerEvent(int pointerId, PointerKind kind, UIRoot root, Vector2 position, Vector2 startPosition, double time, Vector2 velocity)
+        /// <summary>The node it went down on: the deepest under it that takes the pointer.</summary>
+        public readonly UINode Target;
+
+        internal PointerEvent(int pointerId, PointerKind kind, UIRoot root, Vector2 position, Vector2 startPosition, double time, Vector2 velocity, UINode target)
         {
+            Target = target;
             PointerId = pointerId;
             Kind = kind;
             Root = root;

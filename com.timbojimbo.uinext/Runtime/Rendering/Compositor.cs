@@ -38,9 +38,11 @@ namespace TimboJimbo.UINext
         private static bool s_orderDirty = true;
         private static bool s_slotsDirty = true;
 
-        // Scratch for drawing order: one node's children sorted by ZIndex, and the top layer of the tree being walked.
+        // Scratch for drawing order: one node's children sorted by ZIndex, the top layer of the level being walked, and
+        // the presented nodes of the tree being walked, in level order.
         private static readonly List<UINode> s_children = new();
         private static readonly List<UINode> s_topLayer = new();
+        private static readonly List<UINode> s_levels = new();
 
         private static Material s_material;
         private static readonly MaterialPropertyBlock s_properties = new();
@@ -109,10 +111,27 @@ namespace TimboJimbo.UINext
                     if (tree.Nodes.Count == 0) continue;
                     int start = s_instanceCount;
                     tree.DrawOrder.Clear();
-                    s_topLayer.Clear();
-                    Walk(tree, tree.RootNode, s_slotBase[tree], false);
-                    for (int i = 0; i < s_topLayer.Count; i++)
-                        Walk(tree, s_topLayer[i], s_slotBase[tree], true);
+                    tree.LevelStarts.Clear();
+                    tree.LevelInteractive.Clear();
+                    CollectLevels(tree);
+                    // From the topmost cover that is in place: nothing under it shows.
+                    int from = 0;
+                    for (int l = s_levels.Count - 1; l >= 1; l--)
+                    {
+                        if (!Presentation.CoversWhatIsBelow(s_levels[l])) continue;
+                        from = l;
+                        break;
+                    }
+                    for (int l = from; l < s_levels.Count; l++)
+                    {
+                        var level = s_levels[l];
+                        tree.LevelStarts.Add(tree.DrawOrder.Count);
+                        tree.LevelInteractive.Add(level.PresentationLevel.Peek >= 0);
+                        s_topLayer.Clear();
+                        Walk(tree, level, s_slotBase[tree], true, level);
+                        for (int i = 0; i < s_topLayer.Count; i++)
+                            Walk(tree, s_topLayer[i], s_slotBase[tree], true, level);
+                    }
                     MakeBatches(tree, start, s_instanceCount);
                 }
             }
@@ -122,12 +141,37 @@ namespace TimboJimbo.UINext
             s_slotsDirty = false;
         }
 
+        // The levels of a tree: its root, then every presented node in it, lowest level first.
+        private static void CollectLevels(UITree tree)
+        {
+            s_levels.Clear();
+            s_levels.Add(tree.RootNode);
+            for (int i = 1; i < tree.Nodes.Count; i++)
+            {
+                var node = tree.Nodes[i];
+                if (node != null && node.PresentationLevel.Peek != 0)
+                    s_levels.Add(node);
+            }
+            if (s_levels.Count > 2)
+                s_levels.Sort(1, s_levels.Count - 1, LevelOrder.Instance);
+        }
+
+        private sealed class LevelOrder : IComparer<UINode>
+        {
+            public static readonly LevelOrder Instance = new();
+
+            public int Compare(UINode a, UINode b) =>
+                Mathf.Abs(a.PresentationLevel.Peek).CompareTo(Mathf.Abs(b.PresentationLevel.Peek));
+        }
+
         // Adds a node's primitives, then its children's in ZIndex order (siblings with equal ZIndex in hierarchy order);
-        // a node in the top layer is put off until the end of its tree, unless it is the one being drawn there now.
-        private static void Walk(UITree tree, UINode node, int slotBase, bool lifted)
+        // a node in the top layer is put off until the end of its level, and a presented node to its own level, unless
+        // it is the one being drawn there now.
+        private static void Walk(UITree tree, UINode node, int slotBase, bool lifted, UINode level)
         {
             if (node.Index < 0 || node.Tree != tree) return;
-            if (!lifted && node != tree.RootNode && node.TopLayer.Peek)
+            if (node != level && node.PresentationLevel.Peek != 0) return;
+            if (!lifted && node.TopLayer.Peek)
             {
                 s_topLayer.Add(node);
                 return;
@@ -146,7 +190,7 @@ namespace TimboJimbo.UINext
             if (count > 1)
                 SortByZIndex(first, count);
             for (int i = 0; i < count; i++)
-                Walk(tree, s_children[first + i], slotBase, false);
+                Walk(tree, s_children[first + i], slotBase, false, level);
             s_children.RemoveRange(first, count);
             Emit(node.OverlayInstances, node.OverlayTextures, slot);
         }
