@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2bdc0cfd51820af4480804fa8bb3d815, type: 3}
+  m_Name: Theme Secondary
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.ColorToken
+  _default: {r: 0.43137255, g: 0.43137255, b: 0.47058824, a: 1}
+  _modes:
+  - Mode: {fileID: 11400000, guid: f9ad33385e8bb9e4b9d396f6979b8f43, type: 2}
+    Value: {r: 0.6039216, g: 0.6039216, b: 0.6509804, a: 1}
+  - Mode: {fileID: 11400000, guid: 22b903f0576c3af4f8368ed5b66a9aa4, type: 2}
+    Value: {r: 0.54901963, g: 0.4627451, b: 0.3529412, a: 1}

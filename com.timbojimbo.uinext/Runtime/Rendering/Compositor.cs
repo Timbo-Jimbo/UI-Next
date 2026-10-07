@@ -225,16 +225,26 @@ namespace TimboJimbo.UINext
             }
         }
 
+        // Runs of primitives drawn in one call: a texture change starts a new one, but a primitive that samples nothing
+        // (a shape, a shadow) goes with whatever texture its run has, so text between boxes does not split them.
         private static void MakeBatches(UITree tree, int start, int end)
         {
             int batchStart = start;
-            for (int i = start + 1; i <= end; i++)
+            Texture texture = null;
+            for (int i = start; i < end; i++)
             {
-                if (i < end && s_textures[i] == s_textures[batchStart]) continue;
-                if (i > batchStart)
-                    Batches.Add(new Batch { Tree = tree, Start = batchStart, Count = i - batchStart, Texture = s_textures[batchStart] });
+                var next = s_textures[i];
+                if (next == null || next == texture || texture == null)
+                {
+                    texture ??= next;
+                    continue;
+                }
+                Batches.Add(new Batch { Tree = tree, Start = batchStart, Count = i - batchStart, Texture = texture });
                 batchStart = i;
+                texture = next;
             }
+            if (end > batchStart)
+                Batches.Add(new Batch { Tree = tree, Start = batchStart, Count = end - batchStart, Texture = texture });
         }
 
         private static Vector4 OffsetChain(Vector4 chain, int clipBase)
