@@ -23,5 +23,5 @@
 - Content cross-fades: inside `UI.Animate`, a change to a drawn value that cannot interpolate (a label's text, an image's sprite, a drawable's bool or enum) fades the node's old drawing out as the new one fades in
 - A state's enter and exit animations move everything it changes when it is set outside `UI.Animate`, token values included
 - `UIBuild`, extension methods for building trees from code
-- Editor: the state bar, a Scene view overlay previewing interaction states, states and modes on the selected node (`UIStatePreview`); inspector drawers for `UIValue<T>`, `Sizing`, `Insets` and `CornerRadii`; `UISimulator` and `UICapture`, which play and capture frames outside play mode
+- Editor: the state bar, a Scene view overlay previewing interaction states, states and modes on the selected node (`UIStatePreview`), with a readout of the frame's draw calls, primitives and layers; inspector drawers for `UIValue<T>`, `Sizing`, `Insets` and `CornerRadii`; `UISimulator` and `UICapture`, which play and capture frames outside play mode
 - Demos: Circle (`Demos/Scenes/Circle.unity`) and the showcase (`Demos/Scenes/Showcase.unity`), built by `Tools/UI Next/Demos`
