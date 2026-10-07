@@ -1,3 +1,5 @@
+using TimboJimbo.UI.Text;
+using TimboJimbo.UI.Text.Bridge;
 using UnityEngine;
 
 namespace TimboJimbo.UINext
@@ -122,6 +124,60 @@ namespace TimboJimbo.UINext
                 Type = (uint)PrimitiveType.Image,
             }, texture);
         }
+
+        /// <summary>
+        /// A laid-out text with its top-left corner at <paramref name="origin"/> (layout pixels are points): its glyphs,
+        /// as signed distance fields (colour emoji keeping their own colours), and its underlines and strikethroughs, each
+        /// run's colour multiplied by <paramref name="tint"/>.
+        /// </summary>
+        public void Text(TextLayout layout, Vector2 origin, Color tint)
+        {
+            float left = origin.x;
+            float top = origin.y;
+
+            var decorations = layout.Decorations;
+            for (int i = 0; i < decorations.Count; i++)
+            {
+                var decoration = decorations[i];
+                var rect = decoration.Px;
+                rect.x += left;
+                rect.y += top;
+                Rect(rect, Multiply(decoration.Color, tint), default);
+            }
+
+            var handle = layout.Handle;
+            for (int g = 0; g < handle.GroupCount; g++)
+            {
+                var group = handle.GetGroup(g);
+                if (AtgSpriteAssets.IsPlaceholder(in group)) continue;
+                // Synthetic bold widens the glyph by a weight the engine gives in its own units; as a share of the
+                // field, through this atlas's padding, so it is the same in texels whatever the padding.
+                float dilateScale = group.AtlasPadding > 0 ? 0.5f / group.AtlasPadding * BoldTexelsPerUnit : 0f;
+                for (int q = 0; q < group.Count; q++)
+                {
+                    handle.GetQuad(g, q, out var quad);
+                    var topLeft = quad.TopLeft.Position;
+                    var bottomLeft = quad.BottomLeft.Position;
+                    var bottomRight = quad.BottomRight.Position;
+                    var rect = new Rect(left + bottomLeft.x, top + topLeft.y, bottomRight.x - bottomLeft.x, bottomLeft.y - topLeft.y);
+                    float skew = topLeft.x - bottomLeft.x;
+                    var uvMin = quad.BottomLeft.Uv;
+                    var uvMax = quad.TopRight.Uv;
+                    var uv = new Rect(uvMin, uvMax - uvMin);
+                    // Colour bitmaps (emoji) keep their own colours: only the alpha is tinted.
+                    var color = group.IsBitmap
+                        ? new Color(1f, 1f, 1f, quad.BottomLeft.Color.a / 255f * tint.a)
+                        : Multiply(quad.BottomLeft.Color, tint);
+                    Glyph(rect, skew, uv, group.Atlas, color, !group.IsBitmap, quad.BottomLeft.Dilate * dilateScale);
+                }
+            }
+        }
+
+        // Atlas texels one unit of the engine's bold weight dilates a glyph by, as the text engine's own drawing has it.
+        private const float BoldTexelsPerUnit = 2.25f;
+
+        private static Color Multiply(Color32 run, Color tint) =>
+            new(run.r / 255f * tint.r, run.g / 255f * tint.g, run.b / 255f * tint.b, run.a / 255f * tint.a);
 
         /// <summary>
         /// A glyph quad at <paramref name="rect"/> from an atlas, its top moved right by <paramref name="skew"/> (italic):

@@ -1,5 +1,4 @@
 using TimboJimbo.UI.Text;
-using TimboJimbo.UI.Text.Bridge;
 using TimboJimbo.UI.Text.Markup;
 using UnityEngine;
 
@@ -131,51 +130,8 @@ namespace TimboJimbo.UINext
                 _laidOut = input;
             }
             if (!_hasLaidOut) return;
-
-            var tint = _color.Value;
-            float left = box.x;
-            float top = box.y + _layout.TopPx;
-
-            var decorations = _layout.Decorations;
-            for (int i = 0; i < decorations.Count; i++)
-            {
-                var decoration = decorations[i];
-                var rect = decoration.Px;
-                rect.x += left;
-                rect.y += top;
-                painter.Rect(rect, Multiply(decoration.Color, tint), default);
-            }
-
-            var handle = _layout.Handle;
-            for (int g = 0; g < handle.GroupCount; g++)
-            {
-                var group = handle.GetGroup(g);
-                if (AtgSpriteAssets.IsPlaceholder(in group)) continue;
-                // Synthetic bold widens the glyph by a weight the engine gives in its own units; as a share of the
-                // field, through this atlas's padding, so it is the same in texels whatever the padding.
-                float dilateScale = group.AtlasPadding > 0 ? 0.5f / group.AtlasPadding * BoldTexelsPerUnit : 0f;
-                for (int q = 0; q < group.Count; q++)
-                {
-                    handle.GetQuad(g, q, out var quad);
-                    var topLeft = quad.TopLeft.Position;
-                    var bottomLeft = quad.BottomLeft.Position;
-                    var bottomRight = quad.BottomRight.Position;
-                    var rect = new Rect(left + bottomLeft.x, top + topLeft.y, bottomRight.x - bottomLeft.x, bottomLeft.y - topLeft.y);
-                    float skew = topLeft.x - bottomLeft.x;
-                    var uvMin = quad.BottomLeft.Uv;
-                    var uvMax = quad.TopRight.Uv;
-                    var uv = new Rect(uvMin, uvMax - uvMin);
-                    // Colour bitmaps (emoji) keep their own colours: only the alpha is tinted.
-                    var color = group.IsBitmap
-                        ? new Color(1f, 1f, 1f, quad.BottomLeft.Color.a / 255f * tint.a)
-                        : Multiply(quad.BottomLeft.Color, tint);
-                    painter.Glyph(rect, skew, uv, group.Atlas, color, !group.IsBitmap, quad.BottomLeft.Dilate * dilateScale);
-                }
-            }
+            painter.Text(_layout, new Vector2(box.x, box.y + _layout.TopPx), _color.Value);
         }
-
-        // Atlas texels one unit of the engine's bold weight dilates a glyph by, as the text engine's own drawing has it.
-        private const float BoldTexelsPerUnit = 2.25f;
 
         protected override void OnDisable()
         {
@@ -214,8 +170,5 @@ namespace TimboJimbo.UINext
             && a.WordWrap == b.WordWrap && a.Alignment == b.Alignment && a.Overflow == b.Overflow && a.MaxLines == b.MaxLines
             && a.Bold == b.Bold && a.Italic == b.Italic && a.CharacterSpacingPx == b.CharacterSpacingPx
             && (ignoreBox || (a.WidthPx == b.WidthPx && a.HeightPx == b.HeightPx));
-
-        private static Color Multiply(Color32 run, Color tint) =>
-            new(run.r / 255f * tint.r, run.g / 255f * tint.g, run.b / 255f * tint.b, run.a / 255f * tint.a);
     }
 }
