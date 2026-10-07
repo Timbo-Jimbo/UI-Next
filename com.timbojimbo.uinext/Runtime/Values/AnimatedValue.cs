@@ -110,11 +110,35 @@ namespace TimboJimbo.UINext
         /// </summary>
         internal void Fling(Vector4 velocity, UIAnimation animation)
         {
-            if (s_converter == null || !Application.isPlaying) return;
+            if (s_converter == null || !UIFrame.Live) return;
             if (_slot < 0)
                 _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, s_converter.ToVector(_model));
             SpringStore.Retarget(_slot, s_converter.ToVector(_model), animation, null);
             SpringStore.AddVelocity(_slot, velocity);
+            _presentation.Notify();
+        }
+
+        /// <summary>
+        /// Gives it a new model and springs its presentation there on <paramref name="animation"/> from where it is
+        /// drawn, moving at <paramref name="velocity"/> (converted units a second): a scroll bouncing back from past its
+        /// edge, a dragged sheet let go of. Part of no change.
+        /// </summary>
+        internal void SpringTo(T value, Vector4 velocity, UIAnimation animation)
+        {
+            if (s_converter == null || !UIFrame.Live || animation.AtOnce)
+            {
+                SetModel(value, null);
+                Settle();
+                return;
+            }
+            var from = _slot >= 0 ? SpringStore.Value(_slot) : s_converter.ToVector(_model);
+            bool changed = !s_comparer.Equals(_model, value);
+            _model = value;
+            if (changed) NotifyChanged();
+            if (_slot < 0)
+                _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, from);
+            SpringStore.Retarget(_slot, s_converter.ToVector(value), animation, null);
+            SpringStore.SetVelocity(_slot, velocity);
             _presentation.Notify();
         }
 
@@ -129,7 +153,7 @@ namespace TimboJimbo.UINext
         {
             var transaction = UITransaction.Current;
             var animation = transaction?.Animation ?? implicitAnimation;
-            bool animates = s_converter != null && Application.isPlaying && animation.HasValue && !animation.Value.AtOnce
+            bool animates = s_converter != null && UIFrame.Live && animation.HasValue && !animation.Value.AtOnce
                             && (_slot >= 0 || HasPresentationReaders);
             if (animates)
             {

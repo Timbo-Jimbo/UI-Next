@@ -108,6 +108,7 @@ namespace TimboJimbo.UINext
                     var tree = trees[t];
                     if (tree.Nodes.Count == 0) continue;
                     int start = s_instanceCount;
+                    tree.DrawOrder.Clear();
                     s_topLayer.Clear();
                     Walk(tree, tree.RootNode, s_slotBase[tree], false);
                     for (int i = 0; i < s_topLayer.Count; i++)
@@ -133,18 +134,9 @@ namespace TimboJimbo.UINext
             }
             if (!tree.Shown[node.Index]) return;
 
-            var instances = node.Instances;
-            var textures = node.InstanceTextures;
-            EnsureInstances(s_instanceCount + instances.Count);
+            tree.DrawOrder.Add(node.Index);
             uint slot = (uint)(slotBase + node.Index);
-            for (int i = 0; i < instances.Count; i++)
-            {
-                var instance = instances[i];
-                instance.Slot = slot;
-                s_instances[s_instanceCount] = instance;
-                s_textures[s_instanceCount] = textures[i];
-                s_instanceCount++;
-            }
+            Emit(node.Instances, node.InstanceTextures, slot);
 
             int first = s_children.Count;
             int end = tree.SubtreeEnd[node.Index];
@@ -156,6 +148,20 @@ namespace TimboJimbo.UINext
             for (int i = 0; i < count; i++)
                 Walk(tree, s_children[first + i], slotBase, false);
             s_children.RemoveRange(first, count);
+            Emit(node.OverlayInstances, node.OverlayTextures, slot);
+        }
+
+        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot)
+        {
+            EnsureInstances(s_instanceCount + instances.Count);
+            for (int i = 0; i < instances.Count; i++)
+            {
+                var instance = instances[i];
+                instance.Slot = slot;
+                s_instances[s_instanceCount] = instance;
+                s_textures[s_instanceCount] = textures[i];
+                s_instanceCount++;
+            }
         }
 
         // A stable insertion sort of one node's children by ZIndex.

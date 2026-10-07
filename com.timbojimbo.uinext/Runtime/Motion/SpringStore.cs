@@ -39,6 +39,10 @@ namespace TimboJimbo.UINext
         private static readonly List<int> s_active = new();
         private static int s_count;
 
+        // How many steps have been taken: a slot set off since the last is not moved by the next, whose time passed
+        // before it set off.
+        private static int s_steps;
+
         // Slots settled in the step, reported once the step is over.
         private static readonly List<int> s_settled = new();
 
@@ -79,7 +83,7 @@ namespace TimboJimbo.UINext
             s_delay[slot] = 0f;
             s_omega[slot] = float.PositiveInfinity;
             s_zeta[slot] = 1f;
-            s_setOff[slot] = Time.frameCount;
+            s_setOff[slot] = s_steps;
             s_transaction[slot] = null;
             s_activeIndex[slot] = s_active.Count;
             s_active.Add(slot);
@@ -112,6 +116,9 @@ namespace TimboJimbo.UINext
         /// <summary>Adds to a slot's velocity (a fling, a scroll handing on its speed).</summary>
         public static void AddVelocity(int slot, Vector4 velocity) => s_velocity[slot] += velocity;
 
+        /// <summary>Sets a slot's velocity.</summary>
+        public static void SetVelocity(int slot, Vector4 velocity) => s_velocity[slot] = velocity;
+
         /// <summary>Puts a slot's value somewhere at once, keeping its velocity and target.</summary>
         public static void SetValue(int slot, Vector4 value) => s_value[slot] = value;
 
@@ -127,14 +134,17 @@ namespace TimboJimbo.UINext
             owner?.OnSpringSettled();
         }
 
-        /// <summary>Moves every slot <paramref name="dt"/> seconds on, bar those that set off this frame.</summary>
+        /// <summary>
+        /// Moves every slot <paramref name="dt"/> seconds on, bar those that set off since the last step: the time it
+        /// covers passed before they did.
+        /// </summary>
         public static void Step(float dt)
         {
-            int frame = Time.frameCount;
+            int setOff = s_steps++;
             for (int i = 0; i < s_active.Count; i++)
             {
                 int slot = s_active[i];
-                if (s_setOff[slot] == frame) continue;
+                if (s_setOff[slot] == setOff) continue;
                 if (StepSlot(slot, dt))
                     s_settled.Add(slot);
                 else

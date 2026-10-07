@@ -127,15 +127,18 @@ namespace TimboJimbo.UINext
 
         [NonSerialized] internal UITree Tree;
         [NonSerialized] internal UINode ParentNode;
+        [NonSerialized] internal UINode LastParent;
         [NonSerialized] internal int Index = -1;
 
         // Its drawables, in component order, and the first that measures.
         [NonSerialized] internal readonly List<UIDrawable> Drawables = new();
         [NonSerialized] internal IMeasurable Content;
 
-        // What it draws, in its own space, made by its draw computation.
+        // What it draws, in its own space, made by its draw computation: under its children, and over them.
         [NonSerialized] internal readonly List<PrimitiveInstance> Instances = new();
         [NonSerialized] internal readonly List<Texture> InstanceTextures = new();
+        [NonSerialized] internal readonly List<PrimitiveInstance> OverlayInstances = new();
+        [NonSerialized] internal readonly List<Texture> OverlayTextures = new();
         [NonSerialized] internal NodeDraw DrawComputation;
 
         // Its scroll container behaviour, if any, which offsets what is inside it.
@@ -219,6 +222,8 @@ namespace TimboJimbo.UINext
         {
             for (var node = this; node != null; node = node.LayoutParentOrTransform())
             {
+                // Read on every node passed, so a provider added or a parent changed on the way is noticed.
+                _ = node._stateRevision.Value;
                 if (node._interactionProviders > 0)
                     return node._interaction.Value;
             }
@@ -228,7 +233,11 @@ namespace TimboJimbo.UINext
         /// <summary>The interaction states this node provides itself.</summary>
         public InteractionStates Interaction => _interaction.Peek;
 
-        internal void AddInteractionProvider() => _interactionProviders++;
+        internal void AddInteractionProvider()
+        {
+            _interactionProviders++;
+            _stateRevision.Value++;
+        }
 
         internal void RemoveInteractionProvider()
         {
@@ -237,7 +246,11 @@ namespace TimboJimbo.UINext
                 _interactionProviders = 0;
                 _interaction.Value = InteractionStates.None;
             }
+            _stateRevision.Value++;
         }
+
+        // Its layout parent changed: what reads states through it reads them again.
+        internal void HierarchyChanged() => _stateRevision.Value++;
 
         internal void SetInteraction(InteractionStates states, bool on)
         {

@@ -23,7 +23,7 @@ namespace TimboJimbo.UINext
             }
 
             var transaction = new UITransaction(animation);
-            if (!Application.isPlaying)
+            if (!UIFrame.Live)
             {
                 update();
                 UIScheduler.Flush(Phase.Layout);

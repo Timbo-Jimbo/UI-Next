@@ -26,6 +26,7 @@ namespace TimboJimboEditor.UINext
             }
 
             var target = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32) { name = "UINext Capture" };
+            var previousSize = UIFrame.ScreenSizeOverride;
             var go = new GameObject("UINext Capture") { hideFlags = HideFlags.HideAndDontSave };
             try
             {
@@ -51,7 +52,7 @@ namespace TimboJimboEditor.UINext
             }
             finally
             {
-                UIFrame.ScreenSizeOverride = null;
+                UIFrame.ScreenSizeOverride = previousSize;
                 UI.RequestRepaint();
                 Object.DestroyImmediate(go);
                 target.Release();

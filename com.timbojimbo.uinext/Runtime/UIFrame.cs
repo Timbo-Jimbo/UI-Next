@@ -19,6 +19,13 @@ namespace TimboJimbo.UINext
         // A screen size to lay roots out at instead of the screen's (captures at a size of their own).
         internal static Vector2? ScreenSizeOverride;
 
+        // Outside play mode, frames run as they would in play mode, but only step when told to (Advance): for tests
+        // and captures that play a change frame by frame.
+        internal static bool Simulating;
+
+        /// <summary>Whether changes animate: in play mode, or while simulating.</summary>
+        internal static bool Live => Application.isPlaying || Simulating;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics() => s_lastStepped = -1;
 
@@ -51,16 +58,27 @@ namespace TimboJimbo.UINext
         public static void Run()
         {
             int frame = Time.frameCount;
-            bool playing = Application.isPlaying;
-            bool step = playing && frame != s_lastStepped;
+            bool step = Application.isPlaying && frame != s_lastStepped;
             if (step) s_lastStepped = frame;
+            Frame(step ? Time.unscaledDeltaTime : 0f);
+        }
 
+        /// <summary>While simulating, runs a frame <paramref name="dt"/> seconds on from the last.</summary>
+        internal static void Advance(float dt) => Frame(Mathf.Max(0f, dt));
+
+        private static void Frame(float dt)
+        {
             UpdateRoots();
             UIScheduler.Flush(Phase.Layout);
-            if (step)
-                SpringStore.Step(Time.unscaledDeltaTime);
-            else if (!playing && SpringStore.ActiveCount > 0)
+            if (dt > 0f)
+            {
+                ScrollView.StepAll(dt);
+                SpringStore.Step(dt);
+            }
+            else if (!Live && SpringStore.ActiveCount > 0)
+            {
                 SpringStore.StopAll();
+            }
             UIScheduler.Flush(Phase.Draw);
             // A Finished handler may change what is drawn: it is drawn this frame, without stepping again.
             if (UITransaction.FlushFinished())

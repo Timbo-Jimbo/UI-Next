@@ -1,29 +1,70 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace TimboJimbo.UINext
 {
     /// <summary>
-    /// Makes a node scroll its children, as a UIScrollView: layout lets them run past its edge the way it scrolls, it
-    /// clips them, and they are drawn moved by its offset.
+    /// Makes a node scroll what is inside it, as UIScrollView: layout lets its children run past its edge the way it
+    /// scrolls, it clips them, and drags move them, rubber-banding past either end, gliding on when let go and slowing
+    /// as iOS's do, bouncing back into range, and coming to rest on a page when it pages. The mouse wheel scrolls it.
+    /// A pointer that goes down while it moves catches it, and does not press what is under it. It draws its scroll
+    /// indicators over what it holds while it moves.
     /// </summary>
-    [ExecuteAlways]
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(UINode))]
     [AddComponentMenu("Timbo Jimbo/UI Next/Scroll View")]
-    public sealed partial class ScrollView : MonoBehaviour
+    public sealed class ScrollView : UIDrawable, IPointerHandler, IScrollHandler
     {
         [SerializeField] private UIValue<ScrollAxis> _axis = ScrollAxis.Vertical;
 
-        [System.NonSerialized] private UINode _node;
+        [Tooltip("Whether it stretches past its ends while dragged and bounces back, as iOS's do.")]
+        [SerializeField] private UIValue<bool> _bounces = true;
+
+        [Tooltip("Pages: it comes to rest on a whole page of what it shows.")]
+        [SerializeField] private UIValue<ScrollSnap> _snap = ScrollSnap.None;
+
+        [SerializeField] private UIValue<bool> _showsIndicators = true;
+        [SerializeField] private UIValue<Color> _indicatorColor = new Color(0f, 0f, 0f, 0.35f);
+
+        // How far a pointer moves before a drag begins, in points.
+        private const float Slop = 8f;
+
+        // iOS's: how much of the way past its end a drag goes, and how fast a glide slows (per millisecond).
+        private const float RubberBand = 0.55f;
+        private const float Deceleration = 0.998f;
+
+        // A glide slower than this, in points a second, stops.
+        private const float RestSpeed = 8f;
+
+        private static readonly UIAnimation BounceBack = new(0.5f);
+        private static readonly UIAnimation PageTurn = new(0.4f);
+        private static readonly UIAnimation WheelStep = new(0.25f);
+        private static readonly UIAnimation IndicatorFade = new(0.3f, 0f, 0.6f);
+
+        private static readonly List<ScrollView> s_gliding = new();
 
         // How far its children are scrolled (x right, y down), with where it is drawn while it springs or glides.
-        [System.NonSerialized] internal readonly AnimatedValue<Vector2> Offset = new(Vector2.zero, 0.5f);
+        [NonSerialized] internal readonly AnimatedValue<Vector2> Offset = new(Vector2.zero, 0.25f);
+        [NonSerialized] private readonly AnimatedValue<float> _indicatorOpacity = new(0f, 0.01f);
+
+        [NonSerialized] private int _pointer = -1;
+        [NonSerialized] private bool _dragging;
+        [NonSerialized] private Vector2 _dragFrom;
+        [NonSerialized] private Vector2 _dragOrigin;
+        [NonSerialized] private bool _gliding;
+        [NonSerialized] private Vector2 _velocity;
+        [NonSerialized] private Vector2 _pageFrom;
+
+        /// <summary>Raised whenever it is scrolled, by a drag, a glide, the wheel or code, with its offset as set.</summary>
+        public event Action<Vector2> Scrolled;
 
         /// <summary>Which way it scrolls.</summary>
         public UIValue<ScrollAxis> Axis => _axis;
 
-        /// <summary>Its node.</summary>
-        public UINode Node => _node != null ? _node : _node = GetComponent<UINode>();
+        public UIValue<bool> Bounces => _bounces;
+        public UIValue<ScrollSnap> Snap => _snap;
+        public UIValue<bool> ShowsIndicators => _showsIndicators;
+        public UIValue<Color> IndicatorColor => _indicatorColor;
 
         /// <summary>Its size, as last laid out.</summary>
         public Vector2 Viewport { get; private set; }
@@ -36,8 +77,83 @@ namespace TimboJimbo.UINext
             Scrolls(0) ? Mathf.Max(0f, ContentSize.x - Viewport.x) : 0f,
             Scrolls(1) ? Mathf.Max(0f, ContentSize.y - Viewport.y) : 0f);
 
-        /// <summary>How far its children are scrolled, as drawn.</summary>
-        public Vector2 ScrollOffset => Offset.Presented;
+        /// <summary>How far its children are scrolled, where it is going (see <see cref="PresentedOffset"/> for as drawn).</summary>
+        public Vector2 ContentOffset
+        {
+            get => Offset.Peek;
+            set => ScrollTo(value, animated: false);
+        }
+
+        /// <summary>How far its children are scrolled as drawn now.</summary>
+        public Vector2 PresentedOffset => Offset.Presented;
+
+        /// <summary>Whether a drag is moving it.</summary>
+        public bool IsDragging => _dragging;
+
+        /// <summary>Whether it is moving on its own: gliding, bouncing back or turning a page.</summary>
+        public bool IsDecelerating => _gliding || Offset.IsAnimating;
+
+        /// <summary>Scrolls to <paramref name="offset"/> (kept in range), springing there unless told not to.</summary>
+        public void ScrollTo(Vector2 offset, bool animated = true)
+        {
+            StopGlide();
+            var target = Clamp(offset);
+            if (animated)
+            {
+                Offset.SpringTo(target, Offset.Velocity, UIAnimation.Default);
+                Flash();
+            }
+            else
+            {
+                Offset.SetModel(target, null);
+                Offset.Settle();
+            }
+            Scrolled?.Invoke(target);
+        }
+
+        /// <summary>Scrolls back to its start.</summary>
+        public void ScrollToTop(bool animated = true) => ScrollTo(Vector2.zero, animated);
+
+        /// <summary>Scrolls the least it takes to show <paramref name="node"/>, a node inside it, whole (or its start, if it is bigger).</summary>
+        public void ScrollIntoView(UINode node, bool animated = true)
+        {
+            if (node == null) return;
+            // Where the node is laid out in what this scrolls: its rect, moved by every node between it and this.
+            var rect = node.LaidOutRect;
+            for (var parent = node.Parent; parent != null && parent != Node; parent = parent.Parent)
+                rect.position += parent.LaidOutRect.position;
+            var offset = ContentOffset;
+            for (int axis = 0; axis < 2; axis++)
+            {
+                if (!Scrolls(axis)) continue;
+                float min = rect.position[axis], max = min + rect.size[axis], view = Viewport[axis];
+                if (min < offset[axis]) offset[axis] = min;
+                else if (max > offset[axis] + view) offset[axis] = Mathf.Min(min, max - view);
+            }
+            ScrollTo(offset, animated);
+        }
+
+        // ── Lifecycle ────────────────────────────────────────────────────────────
+
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            Node.Scroller = this;
+            Node.Tree?.InvalidateLayout();
+        }
+
+        protected override void OnDisable()
+        {
+            base.OnDisable();
+            StopGlide();
+            _pointer = -1;
+            _dragging = false;
+            if (Node.Scroller == this)
+            {
+                Node.Scroller = null;
+                Node.Tree?.InvalidateLayout();
+            }
+        }
 
         private bool Scrolls(int axis)
         {
@@ -45,43 +161,285 @@ namespace TimboJimbo.UINext
             return axis == 0 ? value is ScrollAxis.Horizontal or ScrollAxis.Both : value is ScrollAxis.Vertical or ScrollAxis.Both;
         }
 
-        private void OnEnable()
-        {
-            ((IUIValue)_axis).Attach(Node);
-            Node.Scroller = this;
-            Node.Tree?.InvalidateLayout();
-            OnEnableInput();
-        }
-
-        private void OnDisable()
-        {
-            ((IUIValue)_axis).Detach();
-            if (_node != null && _node.Scroller == this)
-            {
-                _node.Scroller = null;
-                _node.Tree?.InvalidateLayout();
-            }
-            OnDisableInput();
-        }
-
-        private void OnValidate()
-        {
-            ((IUIValue)_axis).Refresh();
-            UI.RequestRepaint();
-        }
-
-        // After layout: its size and what it holds, which its range comes from.
+        // After layout: its size and what it holds, which its range comes from. An offset left past the end by
+        // what it holds shrinking comes back into range (springing, if the layout change animates).
         internal void SetExtent(Vector2 viewport, Vector2 content, Insets reach)
         {
             Viewport = viewport;
             ContentSize = content;
-            OnExtentChanged();
+            if (_dragging || _gliding) return;
+            var offset = Offset.Peek;
+            var clamped = Clamp(offset);
+            if (clamped != offset)
+                Offset.SetModel(clamped, null);
         }
 
-        partial void OnEnableInput();
+        private Vector2 Clamp(Vector2 offset)
+        {
+            var range = Range;
+            return new Vector2(Mathf.Clamp(offset.x, 0f, range.x), Mathf.Clamp(offset.y, 0f, range.y));
+        }
 
-        partial void OnDisableInput();
+        private Vector2 Mask(Vector2 vector) => new(Scrolls(0) ? vector.x : 0f, Scrolls(1) ? vector.y : 0f);
 
-        partial void OnExtentChanged();
+        // ── Dragging ─────────────────────────────────────────────────────────────
+
+        void IPointerHandler.OnPointerDown(in PointerEvent e)
+        {
+            if (_pointer >= 0) return;
+            _pointer = e.PointerId;
+            // Moving on its own: the pointer catches it where it is drawn, and takes the drag from the start.
+            if (IsDecelerating && UIInput.Claim(this, e.PointerId))
+            {
+                var at = Offset.Presented;
+                StopGlide();
+                Offset.SetModel(at, null);
+                Offset.Settle();
+                BeginDrag(Vector2.zero);
+            }
+        }
+
+        void IPointerHandler.OnPointerMove(in PointerEvent e)
+        {
+            if (e.PointerId != _pointer) return;
+            var translation = Mask(UIInput.ToNodeVector(Node, e.Translation));
+            if (!_dragging)
+            {
+                var raw = UIInput.ToNodeVector(Node, e.Translation);
+                if (!WantsDrag(raw) || !UIInput.Claim(this, e.PointerId)) return;
+                // The content follows from here, so it does not jump by the slop.
+                BeginDrag(translation);
+            }
+            var target = _dragFrom - (translation - _dragOrigin);
+            Offset.SetModel(Stretch(target), null);
+            Scrolled?.Invoke(Offset.Peek);
+        }
+
+        void IPointerHandler.OnPointerUp(in PointerEvent e)
+        {
+            if (e.PointerId != _pointer) return;
+            _pointer = -1;
+            if (!_dragging) return;
+            _dragging = false;
+            Release(-Mask(UIInput.ToNodeVector(Node, e.Velocity)));
+        }
+
+        void IPointerHandler.OnPointerCancel(in PointerEvent e)
+        {
+            if (e.PointerId != _pointer) return;
+            _pointer = -1;
+            if (!_dragging) return;
+            _dragging = false;
+            Release(Vector2.zero);
+        }
+
+        // Whether a pointer moved this far (in its own space) is a drag it takes: far enough, mostly its way.
+        private bool WantsDrag(Vector2 moved)
+        {
+            float x = Mathf.Abs(moved.x), y = Mathf.Abs(moved.y);
+            if (Mathf.Max(x, y) < Slop) return false;
+            var range = Range;
+            bool horizontal = Scrolls(0) && x >= y, vertical = Scrolls(1) && y >= x;
+            if (_axis.Peek == ScrollAxis.Both) return true;
+            // Nothing to scroll that way and no bouncing: let an ancestor have it.
+            if (horizontal) return range.x > 0f || _bounces.Peek;
+            if (vertical) return range.y > 0f || _bounces.Peek;
+            return false;
+        }
+
+        private void BeginDrag(Vector2 origin)
+        {
+            _dragging = true;
+            _dragOrigin = origin;
+            _dragFrom = Offset.Peek;
+            _pageFrom = Clamp(_dragFrom);
+            ShowIndicators();
+        }
+
+        // Past either end a drag goes only part of the way, less the further it goes, as iOS's rubber band.
+        private Vector2 Stretch(Vector2 offset)
+        {
+            var range = Range;
+            bool bounces = _bounces.Peek;
+            for (int axis = 0; axis < 2; axis++)
+            {
+                float value = offset[axis], max = range[axis], size = Mathf.Max(1f, Viewport[axis]);
+                if (value < 0f) offset[axis] = bounces ? -Band(-value, size) : 0f;
+                else if (value > max) offset[axis] = bounces ? max + Band(value - max, size) : max;
+            }
+            return offset;
+        }
+
+        private static float Band(float distance, float size) => (1f - 1f / (distance * RubberBand / size + 1f)) * size;
+
+        // Let go at a velocity (points a second the offset was changing): it pages, glides or bounces back.
+        private void Release(Vector2 velocity)
+        {
+            var offset = Offset.Peek;
+            if (_snap.Peek == ScrollSnap.Pages)
+            {
+                Offset.SpringTo(PageFor(offset, velocity), velocity, PageTurn);
+                HideIndicators();
+                return;
+            }
+            var clamped = Clamp(offset);
+            if (clamped != offset)
+            {
+                Offset.SpringTo(clamped, velocity, BounceBack);
+                HideIndicators();
+                return;
+            }
+            if (velocity.magnitude < RestSpeed)
+            {
+                HideIndicators();
+                return;
+            }
+            _velocity = velocity;
+            if (!_gliding)
+            {
+                _gliding = true;
+                s_gliding.Add(this);
+            }
+        }
+
+        // The page a release comes to rest on: the one it is nearest, thrown on one page at most by a flick.
+        private Vector2 PageFor(Vector2 offset, Vector2 velocity)
+        {
+            var range = Range;
+            var page = offset;
+            for (int axis = 0; axis < 2; axis++)
+            {
+                float size = Mathf.Max(1f, Viewport[axis]);
+                if (!Scrolls(axis) || range[axis] <= 0f) continue;
+                float from = Mathf.Round(_pageFrom[axis] / size);
+                float projected = (offset[axis] + velocity[axis] * 0.15f) / size;
+                float target = Mathf.Clamp(Mathf.Round(projected), from - 1f, from + 1f);
+                page[axis] = Mathf.Clamp(target * size, 0f, range[axis]);
+            }
+            return page;
+        }
+
+        // ── Gliding ──────────────────────────────────────────────────────────────
+
+        /// <summary>Moves every gliding scroll view <paramref name="dt"/> seconds on: once a frame, before springs step.</summary>
+        internal static void StepAll(float dt)
+        {
+            for (int i = s_gliding.Count - 1; i >= 0; i--)
+            {
+                var view = s_gliding[i];
+                if (view == null || !view.isActiveAndEnabled || !view._gliding)
+                {
+                    s_gliding.RemoveAt(i);
+                    continue;
+                }
+                view.Glide(dt);
+            }
+        }
+
+        private void Glide(float dt)
+        {
+            // Exactly, as the velocity decays by the rate each millisecond: v(t) = v0 r^(1000t).
+            float decay = Mathf.Pow(Deceleration, dt * 1000f);
+            float k = 1000f * Mathf.Log(Deceleration);
+            var offset = Offset.Peek + _velocity * ((decay - 1f) / k);
+            _velocity *= decay;
+
+            var clamped = Clamp(offset);
+            if (clamped != offset)
+            {
+                StopGlide();
+                if (_bounces.Peek)
+                {
+                    // It runs on past the end with the speed it had, and springs back.
+                    Offset.SetModel(offset, null);
+                    Offset.SpringTo(clamped, _velocity, BounceBack);
+                }
+                else
+                {
+                    Offset.SetModel(clamped, null);
+                }
+                HideIndicators();
+                Scrolled?.Invoke(Offset.Peek);
+                return;
+            }
+            Offset.SetModel(offset, null);
+            Scrolled?.Invoke(offset);
+            if (_velocity.magnitude < RestSpeed)
+            {
+                StopGlide();
+                HideIndicators();
+            }
+        }
+
+        private void StopGlide()
+        {
+            if (!_gliding) return;
+            _gliding = false;
+            _velocity = Vector2.zero;
+            s_gliding.Remove(this);
+        }
+
+        // ── Wheel ────────────────────────────────────────────────────────────────
+
+        bool IScrollHandler.OnScroll(Vector2 delta)
+        {
+            delta = Mask(UIInput.ToNodeVector(Node, delta));
+            if (delta == Vector2.zero) return false;
+            var from = _gliding || Offset.IsAnimating ? Offset.Model : Offset.Peek;
+            var target = Clamp(from + delta);
+            // Already at the end that way: an ancestor may scroll instead.
+            if (target == Clamp(from)) return false;
+            StopGlide();
+            Offset.SpringTo(target, Offset.Velocity, WheelStep);
+            Flash();
+            Scrolled?.Invoke(target);
+            return true;
+        }
+
+        // ── Indicators ───────────────────────────────────────────────────────────
+
+        private void ShowIndicators()
+        {
+            _indicatorOpacity.SetModel(1f, null);
+            _indicatorOpacity.Settle();
+        }
+
+        private void HideIndicators() => UI.Animate(IndicatorFade, () => _indicatorOpacity.Value = 0f);
+
+        private void Flash()
+        {
+            ShowIndicators();
+            HideIndicators();
+        }
+
+        protected internal override void Draw(Painter painter)
+        {
+            if (!_showsIndicators.Value) return;
+            float opacity = _indicatorOpacity.Value;
+            if (opacity <= 0.001f) return;
+            var offset = Offset.Value;
+            var color = _indicatorColor.Value;
+            color.a *= opacity;
+            var overlay = painter.Overlay;
+            var viewport = painter.Size;
+            var range = Range;
+            const float thickness = 3f, inset = 3f, shortest = 32f;
+            for (int axis = 0; axis < 2; axis++)
+            {
+                if (!Scrolls(axis) || range[axis] <= 0.5f) continue;
+                float along = viewport[axis], content = Mathf.Max(along, ContentSize[axis]);
+                float track = along - inset * 2f;
+                float length = Mathf.Max(shortest, track * along / content);
+                // Past an end it shrinks, as iOS's do.
+                float over = offset[axis] < 0f ? -offset[axis] : offset[axis] > range[axis] ? offset[axis] - range[axis] : 0f;
+                length = Mathf.Max(thickness * 2f, length - over);
+                float t = Mathf.Clamp01(offset[axis] / range[axis]);
+                float start = inset + t * (track - length);
+                var rect = axis == 1
+                    ? new Rect(viewport.x - inset - thickness, start, thickness, length)
+                    : new Rect(start, viewport.y - inset - thickness, length, thickness);
+                overlay.Rect(rect, color, thickness * 0.5f);
+            }
+        }
     }
 }

@@ -34,6 +34,9 @@ namespace TimboJimbo.UINext
         public readonly List<ClipShape> ClipShapes = new();
         private Vector4[] _clipChains = new Vector4[32];
 
+        // The nodes shown, in the order they are drawn (the compositor's), which hit testing walks backwards.
+        public readonly List<int> DrawOrder = new();
+
         private readonly LayoutComputation _layout;
         private readonly CompositeComputation _composite;
         private bool _structureDirty = true;
@@ -164,12 +167,64 @@ namespace TimboJimbo.UINext
         {
             node.Tree = this;
             node.ParentNode = parent;
+            if (node.LastParent != parent)
+            {
+                node.LastParent = parent;
+                node.HierarchyChanged();
+            }
             node.Index = Nodes.Count;
             Nodes.Add(node);
             SubtreeEnd.Add(Nodes.Count);
             if (parent != null)
                 _tracker.Add(Root, node.RectTransform, DrivenTransformProperties.AnchoredPosition | DrivenTransformProperties.SizeDelta
                     | DrivenTransformProperties.Anchors | DrivenTransformProperties.Pivot);
+        }
+
+        // ── Hit testing ──────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The node drawn topmost at <paramref name="point"/> (its root's points) that takes the pointer: shown, not
+        /// see-through, hit testable, with something drawn or something listening, and inside its clips. -1 for none.
+        /// </summary>
+        public int HitTest(Vector2 point)
+        {
+            for (int k = DrawOrder.Count - 1; k >= 0; k--)
+            {
+                int i = DrawOrder[k];
+                if (i >= Nodes.Count) continue;
+                var node = Nodes[i];
+                if (node == null || !Shown[i] || Slots[i].SizeOpacity.z <= 0.001f) continue;
+                if (!node.HitTestable.Peek) continue;
+                if (node.Drawables.Count == 0 && !node.TryGetComponent<IPointerHandler>(out _)) continue;
+                if (Contains(i, point, 0f) && InsideClips(i, point))
+                    return i;
+            }
+            return -1;
+        }
+
+        /// <summary>Whether <paramref name="point"/> is over node <paramref name="index"/> as drawn, give or take <paramref name="slop"/> points.</summary>
+        public bool Contains(int index, Vector2 point, float slop)
+        {
+            if (index < 0 || index >= Nodes.Count) return false;
+            var local = World[index].Inverse.Apply(point);
+            var size = Slots[index].SizeOpacity;
+            return local.x >= -slop && local.y >= -slop && local.x <= size.x + slop && local.y <= size.y + slop;
+        }
+
+        private bool InsideClips(int index, Vector2 point)
+        {
+            var chain = Slots[index].Clips;
+            for (int c = 0; c < 4; c++)
+            {
+                int clip = (int)chain[c];
+                if (clip < 0) break;
+                if (clip >= ClipShapes.Count) continue;
+                var shape = ClipShapes[clip];
+                float x = shape.Inverse0.x * point.x + shape.Inverse0.y * point.y + shape.Inverse0.z;
+                float y = shape.Inverse1.x * point.x + shape.Inverse1.y * point.y + shape.Inverse1.z;
+                if (x < 0f || y < 0f || x > shape.Size.x || y > shape.Size.y) return false;
+            }
+            return true;
         }
 
         // ── Layout ───────────────────────────────────────────────────────────────
@@ -315,7 +370,7 @@ namespace TimboJimbo.UINext
                 if (p >= 0 && !topLayer)
                 {
                     chain = _clipChains[p];
-                    if (parent.Clips.Value)
+                    if (parent.Clips.Value || (parent.Scroller != null && parent.Scroller.isActiveAndEnabled))
                         chain = Append(chain, OwnClip(parent, p));
                 }
                 _clipChains[i] = chain;

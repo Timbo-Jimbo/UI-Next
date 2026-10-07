@@ -10,8 +10,16 @@ namespace TimboJimbo.UINext
     public readonly struct Painter
     {
         private readonly UINode _node;
+        private readonly bool _overlay;
 
-        internal Painter(UINode node) => _node = node;
+        internal Painter(UINode node, bool overlay = false)
+        {
+            _node = node;
+            _overlay = overlay;
+        }
+
+        /// <summary>A painter for the same node whose primitives are drawn over its children rather than under them.</summary>
+        public Painter Overlay => new(_node, true);
 
         /// <summary>The node's laid-out size (where it is going), which content lays itself out at.</summary>
         public Vector2 Size => _node.Frame.Model.size;
@@ -135,6 +143,12 @@ namespace TimboJimbo.UINext
         /// <summary>Adds a primitive as it is, with the texture it samples (null for none).</summary>
         public void Add(in PrimitiveInstance instance, Texture texture)
         {
+            if (_overlay)
+            {
+                _node.OverlayInstances.Add(instance);
+                _node.OverlayTextures.Add(texture);
+                return;
+            }
             _node.Instances.Add(instance);
             _node.InstanceTextures.Add(texture);
         }

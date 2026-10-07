@@ -3,6 +3,7 @@
     "rootNamespace": "TimboJimboEditor.UINext",
     "references": [
         "TimboJimbo.UINext",
+        "Unity.InputSystem",
         "TimboJimbo.UI.Text.Runtime",
         "TimboJimbo.Core.Runtime",
         "Unity.RenderPipelines.Core.Runtime",

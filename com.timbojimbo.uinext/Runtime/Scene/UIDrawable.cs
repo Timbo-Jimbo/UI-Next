@@ -97,6 +97,8 @@ namespace TimboJimbo.UINext
         {
             _node.Instances.Clear();
             _node.InstanceTextures.Clear();
+            _node.OverlayInstances.Clear();
+            _node.OverlayTextures.Clear();
             if (_node.Display.Value == DisplayMode.Visible)
             {
                 var painter = new Painter(_node);
