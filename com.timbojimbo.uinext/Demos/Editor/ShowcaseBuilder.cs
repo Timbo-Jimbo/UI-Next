@@ -80,7 +80,9 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var row = list.Child(title).Row(12f).Pad(16f, 12f).Align(AlignX.Left, AlignY.Center);
             row.Width.Value = Sizing.Grow();
-            row.Box(Color.clear).Fill.When(InteractionStates.Pressed, Pressed);
+            var rowBox = row.Box(Color.clear);
+            rowBox.Fill.When(InteractionStates.Pressed, Pressed);
+            rowBox.Fill.When(InteractionStates.Focused, new Color(Accent.r, Accent.g, Accent.b, 0.12f));
             var badge = row.Child("Icon").Sized(Sizing.Fixed(32f), Sizing.Fixed(32f)).Center();
             badge.Box(colour, 8f);
             badge.Child("Glyph").Label(icon, 17f);
@@ -105,6 +107,7 @@ namespace TimboJimboEditor.UINext.Demos
             header.Width.Value = Sizing.Grow();
             header.Box(Card);
             var back = header.Child("Back").Pad(8f, 4f);
+            back.Box(Color.clear, 8f).Fill.When(InteractionStates.Focused, new Color(Accent.r, Accent.g, Accent.b, 0.15f));
             back.Child("Title").Label("‹ Back", 17f, Accent);
             var title_ = header.Child("Title").Label(title, 17f, Text, bold: true);
             title_.Node.Width.Value = Sizing.Grow();
@@ -138,6 +141,7 @@ namespace TimboJimboEditor.UINext.Demos
             box.Fill.When(InteractionStates.Pressed, Color.Lerp(fill, Color.black, 0.25f));
             box.Fill.When(InteractionStates.Hovered, Color.Lerp(fill, Color.white, 0.15f));
             box.Fill.When(InteractionStates.Disabled, new Color(0.78f, 0.78f, 0.8f));
+            DemoKit.FocusRing(box, new Color(Accent.r, Accent.g, Accent.b, 0.55f));
             button.Child("Title").Label(title, 16f, text, bold: true);
             return button.Pressable();
         }
@@ -147,7 +151,9 @@ namespace TimboJimboEditor.UINext.Demos
             var row = parent.Child(title).Row(10f).Align(AlignX.Left, AlignY.Center);
             row.Child("Title").Label(title, 15f, Text);
             var track = row.Child("Switch").Sized(Sizing.Fixed(51f), Sizing.Fixed(31f)).Pad(2f).Align(AlignX.Left, AlignY.Center);
-            track.Box(new Color(0.47f, 0.47f, 0.5f, 0.32f), 15.5f).Fill.When(InteractionStates.Selected, new Color32(0x34, 0xC7, 0x59, 0xFF));
+            var trackBox = track.Box(new Color(0.47f, 0.47f, 0.5f, 0.32f), 15.5f);
+            trackBox.Fill.When(InteractionStates.Selected, new Color32(0x34, 0xC7, 0x59, 0xFF));
+            DemoKit.FocusRing(trackBox, new Color(Accent.r, Accent.g, Accent.b, 0.55f));
             var knob = track.Child("Knob").Sized(Sizing.Fixed(27f), Sizing.Fixed(27f));
             DemoKit.Shadow(knob.Box(Color.white, 13.5f), 0.2f, 4f, 2f);
             var pressable = track.Pressable();

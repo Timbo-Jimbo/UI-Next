@@ -33,6 +33,7 @@ namespace TimboJimboTests.UINext
         public void CloseScene()
         {
             UIInput.CancelAll();
+            UIFocus.Clear();
             UIFrame.Simulating = false;
             UIFrame.ScreenSizeOverride = null;
             if (_previous.IsValid() && _previous.isLoaded)

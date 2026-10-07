@@ -101,6 +101,74 @@ namespace TimboJimboTests.UINext
             Assert.AreEqual(1, taps);
         }
 
+        private static Pressable Button(UINode parent, string name)
+        {
+            var button = parent.Child(name).Sized(Sizing.Fixed(80f), Sizing.Fixed(40f));
+            button.Box(Color.white);
+            return button.Pressable();
+        }
+
+        [Test]
+        public void FocusGoesToTheNearestButtonThatWay()
+        {
+            var grid = Root.Node.Column(10f).Pad(10f);
+            var top = grid.Child("Top").Row(10f);
+            var a = Button(top, "A");
+            var b = Button(top, "B");
+            var bottom = grid.Child("Bottom").Row(10f);
+            var c = Button(bottom, "C");
+            var d = Button(bottom, "D");
+            Frame();
+            var down = new Vector2(0f, 1f);
+            var right = new Vector2(1f, 0f);
+            UIFocus.Move(right);
+            Assert.AreSame(a, UIFocus.Focused, "with nothing focused, the first takes it");
+            UIFocus.Move(right);
+            Assert.AreSame(b, UIFocus.Focused);
+            UIFocus.Move(down);
+            Assert.AreSame(d, UIFocus.Focused);
+            UIFocus.Move(-right);
+            Assert.AreSame(c, UIFocus.Focused);
+            Assert.IsFalse(UIFocus.Move(-right), "nothing further that way");
+            Assert.AreSame(c, UIFocus.Focused);
+            Frame();
+            Assert.IsTrue((c.Node.Interaction & InteractionStates.Focused) != 0, "the focused button is Focused while focus shows");
+        }
+
+        [Test]
+        public void TabStepsThroughInOrderAndAPointerHidesFocus()
+        {
+            var column = Root.Node.Column(10f);
+            var a = Button(column, "A");
+            var b = Button(column, "B");
+            Frame();
+            UIFocus.Next();
+            UIFocus.Next();
+            Assert.AreSame(b, UIFocus.Focused);
+            UIFocus.Next();
+            Assert.AreSame(a, UIFocus.Focused, "it wraps round");
+            Assert.IsTrue(UIFocus.IsVisible);
+            Down(new Vector2(300f, 700f));
+            Assert.IsFalse(UIFocus.IsVisible);
+            Assert.IsTrue((a.Node.Interaction & InteractionStates.Focused) == 0);
+        }
+
+        [Test]
+        public void ADialogKeepsFocusInsideItself()
+        {
+            Button(Root.Node, "Below");
+            var host = Root.Node.Child("Dialog").Center();
+            var dialog = host.Add<Presentation>();
+            var ok = Button(host, "OK");
+            Frame();
+            dialog.Present();
+            Run(1f);
+            UIFocus.Move(new Vector2(0f, 1f));
+            Assert.AreSame(ok, UIFocus.Focused);
+            UIFocus.Move(new Vector2(0f, -1f));
+            Assert.AreSame(ok, UIFocus.Focused, "the button below the dialog cannot take focus");
+        }
+
         [Test]
         public void APresentationTakesThePointerFromWhatIsBelow()
         {

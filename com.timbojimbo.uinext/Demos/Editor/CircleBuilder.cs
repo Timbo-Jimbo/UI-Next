@@ -140,6 +140,7 @@ namespace TimboJimboEditor.UINext.Demos
                     var chip = chips.Child("Reaction").Row(5f).Pad(11f, 6f).Align(AlignX.Left, AlignY.Center);
                     var chipBox = DemoKit.Fill(chip, s_subtle, 15f);
                     chipBox.Fill.When(InteractionStates.Selected, new Color(Accent.r, Accent.g, Accent.b, 0.18f));
+                    DemoKit.FocusRing(chipBox, new Color(Accent.r, Accent.g, Accent.b, 0.55f));
                     chip.Child("Emoji").Label(emoji, 15f);
                     var number = DemoKit.Text(chip, "Count", count.ToString(), 14f, s_secondary, bold: true);
                     number.Color.When(InteractionStates.Selected, Accent);
@@ -170,6 +171,7 @@ namespace TimboJimboEditor.UINext.Demos
                 row.Width.Value = Sizing.Grow();
                 var rowBox = row.Box(Color.clear);
                 rowBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.15f));
+                rowBox.Fill.When(InteractionStates.Focused, new Color(Accent.r, Accent.g, Accent.b, 0.12f));
                 DemoKit.Avatar(row, 50f, colour, initials);
                 var middle = row.Child("Middle").Column(3f);
                 middle.Width.Value = Sizing.Grow();
@@ -216,6 +218,7 @@ namespace TimboJimboEditor.UINext.Demos
             button.Sized(Sizing.Grow(), Sizing.Fixed(50f));
             var buttonBox = DemoKit.Fill(button, s_card, 14f);
             buttonBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.25f));
+            DemoKit.FocusRing(buttonBox, new Color(Red.r, Red.g, Red.b, 0.5f));
             button.Child("Title").Label("Log out", 17f, Red, bold: true);
             logOut = button.Pressable();
             return scroll;
@@ -226,6 +229,7 @@ namespace TimboJimboEditor.UINext.Demos
             var track = parent.Child("Switch").Sized(Sizing.Fixed(51f), Sizing.Fixed(31f)).Pad(2f).Align(AlignX.Left, AlignY.Center);
             var trackBox = track.Box(new Color(0.47f, 0.47f, 0.5f, 0.32f), 15.5f);
             trackBox.Fill.When(InteractionStates.Selected, Green);
+            DemoKit.FocusRing(trackBox, new Color(Accent.r, Accent.g, Accent.b, 0.55f));
             var knob = track.Child("Knob").Sized(Sizing.Fixed(27f), Sizing.Fixed(27f));
             DemoKit.Shadow(knob.Box(Color.white, 13.5f), 0.2f, 4f, 2f);
             knob.HitTestable.Value = false;
@@ -246,6 +250,7 @@ namespace TimboJimboEditor.UINext.Demos
             foreach (var (icon, title) in new[] { ("🏠", "Home"), ("💬", "Chats"), ("🙂", "Me") })
             {
                 var tab = bar.Child(title).Column(2f).Pad(22f, 8f).Align(AlignX.Center, AlignY.Center);
+                tab.Box(Color.clear, 24f).Fill.When(InteractionStates.Focused, new Color(Accent.r, Accent.g, Accent.b, 0.1f));
                 tab.Child("Icon").Label(icon, 20f);
                 var label = DemoKit.Text(tab, "Title", title, 11f, s_secondary, bold: true);
                 label.Color.When(InteractionStates.Selected, Accent);

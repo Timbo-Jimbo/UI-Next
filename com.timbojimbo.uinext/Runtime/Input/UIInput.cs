@@ -165,6 +165,7 @@ namespace TimboJimbo.UINext
             var gamepad = Gamepad.current;
             if ((keyboard != null && keyboard.escapeKey.wasPressedThisFrame) || (gamepad != null && gamepad.buttonEast.wasPressedThisFrame))
                 GoBack();
+            UIFocus.Poll(now);
 
             var pen = Pen.current;
             if (pen != null)
@@ -215,6 +216,7 @@ namespace TimboJimbo.UINext
 
         internal static void Down(int pointerId, PointerKind kind, Vector2 screen, double time)
         {
+            UIFocus.PointerUsed();
             if (s_tracks.ContainsKey(pointerId))
                 Cancel(pointerId, time);
             if (!HitTest(screen, out var tree, out var node, out var point)) return;
