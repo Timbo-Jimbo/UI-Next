@@ -41,7 +41,7 @@ button.Pressable(() =>
 - **Presentations:** `Presentation` presents a node over everything as a sheet, an alert or a pushed or full-screen page, with a dim backdrop, back to dismiss, and the screens under a cover culled.
 - **Gestures:** `Pressable` (tap, long press, toggles, Interactable), `Draggable` (pan), `Pinchable` (two-finger pinch and turn), `ScrollView` (iOS deceleration, rubber band, paging, wheel), `ListView` (long lists that make only the rows near view).
 - **Text fields:** `node.TextField("Message", 16f, multiline: true, maxLines: 5)`; `Submitted`, `TextChanged`, `Config` (content type, return key, capitalisation, autocorrection), `MaxLength`.
-- **Tools:** `UISimulator` and `UICapture` run and capture frames outside play mode, for tests and screenshots.
+- **Tools:** the state bar (*UI Next States* in the Scene view's overlays) previews interaction states, states and modes on the selected node in the Scene and Game views; `UISimulator` and `UICapture` run and capture frames outside play mode, for tests and screenshots.
 
 ## Demos
 
