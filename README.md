@@ -36,7 +36,7 @@ button.Pressable(() =>
 });
 ```
 
-- **Nodes:** `UINode` is layout and drawn transform (`Offset`, `Scale`, `Rotation`, `Opacity`, `ZIndex`, `Clips`, `TopLayer`, `GroupOpacity`, `Blur`); `UIRoot` sizes a tree to the screen. `UIBuild` builds trees from code; the inspector builds them by hand.
+- **Nodes:** `UINode` is layout and drawn transform (`Offset`, `Scale`, `Rotation`, `Opacity`, `ZIndex`, `Clips`, `TopLayer`) and filters (`GroupOpacity`, `Blur`, `Saturation`, `Brightness`); `UIRoot` sizes a tree to the screen. `UIBuild` builds trees from code; the inspector builds them by hand.
 - **Coming and going:** a node shown or hidden inside `UI.Animate` stays drawn while it leaves; `DisplayTransition` fades, grows or slides it.
 - **Presentations:** `Presentation` presents a node over everything as a sheet, an alert or a pushed or full-screen page, with a dim backdrop, back to dismiss, and the screens under a cover culled.
 - **Gestures:** `Pressable` (tap, long press, toggles, Interactable), `Draggable` (pan), `Pinchable` (two-finger pinch and turn), `ScrollView` (iOS deceleration, rubber band, paging, wheel), `ListView` (long lists that make only the rows near view).
