@@ -466,7 +466,7 @@ namespace TimboJimboEditor.UINext.Demos
                 tile.Child("Number").Label((i + 1).ToString(), 22f, Color.white, bold: true);
             }
 
-            var listDemo = Case(body, "A list in a box (it bounces at the ends)");
+            var listDemo = Case(body, "A list in a box (at its end, a new drag scrolls the page)");
             var listBox = listDemo.Child("List").Column().Sized(Sizing.Grow(), Sizing.Fixed(300f));
             listBox.Box(Card, 14f);
             listBox.Clip(14f);

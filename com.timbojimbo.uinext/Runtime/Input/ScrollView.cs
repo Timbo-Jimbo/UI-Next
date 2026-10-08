@@ -8,8 +8,9 @@ namespace TimboJimbo.UINext
     /// Makes a node scroll what is inside it, as UIScrollView: layout lets its children run past its edge the way it
     /// scrolls, it clips them, and drags move them, rubber-banding past either end, gliding on when let go and slowing
     /// as iOS's do, bouncing back into range, and coming to rest on a page when it pages. The mouse wheel scrolls it.
-    /// A pointer that goes down while it moves catches it, and does not press what is under it. It draws its scroll
-    /// indicators over what it holds while it moves.
+    /// Already at an end, a new drag (or the wheel) past it scrolls a scroll view it is in instead, when that one can
+    /// go that way. A pointer that goes down while it moves catches it, and does not press what is under it. It draws
+    /// its scroll indicators over what it holds while it moves.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/UI Next/Scroll View")]
@@ -219,7 +220,7 @@ namespace TimboJimbo.UINext
             if (!_dragging)
             {
                 var raw = UIInput.ToNodeVector(Node, e.Translation);
-                if (!WantsDrag(raw) || !UIInput.Claim(this, e.PointerId)) return;
+                if (!WantsDrag(raw) || OuterTakes(e.Translation) || !UIInput.Claim(this, e.PointerId)) return;
                 // The content follows from here, so it does not jump by the slop.
                 BeginDrag(translation);
             }
@@ -258,6 +259,33 @@ namespace TimboJimbo.UINext
             if (horizontal) return range.x > 0f || _bounces.Peek;
             if (vertical) return range.y > 0f || _bounces.Peek;
             return false;
+        }
+
+        // A drag heading past the end this is already at goes to a scroll view it is in that can still scroll that way,
+        // as nested scroll views chain on the web: a new drag at the bottom of a list in a page scrolls the page. With
+        // none that can, it is this one's, and it rubber-bands. A drag already taken stays with the one that took it.
+        private bool OuterTakes(Vector2 rootTranslation)
+        {
+            if (CanScrollToward(UIInput.ToNodeVector(Node, rootTranslation))) return false;
+            for (var parent = Node.Parent; parent != null; parent = parent.Parent)
+            {
+                var outer = parent.Scroller;
+                if (outer != null && outer.isActiveAndEnabled && outer.CanScrollToward(UIInput.ToNodeVector(parent, rootTranslation)))
+                    return true;
+                // What is below a presentation never takes its drags.
+                if (parent.PresentationLevel.Peek != 0) break;
+            }
+            return false;
+        }
+
+        // Whether a drag of `moved` (in its own space) has room to scroll it, along the axis the drag mostly follows: the
+        // offset moves against the finger.
+        private bool CanScrollToward(Vector2 moved)
+        {
+            int axis = Mathf.Abs(moved.x) >= Mathf.Abs(moved.y) ? 0 : 1;
+            if (!Scrolls(axis)) return false;
+            float offset = Offset.Peek[axis];
+            return moved[axis] < 0f ? offset < Range[axis] - 0.5f : offset > 0.5f;
         }
 
         private void BeginDrag(Vector2 origin)
