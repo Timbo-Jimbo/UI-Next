@@ -411,24 +411,23 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Cross-fades its drawing on <paramref name="animation"/>: what it draws now fades out as what it draws next
-        /// fades in. Called when a drawn value that cannot interpolate changes inside a change. Cross-fading already,
-        /// the drawing on its way out stays the one that was there first.
+        /// fades in. Called when a drawn value that cannot interpolate changes inside a change. Cross-fading already, what
+        /// fades out is what is drawn now, both drawings as far as each has faded, as a Core Animation transition starts
+        /// from the presentation layer: a count stepped quickly fades on from where it is, never back to where it began.
         /// </summary>
         internal void CrossFadeDrawing(UIAnimation animation)
         {
             if (Instances.Count == 0 && OverlayInstances.Count == 0) return;
             _crossFade ??= new AnimatedValue<float>(1f, 0.002f, true);
-            if (!_crossFade.IsAnimating || _outgoing == null)
-            {
-                _outgoing ??= new List<PrimitiveInstance>();
-                _outgoingTextures ??= new List<Texture>();
-                _outgoing.Clear();
-                _outgoingTextures.Clear();
-                _outgoing.AddRange(Instances);
-                _outgoingTextures.AddRange(InstanceTextures);
-                _outgoing.AddRange(OverlayInstances);
-                _outgoingTextures.AddRange(OverlayTextures);
-            }
+            _outgoing ??= new List<PrimitiveInstance>();
+            _outgoingTextures ??= new List<Texture>();
+            // As last drawn: a drawing still fading out is in it already, at the opacity it was drawn at.
+            _outgoing.Clear();
+            _outgoingTextures.Clear();
+            _outgoing.AddRange(Instances);
+            _outgoingTextures.AddRange(InstanceTextures);
+            _outgoing.AddRange(OverlayInstances);
+            _outgoingTextures.AddRange(OverlayTextures);
             _crossFade.Jump(0f);
             _crossFade.SpringTo(1f, Vector4.zero, animation);
             DrawComputation?.Invalidate();
