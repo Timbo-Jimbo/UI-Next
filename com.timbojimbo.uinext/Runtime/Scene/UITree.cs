@@ -461,10 +461,12 @@ namespace TimboJimbo.UINext
                 // is drawn at the group's. A node a transition is fading (a page, an alert, an item going away) fades
                 // as a group too, so its parts never show through each other on the way.
                 bool fadingIn = transition != null && transition.Opacity.Value < 0.999f;
-                // A blurred node is a group however opaque it is: its image is what is blurred.
+                // A blurred node is a group however opaque it is: its image is what is blurred. A node drawn at no
+                // opacity at all (faded out, a fade's first frame, a bouncy fade past nothing) is no group: nothing in
+                // it is seen, so its image is not made, and what is in it is drawn at nothing (not at the group's 1).
                 float blur = node.Blur.Value;
-                bool group = shown && (((node.GroupOpacity.Value || fadingIn) && opacity < 0.999f) || blur > 0.01f
-                                       || node.Mask.Value != null);
+                bool group = shown && effectiveOpacity > 0f
+                             && (((node.GroupOpacity.Value || fadingIn) && opacity < 0.999f) || blur > 0.01f || node.Mask.Value != null);
                 GroupOpacities[i] = group ? effectiveOpacity : 0f;
                 Blurs[i] = group ? Mathf.Max(0f, blur) : 0f;
                 if (group) effectiveOpacity = 1f;

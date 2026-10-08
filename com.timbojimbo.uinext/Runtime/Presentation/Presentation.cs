@@ -133,10 +133,38 @@ namespace TimboJimbo.UINext
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics() => s_stack.Clear();
 
-        /// <summary>Whether a presented node is a cover in place, which nothing below it shows through.</summary>
-        internal static bool CoversWhatIsBelow(UINode node) =>
-            node.TryGetComponent(out Presentation presentation) && presentation._presented && presentation._settled
-            && presentation._style == PresentationStyle.Cover;
+        /// <summary>
+        /// Whether a presented node of <paramref name="tree"/> is a cover in place, which nothing below it shows through:
+        /// up, and it and its content drawn where they are laid out, unscaled and opaque. Moved by anything (a swipe
+        /// taking it away with the finger), what is below is drawn again, as UIKit puts the presenting views back for an
+        /// interactive dismissal.
+        /// </summary>
+        internal static bool CoversWhatIsBelow(UITree tree, UINode node)
+        {
+            if (!node.TryGetComponent(out Presentation presentation) || !presentation._presented || !presentation._settled
+                || presentation._style != PresentationStyle.Cover)
+                return false;
+            // A presented node is laid out over its whole root, from its corner.
+            if (!DrawnInPlace(tree, node.Index, Vector2.zero)) return false;
+            int end = tree.SubtreeEnd[node.Index];
+            for (int i = node.Index + 1; i < end; i = tree.SubtreeEnd[i])
+            {
+                var child = tree.Nodes[i];
+                if (!tree.Shown[i] || child.PresentationLevel.Peek != 0) continue;
+                if (!DrawnInPlace(tree, i, child.Frame.Peek.position)) return false;
+            }
+            return true;
+        }
+
+        // Whether node `index` is drawn at `position` in its root's points, unscaled, unturned and fully opaque.
+        private static bool DrawnInPlace(UITree tree, int index, Vector2 position)
+        {
+            var world = tree.World[index];
+            return tree.Opacities[index] >= 0.999f
+                   && Mathf.Abs(world.A - 1f) < 1e-4f && Mathf.Abs(world.B) < 1e-4f
+                   && Mathf.Abs(world.C) < 1e-4f && Mathf.Abs(world.D - 1f) < 1e-4f
+                   && Mathf.Abs(world.Tx - position.x) < 0.01f && Mathf.Abs(world.Ty - position.y) < 0.01f;
+        }
 
         /// <summary>Brings it up over everything in its root, its content coming in by its transition.</summary>
         public UITransaction Present()

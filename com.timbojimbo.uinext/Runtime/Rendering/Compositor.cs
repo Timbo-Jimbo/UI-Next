@@ -209,7 +209,7 @@ namespace TimboJimbo.UINext
                     int from = 0;
                     for (int l = s_levels.Count - 1; l >= 1; l--)
                     {
-                        if (!Presentation.CoversWhatIsBelow(s_levels[l])) continue;
+                        if (!Presentation.CoversWhatIsBelow(tree, s_levels[l])) continue;
                         from = l;
                         break;
                     }
@@ -269,7 +269,8 @@ namespace TimboJimbo.UINext
                 s_topLayer.Add(node);
                 return;
             }
-            if (!tree.Shown[node.Index]) return;
+            // Hidden, or drawn at no opacity: nothing in it is seen.
+            if (!tree.Shown[node.Index] || tree.Opacities[node.Index] <= 0f) return;
 
             // A group: a quad over the root draws its image here; what is in it is walked into a range of its own
             // later. It still takes its place in drawing order for hit testing.
@@ -347,7 +348,7 @@ namespace TimboJimbo.UINext
         }
 
         // The bounds of what a group draws, in its root's points: every primitive the walk puts in it (its nodes but
-        // hidden and presented ones, with what is inside them), placed as the shader places it.
+        // hidden, unseen and presented ones, with what is inside them), placed as the shader places it.
         private static Rect GroupBounds(UITree tree, UINode group)
         {
             var min = new Vector2(float.MaxValue, float.MaxValue);
@@ -356,7 +357,7 @@ namespace TimboJimbo.UINext
             for (int i = group.Index; i < end;)
             {
                 var node = tree.Nodes[i];
-                if (!tree.Shown[i] || (node != group && node.PresentationLevel.Peek != 0))
+                if (!tree.Shown[i] || tree.Opacities[i] <= 0f || (node != group && node.PresentationLevel.Peek != 0))
                 {
                     i = tree.SubtreeEnd[i];
                     continue;
