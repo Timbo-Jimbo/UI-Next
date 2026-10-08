@@ -96,6 +96,9 @@ namespace TimboJimbo.UINext.Demos.Circle
         public void Open(ScenePhoto source, string caption)
         {
             if (_presentation.IsPresented) return;
+            // Opened again while the last one flies home: that one is back in the feed at once.
+            if (_source != null)
+                Set(_source.Node.Opacity, 1f);
             _source = source;
             _closing = false;
             _photo.CopyFrom(source);
@@ -119,7 +122,10 @@ namespace TimboJimbo.UINext.Demos.Circle
             });
         }
 
-        /// <summary>Closes it, flying home to where its photo in the feed is drawn now.</summary>
+        /// <summary>
+        /// Closes it, flying home to where its photo in the feed is drawn now. It is dismissed in the same change, so the
+        /// feed takes the pointer at once and the viewer is hidden as the photo lands, never drawn back where it opened.
+        /// </summary>
         public void Close()
         {
             if (!_presentation.IsPresented || _closing || _source == null) return;
@@ -133,10 +139,12 @@ namespace TimboJimbo.UINext.Demos.Circle
                 node.Scale.Value = scale;
                 _backdrop.Opacity.Value = 0f;
                 _caption.Node.Opacity.Value = 0f;
+                _presentation.Dismiss();
             }).Finished += () =>
             {
+                // Opened again on its way home, the photo is the new opening's.
+                if (_presentation.IsPresented) return;
                 Set(source.Node.Opacity, 1f);
-                _presentation.Dismiss();
                 Set(node.Offset, Vector2.zero);
                 Set(node.Scale, 1f);
                 _closing = false;

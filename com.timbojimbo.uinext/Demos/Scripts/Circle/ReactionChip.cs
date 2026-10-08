@@ -3,8 +3,9 @@ using UnityEngine;
 namespace TimboJimbo.UINext.Demos.Circle
 {
     /// <summary>
-    /// A reaction under a post: tapping it toggles yours (its Pressable toggles, so it is Selected and its fill follows),
-    /// its count is a binding that reads that state, and it pops as it changes.
+    /// A reaction under a post: tapping it toggles yours inside one change, as SwiftUI's withAnimation does (its
+    /// Pressable is Selected and its fill follows), so its count, a binding that reads that state, cross-fades as the
+    /// row makes room for it; and it pops.
     /// </summary>
     [RequireComponent(typeof(Pressable))]
     public sealed class ReactionChip : MonoBehaviour
@@ -26,17 +27,19 @@ namespace TimboJimbo.UINext.Demos.Circle
             var node = _pressable.Node;
             // Read inside the binding, the node's states are tracked: toggling it counts it again.
             _count.Text.Bind(() => (_others + ((node.ActiveInteraction() & InteractionStates.Selected) != 0 ? 1 : 0)).ToString());
-            _pressable.Toggled += Pop;
+            _pressable.Tapped += Toggle;
         }
 
         private void OnDisable()
         {
-            _pressable.Toggled -= Pop;
+            _pressable.Tapped -= Toggle;
             _count.Text.Unbind();
         }
 
-        private void Pop(bool on)
+        private void Toggle()
         {
+            bool on = !_pressable.IsSelected;
+            UI.Animate(UIAnimation.Smooth, () => _pressable.IsSelected = on);
             var node = _pressable.Node;
             node.Scale.Value = on ? 1.25f : 0.85f;
             node.Scale.Settle();

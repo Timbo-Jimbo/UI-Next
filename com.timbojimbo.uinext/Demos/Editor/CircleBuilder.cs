@@ -144,8 +144,8 @@ namespace TimboJimboEditor.UINext.Demos
                     chip.Child("Emoji").Label(emoji, 15f);
                     var number = DemoKit.Text(chip, "Count", count.ToString(), 14f, s_secondary, bold: true);
                     number.Color.When(InteractionStates.Selected, Accent);
-                    var pressable = chip.Pressable();
-                    pressable.Toggles = true;
+                    // The chip toggles itself, inside a change.
+                    chip.Pressable();
                     chip.Add<ReactionChip>().Setup(number, count);
                 }
             }
