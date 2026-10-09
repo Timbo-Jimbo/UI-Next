@@ -138,7 +138,9 @@ namespace TimboJimbo.UINext
             _resolver = null;
         }
 
-        void IUIValue.Refresh() => Resolve();
+        // Deserialization has written the model already (OnAfterDeserialize), so the change must be forced through
+        // to what reads it.
+        void IUIValue.Refresh() => Resolve(force: true);
 
         bool IDrawnValue.CrossFades
         {
@@ -173,14 +175,19 @@ namespace TimboJimbo.UINext
 
         // Resolves now. A plain literal needs no computation; anything that reads states, tokens or a binding gets one,
         // which runs again whenever what it read changes.
-        private void Resolve()
+        // Whether the next resolution counts as a change even if the value is the same (an inspector edit).
+        [NonSerialized] private bool _force;
+
+        private void Resolve(bool force = false)
         {
+            _force = force;
             if (!NeedsResolver)
             {
                 _resolver?.Dispose();
                 _resolver = null;
                 _winner = -1;
-                SetModel(_value, null);
+                SetModel(_value, null, force);
+                _force = false;
                 return;
             }
             _resolver ??= new Resolver(this);
@@ -198,7 +205,8 @@ namespace TimboJimbo.UINext
             }
             var animation = winner != _winner ? StateAnimation(winner, _winner) : null;
             _winner = winner;
-            SetModel(resolved, animation);
+            SetModel(resolved, animation, _force);
+            _force = false;
         }
 
         // The active variant with the highest priority: level, then how many conditions, then the later in the list.

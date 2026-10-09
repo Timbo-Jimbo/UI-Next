@@ -22,6 +22,10 @@ namespace TimboJimbo.UINext
         // A screen size to lay roots out at instead of the screen's (captures at a size of their own).
         internal static Vector2? ScreenSizeOverride;
 
+        // The game's safe area as last read while the game view rendered: Screen reports whichever view is rendering,
+        // and the scene view's frames must not take the scene view's rect for it.
+        private static Rect? s_safeArea;
+
         // Outside play mode, frames run as they would in play mode, but only step when told to (Advance): for tests
         // and captures that play a change frame by frame.
         internal static bool Simulating;
@@ -39,7 +43,11 @@ namespace TimboJimbo.UINext
             || (camera.cameraType == CameraType.Game && (camera.targetTexture == null || camera == CaptureCamera));
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStatics() => s_lastStepped = -1;
+        private static void ResetStatics()
+        {
+            s_lastStepped = -1;
+            s_safeArea = null;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         internal static void EnsureHooked()
@@ -105,10 +113,16 @@ namespace TimboJimbo.UINext
         private static void UpdateRoots()
         {
             var pixelSize = ScreenPixelSize();
-            // The screen's safe area is in its own pixels: a size of our own (a capture) has none to speak of.
-            var safeArea = Screen.safeArea;
-            if (!Application.isPlaying || ScreenSizeOverride.HasValue)
-                safeArea = new Rect(0f, 0f, pixelSize.x, pixelSize.y);
+            // The screen's safe area is in its own pixels: a size of our own (a capture) has none to speak of, and only
+            // the game view's frames read it (the scene view, rendering, reports its own rect as the screen's).
+            var safeArea = new Rect(0f, 0f, pixelSize.x, pixelSize.y);
+            if (Application.isPlaying && !ScreenSizeOverride.HasValue)
+            {
+                if (Mathf.Abs(Screen.width - pixelSize.x) < 1f && Mathf.Abs(Screen.height - pixelSize.y) < 1f)
+                    s_safeArea = Screen.safeArea;
+                if (s_safeArea.HasValue)
+                    safeArea = s_safeArea.Value;
+            }
             foreach (var tree in UITree.Trees)
             {
                 if (tree.Root != null)
