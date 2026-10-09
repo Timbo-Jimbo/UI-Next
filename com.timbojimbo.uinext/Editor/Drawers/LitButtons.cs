@@ -30,12 +30,12 @@ namespace TimboJimboEditor.UINext
         private static readonly Dictionary<Type, (GUIContent Content, int Bit)[]> s_flags = new();
 
         /// <summary>Whether an enum is drawn as buttons: a handful of values, none of them flags.</summary>
-        public static bool Suits(Type type) => type != null && type.IsEnum && !IsFlags(type) && Enum.GetValues(type).Length <= 4;
+        public static bool Suits(Type type) => type != null && type.IsEnum && !IsFlags(type) && System.Enum.GetValues(type).Length <= 4;
 
         public static bool IsFlags(Type type) => type != null && type.IsEnum && type.IsDefined(typeof(FlagsAttribute), false);
 
         /// <summary>An enum property as one lit button a value.</summary>
-        public static void Enum(Rect rect, SerializedProperty property, Type type)
+        public static void Choice(Rect rect, SerializedProperty property, Type type)
         {
             var contents = Contents(type);
             int index = Mathf.Clamp(property.enumValueIndex, 0, contents.Length - 1);

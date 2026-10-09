@@ -81,7 +81,7 @@ namespace TimboJimboEditor.UINext
                 var field = EditorGUI.PrefixLabel(firstLine, label);
                 int indent = EditorGUI.indentLevel;
                 EditorGUI.indentLevel = 0;
-                LitButtons.Enum(field, value, valueType);
+                LitButtons.Choice(field, value, valueType);
                 EditorGUI.indentLevel = indent;
             }
             else if (value != null && LitButtons.IsFlags(valueType))
