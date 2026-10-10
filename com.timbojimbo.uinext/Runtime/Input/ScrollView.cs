@@ -94,20 +94,28 @@ namespace TimboJimbo.UINext
         /// <summary>Whether it is moving on its own: gliding, bouncing back or turning a page.</summary>
         public bool IsDecelerating => _gliding || Offset.IsAnimating;
 
-        /// <summary>Scrolls to <paramref name="offset"/> (kept in range), springing there unless told not to.</summary>
+        /// <summary>
+        /// Scrolls to <paramref name="offset"/> (kept in range), springing there from where it is drawn at the speed it
+        /// has unless told not to: inside a change (<see cref="UI.Animate(UIAnimation, Action)"/>) on the change's
+        /// animation, as part of it, as SwiftUI scrolls inside withAnimation; outside one on a spring of its own, its
+        /// indicators flashing.
+        /// </summary>
         public void ScrollTo(Vector2 offset, bool animated = true)
         {
             StopGlide();
             var target = Clamp(offset);
-            if (animated)
+            if (!animated)
             {
-                Offset.SpringTo(target, Offset.Velocity, UIAnimation.Default);
-                Flash();
+                Offset.Jump(target);
+            }
+            else if (UITransaction.Current != null)
+            {
+                Offset.SetModel(target, null);
             }
             else
             {
-                Offset.SetModel(target, null);
-                Offset.Settle();
+                Offset.SpringTo(target, Offset.Velocity, UIAnimation.Default);
+                Flash();
             }
             Scrolled?.Invoke(target);
         }

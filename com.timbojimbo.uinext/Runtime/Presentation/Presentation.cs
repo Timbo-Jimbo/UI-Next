@@ -41,6 +41,11 @@ namespace TimboJimbo.UINext
     /// clip, and takes the pointer from everything below it while it is up. Its backdrop dims what is below and, tapped,
     /// dismisses it; so does back (Escape, a gamepad's B). Its content (its children) comes in and goes away by its
     /// <see cref="Transition"/>, on top of their own values. Hidden (Display None) while it is not presented.
+    /// <para>
+    /// Presenting and dismissing each make all their state changes inside one animated change of their own, and raise
+    /// <see cref="Presenting"/> or <see cref="Dismissing"/> inside it, so code joins the change: what it shows, hides or
+    /// sets there moves with the presentation, as one change.
+    /// </para>
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/UI Next/Presentation")]
@@ -71,6 +76,18 @@ namespace TimboJimbo.UINext
         [NonSerialized] private bool _backdropPressed;
         [NonSerialized] private UITransaction _change;
         [NonSerialized] private readonly List<UINode> _content = new();
+
+        /// <summary>
+        /// Raised inside the change that brings it up, once its own state has changed (shown, laid out, its content on its
+        /// way in): what is changed here is part of that change, and moves with it.
+        /// </summary>
+        public event Action Presenting;
+
+        /// <summary>
+        /// Raised inside the change that takes it away, once its own state has changed (taking no pointers, its content on
+        /// its way out): what is changed here is part of that change, and moves with it.
+        /// </summary>
+        public event Action Dismissing;
 
         /// <summary>Raised once it is in place.</summary>
         public event Action Presented;
@@ -166,7 +183,10 @@ namespace TimboJimbo.UINext
                    && Mathf.Abs(world.Tx - position.x) < 0.01f && Mathf.Abs(world.Ty - position.y) < 0.01f;
         }
 
-        /// <summary>Brings it up over everything in its root, its content coming in by its transition.</summary>
+        /// <summary>
+        /// Brings it up over everything in its root, its content coming in by its transition, in one change that
+        /// <see cref="Presenting"/> is raised inside.
+        /// </summary>
         public UITransaction Present()
         {
             if (_presented) return _change;
@@ -178,27 +198,28 @@ namespace TimboJimbo.UINext
             s_stack.Add(this);
             UIInput.CancelAll();
             var node = Node;
-            node.PresentationLevel.Value = s_stack.Count;
-            node.Display.Value = DisplayMode.Visible;
-            // Laid out now, so the content's size is known to slide it by; then put where it comes in from, at once.
-            UI.LayoutNow();
-            CollectContent();
-            if (!returning)
-            {
-                foreach (var child in _content)
-                {
-                    Out(child, out var offset, out float scale, out float opacity);
-                    child.EnsureTransition().Set(offset, scale, opacity);
-                }
-                _backdrop.SetModel(0f, null);
-                _backdrop.Settle();
-            }
-
             var change = UI.Animate(_animation, () =>
             {
+                node.PresentationLevel.Value = s_stack.Count;
+                node.Display.Value = DisplayMode.Visible;
+                // Laid out now, so the content's size is known to slide it by; put where it comes in from, at once, and
+                // sent in.
+                UI.LayoutNow();
+                CollectContent();
                 foreach (var child in _content)
-                    child.EnsureTransition().To(Vector2.zero, 1f, 1f);
+                {
+                    var transition = child.EnsureTransition();
+                    if (!returning)
+                    {
+                        Out(child, out var offset, out float scale, out float opacity);
+                        transition.Set(offset, scale, opacity);
+                    }
+                    transition.To(Vector2.zero, 1f, 1f);
+                }
+                if (!returning)
+                    _backdrop.Jump(0f);
                 _backdrop.Value = 1f;
+                Presenting?.Invoke();
             });
             _change = change;
             change.Finished += () =>
@@ -212,25 +233,29 @@ namespace TimboJimbo.UINext
             return change;
         }
 
-        /// <summary>Takes it away, its content going by its transition; once it has gone, it is hidden again.</summary>
+        /// <summary>
+        /// Takes it away, its content going by its transition, in one change that <see cref="Dismissing"/> is raised
+        /// inside; once it has gone, it is hidden again.
+        /// </summary>
         public UITransaction Dismiss()
         {
             if (!_presented) return _change;
             _presented = false;
             _settled = false;
             var node = Node;
-            // On its way out it takes no pointers: what it uncovers does, at once.
-            node.PresentationLevel.Value = -Mathf.Abs(node.PresentationLevel.Peek);
-            Compositor.MarkOrderDirty();
-            CollectContent();
             var change = UI.Animate(_animation, () =>
             {
+                // On its way out it takes no pointers: what it uncovers does, at once.
+                node.PresentationLevel.Value = -Mathf.Abs(node.PresentationLevel.Peek);
+                Compositor.MarkOrderDirty();
+                CollectContent();
                 foreach (var child in _content)
                 {
                     Out(child, out var offset, out float scale, out float opacity);
                     child.EnsureTransition().To(offset, scale, opacity);
                 }
                 _backdrop.Value = 0f;
+                Dismissing?.Invoke();
             });
             _change = change;
             change.Finished += () =>

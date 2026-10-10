@@ -12,3 +12,9 @@ One line per decision the brief left open, with the precedent followed.
 - `Cancelled` hands the speed on as `Ended` does: UIKit's pan recognizer still reports its velocity when it is cancelled.
 - A scroll view's offset carries the speed of the drag and the glide moving it, so a change made meanwhile sets off at that speed: the brief's "however it is moved", and springs keeping their speed when retargeted, as SwiftUI's do.
 - A spring set off on a value nothing has drawn yet (a node made and animated in one go) starts at the speed the value had: the brief's "every value keeps the speed it is moving at".
+
+## Presentations
+
+- `Presenting` and `Dismissing` are C# events raised at the end of the presentation's own state changes, inside its change (shown and laid out, or taking no pointers, its content on its way): UIKit's `animate(alongsideTransition:)`, which runs code inside a presentation's animation.
+- `ScrollTo` made inside a change scrolls on the change's animation, and is part of it, without flashing its indicators: SwiftUI's `scrollTo` inside `withAnimation` animates with that animation.
+- A transition put where it comes in from inside a change is put there at once (`NodeTransition.Set` jumps), so the change it is set off in still completes: Core Animation's model value set with actions disabled inside a transaction.

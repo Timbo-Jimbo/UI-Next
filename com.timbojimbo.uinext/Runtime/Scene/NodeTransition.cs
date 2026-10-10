@@ -13,15 +13,15 @@ namespace TimboJimbo.UINext
         public readonly AnimatedValue<float> Scale = new(1f, 0.0005f, true);
         public readonly AnimatedValue<float> Opacity = new(1f, 0.002f, true);
 
-        /// <summary>Puts it at <paramref name="offset"/>, <paramref name="scale"/> and <paramref name="opacity"/> at once.</summary>
+        /// <summary>
+        /// Puts it at <paramref name="offset"/>, <paramref name="scale"/> and <paramref name="opacity"/> at once, still,
+        /// even inside a change (where it comes in from, before the change springs it in).
+        /// </summary>
         public void Set(Vector2 offset, float scale, float opacity)
         {
-            Offset.SetModel(offset, null);
-            Offset.Settle();
-            Scale.SetModel(scale, null);
-            Scale.Settle();
-            Opacity.SetModel(opacity, null);
-            Opacity.Settle();
+            Offset.Jump(offset);
+            Scale.Jump(scale);
+            Opacity.Jump(opacity);
         }
 
         /// <summary>Sends it to <paramref name="offset"/>, <paramref name="scale"/> and <paramref name="opacity"/> (springing, inside a change).</summary>
