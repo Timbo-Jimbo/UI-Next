@@ -121,42 +121,6 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
-        public void TextInAFlightKeepsItsHeightRatherThanSwellingToTheWidth()
-        {
-            // Two lines one height, one short and one long: fitted to the width, the short one's text would swell.
-            var shortLine = Root.Node.Child("Short").Float(AttachPoint.LeftTop, AttachPoint.LeftTop, new Vector2(20f, 100f));
-            shortLine.Label("Hi", 20f);
-            shortLine.MatchName.Value = "Title";
-            var longLine = Root.Node.Child("Long").Float(AttachPoint.LeftTop, AttachPoint.LeftTop, new Vector2(20f, 300f));
-            longLine.Label("Hi there, everyone", 20f);
-            longLine.MatchName.Value = "Title";
-            longLine.Display.Value = DisplayMode.None;
-            Frame();
-            Swap(shortLine, longLine);
-            Frame(1f / 60f);
-            var flight = longLine.FlightIn;
-            Assert.IsNotNull(flight);
-            var size = (Vector2)longLine.Tree.Slots[longLine.Index].SizeOpacity;
-            Assert.AreEqual(flight.Rect.height / size.y, flight.LiveScale, 1e-3f, "fitted to the flight's height");
-            Assert.AreEqual(1f, flight.LiveScale, 0.05f, "lines of one height draw their text at its size");
-        }
-
-        [Test]
-        public void WhatIsInsideIsFittedToTheFlightsWidthAndItsBackgroundStretches()
-        {
-            var (small, big) = Pair();
-            Swap(small, big);
-            Frame(1f / 60f);
-            var flight = big.FlightIn;
-            Assert.AreEqual(50f / 300f, flight.LiveScale, 1e-3f, "the node is fitted to the flight's width");
-            Assert.AreEqual(1f, flight.PictureScale, 1e-3f, "the picture starts as it was drawn");
-            // Its own space's top left is the flight's.
-            var topLeft = flight.FitMap * big.Tree.World[big.Index];
-            Assert.AreEqual(20f, topLeft.Tx, 0.5f);
-            Assert.AreEqual(100f, topLeft.Ty, 0.5f);
-        }
-
-        [Test]
         public void ANodeShownWhileItsNamesakeStaysFliesOutOfIt()
         {
             var (small, big) = Pair();
@@ -203,7 +167,7 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
-        public void ANamedPartFliesInsideItsPair()
+        public void ANamedPartFliesOnItsOwn()
         {
             var (small, big) = Pair();
             var smallIcon = Named("Icon", new Vector2(5f, 5f), new Vector2(20f, 20f), small);
@@ -211,7 +175,6 @@ namespace TimboJimboTests.UINext
             Frame();
             Swap(small, big);
             Assert.IsNotNull(bigIcon.FlightIn);
-            Assert.AreSame(big.FlightIn, bigIcon.FlightIn.Outer, "inside the whole's flight");
             Assert.AreSame(bigIcon.FlightIn, smallIcon.FlightOut);
             Frame(1f / 60f);
             AreEqual(new Rect(25f, 105f, 20f, 20f), bigIcon.FlightIn.Rect, "from where the small one's icon was drawn");

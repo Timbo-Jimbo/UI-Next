@@ -26,7 +26,7 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// A matched pair: two premultiplied images (a picture of where a flight came from, and where it goes), summed as
-        /// they cross-fade (by Color's alpha), cut to a rounded rect.
+        /// they cross-fade (by Color's alpha).
         /// </summary>
         Pair = 6,
     }

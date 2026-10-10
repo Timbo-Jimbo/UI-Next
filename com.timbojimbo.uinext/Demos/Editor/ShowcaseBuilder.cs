@@ -816,6 +816,8 @@ namespace TimboJimboEditor.UINext.Demos
                 card.Sized(Sizing.Grow(), Sizing.Fixed(360f));
                 card.MatchName.Value = "Today";
                 card.MatchId.Value = i.ToString();
+                // What is inside it hangs from its top as it opens into its story, whose art is at its top too.
+                card.MatchAnchor.Value = new Vector2(0.5f, 0f);
                 card.ClipRadii.Value = 22f;
                 var art = card.Box(from, 22f);
                 art.Gradient.Value = true;
@@ -842,6 +844,7 @@ namespace TimboJimboEditor.UINext.Demos
             var content = host.Child("Content").Sized(Sizing.Grow(), Sizing.Grow()).Column();
             content.IgnoresSafeArea.Value = Edges.All;
             content.MatchName.Value = "Today";
+            content.MatchAnchor.Value = new Vector2(0.5f, 0f);
             content.Clips.Value = true;
             content.Add<Draggable>().Axis = ScrollAxis.Vertical;
             var swipe = content.Add<SwipeToDismiss>();

@@ -185,6 +185,8 @@ namespace TimboJimboEditor.UINext.Demos
                 // into the conversation's header.
                 row.MatchName.Value = "Chat";
                 row.MatchId.Value = c.ToString();
+                // What is inside it hangs from its top as it grows, so it turns into the conversation's header.
+                row.MatchAnchor.Value = new Vector2(0.5f, 0f);
                 var rowBox = DemoKit.Fill(row, s_background);
                 rowBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.15f));
                 rowBox.Fill.When(InteractionStates.Focused, new Color(Accent.r, Accent.g, Accent.b, 0.12f));
@@ -367,6 +369,7 @@ namespace TimboJimboEditor.UINext.Demos
             DemoKit.Fill(content, s_background);
             content.IgnoresSafeArea.Value = Edges.All;
             content.MatchName.Value = "Chat";
+            content.MatchAnchor.Value = new Vector2(0.5f, 0f);
             content.Add<Draggable>().Axis = ScrollAxis.Horizontal;
             content.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Right);
 

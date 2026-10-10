@@ -122,7 +122,7 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 // for a glyph, whose quad has its own and whose neighbours in the atlas lie just past it, or for a group's
                 // image, which covers its region exactly.
                 bool glyph = inst.type == 3u || inst.type == 4u;
-                float margin = glyph || inst.type == 5u ? 0 : 1.5 * max(slot.sizeOpacity.w, 0.01) + (inst.type == 1u ? inst.params.y * 2.5 : 0);
+                float margin = glyph || inst.type == 5u || inst.type == 6u ? 0 : 1.5 * max(slot.sizeOpacity.w, 0.01) + (inst.type == 1u ? inst.params.y * 2.5 : 0);
                 float2 corner = kCorners[vertexID % 6];
                 float2 p = rect.xy - margin + corner * (rect.zw + 2 * margin);
                 float2 t = (p - rect.xy) / max(rect.zw, 1e-5);
@@ -170,12 +170,10 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 if (inst.type == 6u)
                 {
                     // A matched pair: the picture of where it came from and the node it goes to, each an image of its own
-                    // (premultiplied), cross-faded by summing them, as the web's view transitions blend an image pair
-                    // (plus-lighter), so where both are opaque it stays opaque all the way; cut to the pair's rounded shape.
+                    // (premultiplied) holding its whole end, cross-faded by summing them, as the web's view transitions blend
+                    // an image pair (plus-lighter), so where both are opaque it stays opaque all the way.
                     float4 live = SampleTexture((inst.textureIndex >> 4) & 15u, uv, uvDx, uvDy);
                     color = min(tex * (1.0 - inst.color.a) + live * inst.color.a, 1.0);
-                    float d = SdRoundRect(i.local, i.halfSize, inst.radii);
-                    coverage = saturate(0.5 - d / aa);
                     premultiplied = true;
                 }
                 else if (inst.type == 0u)

@@ -29,7 +29,12 @@ namespace TimboJimbo.UINext
     /// with <see cref="UI.Animate(UIAnimation, Action)"/> begins, the named nodes shown are noted, where each is drawn
     /// and how fast; once its update and layout are done, a node it showed with the name and id of one it hid takes over
     /// from that one, and a node it showed while a namesake stays flies out of that one: a <see cref="Flight"/> from a
-    /// picture of the other node, as it was drawn, to the shown node itself, live, on the change's animation.
+    /// picture of the other node, as it was drawn, to the shown node itself, live, on the change's animation. Each end's
+    /// own drawing (what it draws relative to its rect: a box, its border, its shadow) is laid out at the flight's rect;
+    /// what is inside it is scaled evenly into the flight along the axis the two ends are most alike in, lined up along
+    /// the other by its node's <see cref="UINode.MatchAnchor"/>, and cut to the flight's window, whose corners go from
+    /// one end's <see cref="UINode.ClipRadii"/> to the other's. The two ends are added together as they cross-fade, so
+    /// where both are opaque nothing behind shows through.
     /// </summary>
     internal static class MatchedGeometry
     {
@@ -185,8 +190,6 @@ namespace TimboJimbo.UINext
                 Flights.Add(flight);
                 Compositor.MarkOrderDirty();
             }
-            foreach (var flight in s_started)
-                flight.Outer = OuterOf(flight);
             s_started.Clear();
             s_before.Clear();
             s_beforeNodes.Clear();
@@ -214,6 +217,7 @@ namespace TimboJimbo.UINext
             {
                 From = candidate.Rect,
                 FromRadii = candidate.Radii,
+                SourceAnchor = source.MatchAnchor.Peek,
                 Transaction = transaction,
             };
             // Turned round, it fades on from where it had faded, the other way.
@@ -255,31 +259,12 @@ namespace TimboJimbo.UINext
             return flight;
         }
 
-        // The innermost flight whose two ends hold both of `flight`'s: a named part inside a pair, which flies inside
-        // that pair's shape.
-        private static Flight OuterOf(Flight flight)
-        {
-            Flight outer = null;
-            foreach (var other in Flights)
-            {
-                if (other == flight || !IsInside(flight.Destination, other.Destination) || !IsInside(flight.Source, other.Source))
-                    continue;
-                if (outer == null || IsInside(other.Destination, outer.Destination))
-                    outer = other;
-            }
-            return outer;
-        }
-
-        private static bool IsInside(UINode node, UINode ancestor) =>
-            node != null && ancestor != null && node != ancestor && node.transform.IsChildOf(ancestor.transform);
-
         /// <summary>
         /// Once a frame while flights are under way, before compositing: lets go of those that have landed or lost their
-        /// destination, and works out where each of the rest is drawn this frame, outer ones before their parts.
+        /// destination, and works out where each of the rest is drawn this frame.
         /// </summary>
         internal static void Update()
         {
-            int frame = UIFrame.FrameIndex;
             for (int i = Flights.Count - 1; i >= 0; i--)
             {
                 if (i >= Flights.Count) continue;
@@ -297,47 +282,52 @@ namespace TimboJimbo.UINext
                     Drop(flight);
             }
             foreach (var flight in Flights)
-                Measure(flight, frame);
+                Measure(flight);
         }
 
-        // Where a flight is drawn this frame: where its destination is drawn (inside its outer flight, for a part) and
-        // how far from that it still is.
-        private static void Measure(Flight flight, int frame)
+        // Where a flight is drawn this frame: where its destination is drawn and how far from that it still is; and how what
+        // is inside each end is fitted into it.
+        private static void Measure(Flight flight)
         {
-            if (flight.MeasuredFrame == frame) return;
-            flight.MeasuredFrame = frame;
-            var outer = flight.Outer;
-            if (outer != null)
-                Measure(outer, frame);
             var destination = flight.Destination;
             var tree = destination.Tree;
             int d = destination.Index;
             flight.Tree = tree;
             var world = tree.World[d];
             var size = (Vector2)tree.Slots[d].SizeOpacity;
-            var placed = outer != null && outer.Placed ? outer.FitMap * world : world;
-            var drawn = Bounds(placed, size);
-            var radii = destination.ClipRadii.Drawn.ToVector() * placed.ScaleFactor;
+            var drawn = Bounds(world, size);
+            var radii = destination.ClipRadii.Drawn.ToVector() * world.ScaleFactor;
             if (!flight.Placed)
             {
-                // Its first frame: it sets off from where the other node was drawn.
+                // Its first frame: it sets off from where the other node was drawn. Both ends are fitted along the axis their
+                // sizes are most alike in, so what is inside them is scaled least: their widths for a row growing into a
+                // page, their heights for a line of text growing into a longer one.
                 flight.Placed = true;
                 flight.Offset.Displace(RectVector(flight.From) - RectVector(drawn));
                 flight.Corners.Displace(flight.FromRadii - radii);
+                flight.ByHeight = Unlike(drawn.height, flight.From.height) < Unlike(drawn.width, flight.From.width);
             }
             var offset = flight.Offset.Drawn;
             var rect = new Rect(drawn.x + offset.x, drawn.y + offset.y, Mathf.Max(1f, drawn.width + offset.z), Mathf.Max(1f, drawn.height + offset.w));
             flight.Rect = rect;
             flight.Radii = Vector4.Max(Vector4.zero, radii + flight.Corners.Drawn);
             flight.Progress = Mathf.Clamp01(flight.Fade.Drawn);
-            // What is in the destination is fitted to the flight's width from its top, text to its height, so its glyphs
-            // never swell with the width; its own background is laid out at the flight's size.
-            flight.LiveScale = flight.Text ? rect.height / Mathf.Max(1e-3f, size.y) : rect.width / Mathf.Max(1e-3f, size.x);
-            flight.FitMap = Scaled(rect.position, flight.LiveScale) * world.Inverse;
-            flight.PictureScale = flight.Text
-                ? rect.height / Mathf.Max(1e-3f, flight.Picture.Size.y)
-                : rect.width / Mathf.Max(1e-3f, flight.Picture.Size.x);
-            flight.PictureMap = Scaled(rect.position, flight.PictureScale);
+            // What is inside each end is scaled evenly to the flight along that axis and lined up with it along the other as
+            // its node's anchor says; each end's own drawing is laid out at the flight's rect (the compositor's).
+            flight.FitMap = Fit(rect, size, flight.ByHeight, destination.MatchAnchor.Peek) * world.Inverse;
+            flight.PictureMap = Fit(rect, flight.Picture.Size, flight.ByHeight, flight.SourceAnchor);
+        }
+
+        // How unlike two lengths are, either way round.
+        private static float Unlike(float a, float b) => Mathf.Abs(Mathf.Log(Mathf.Max(a, 1e-3f) / Mathf.Max(b, 1e-3f)));
+
+        // What is inside something `size` big, scaled evenly into `rect` along one axis (its height, or else its width) and
+        // lined up with it along the other at `anchor` (0 at its start, 1 at its end).
+        private static Affine2 Fit(Rect rect, Vector2 size, bool byHeight, Vector2 anchor)
+        {
+            float scale = byHeight ? rect.height / Mathf.Max(1e-3f, size.y) : rect.width / Mathf.Max(1e-3f, size.x);
+            var position = rect.position + Vector2.Scale(rect.size - size * scale, anchor);
+            return new Affine2 { A = scale, D = scale, Tx = position.x, Ty = position.y };
         }
 
         // Lets go of a flight: one that landed, or one cut short (its change does not complete).
@@ -351,9 +341,6 @@ namespace TimboJimbo.UINext
             if (flight.Source != null && flight.Source.FlightOut == flight)
                 flight.Source.FlightOut = null;
             Flights.Remove(flight);
-            foreach (var other in Flights)
-                if (other.Outer == flight)
-                    other.Outer = null;
             Compositor.MarkOrderDirty();
         }
 
@@ -426,17 +413,13 @@ namespace TimboJimbo.UINext
             Bounds(map * Affine2.Translate(rect.position), rect.size);
 
         private static Vector4 RectVector(Rect rect) => new(rect.x, rect.y, rect.width, rect.height);
-
-        // Scaled by `scale` from the origin, then moved to `position`.
-        private static Affine2 Scaled(Vector2 position, float scale) =>
-            new() { A = scale, D = scale, Tx = position.x, Ty = position.y };
     }
 
     /// <summary>
     /// One matched pair under way: a picture of the node it flies from, as that was drawn, and the node it flies to, live,
-    /// cross-fading as one image in one rounded shape. What springs is how far it is from where its destination is drawn
-    /// (closing to nothing, so whatever moves the destination meanwhile carries it), its corners from the destination's,
-    /// and how far the destination has faded in.
+    /// each laid out in its rect and cut to its window, cross-fading as one image. What springs is how far it is from where
+    /// its destination is drawn (closing to nothing, so whatever moves the destination meanwhile carries it), its window's
+    /// corners from the destination's, and how far the destination has faded in.
     /// </summary>
     internal sealed class Flight
     {
@@ -453,11 +436,11 @@ namespace TimboJimbo.UINext
         // The change it set off in, which it lands with.
         public UITransaction Transaction;
 
-        // Whether its ends are text, fitted to the flight's height rather than its width.
-        public readonly bool Text;
+        // Where what is inside the source lines up with the flight: its node's anchor as the flight set off.
+        public Vector2 SourceAnchor;
 
-        // The flight whose pair holds this one's ends, which it flies inside the shape of (null at the top).
-        public Flight Outer;
+        // Whether its ends are fitted to its height, the axis they are most alike in, rather than to its width.
+        public bool ByHeight;
 
         // How far it is from where its destination is drawn (x, y, width, height), its corners from the destination's,
         // and how far the destination has faded in over the picture.
@@ -469,34 +452,26 @@ namespace TimboJimbo.UINext
         public Rect From;
         public Vector4 FromRadii;
         public bool Placed;
-        public int MeasuredFrame = -1;
 
-        // This frame: its destination's tree, where it is drawn (its root's points), its corners and how far it has
-        // faded; and the maps that fit the destination (its root's space to the flight) and the picture (the source's
-        // own space to the flight) into it, at their scales.
+        // This frame: its destination's tree, where it is drawn (its root's points), its window's corners and how far it
+        // has faded; and the maps that fit what is inside the destination (its root's space to the flight) and inside the
+        // picture (the source's own space to the flight) into it.
         public UITree Tree;
         public Rect Rect;
         public Vector4 Radii;
         public float Progress;
         public Affine2 FitMap;
-        public float LiveScale = 1f;
         public Affine2 PictureMap;
-        public float PictureScale = 1f;
 
-        // The compositor's, for the build under way: the build it was last laid out for, whether it is drawn, its pair's
-        // slot and clips, its shape as a clip, where its ends' slots start, and the slots its ends' own backgrounds are
-        // laid out in, at its size, and their own shadows drawn in, under its pair (-1: none).
-        internal int SlotsBuild = -1;
+        // The compositor's, for the build under way: whether it is drawn, its pair's slot, its window as a clip, where its
+        // ends' slots start, and the slots its ends' own drawing is laid out in, at its rect (-1: none).
         internal bool InBuild;
         internal int PairSlot;
-        internal Vector4 PairClips;
-        internal int ShapeClip;
+        internal int Window;
         internal int LiveSlots;
         internal int PictureSlots;
-        internal int LiveBackground = -1;
-        internal int PictureBackground = -1;
-        internal int LiveShadow = -1;
-        internal int PictureShadow = -1;
+        internal int LiveOwn = -1;
+        internal int PictureOwn = -1;
 
         public Flight(MatchKey key, UINode source, UINode destination, bool takesOver, UINode sourceLevel, Picture picture)
         {
@@ -506,7 +481,6 @@ namespace TimboJimbo.UINext
             TakesOver = takesOver;
             SourceLevel = sourceLevel;
             Picture = picture;
-            Text = destination != null && destination.TryGetComponent(out Label _);
         }
     }
 
