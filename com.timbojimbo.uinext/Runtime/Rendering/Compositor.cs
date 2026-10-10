@@ -495,13 +495,17 @@ namespace TimboJimbo.UINext
             return target;
         }
 
-        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot)
+        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot) => Emit(instances, textures, slot, slot);
+
+        // A node's primitives in its slot, those it draws relative to its rect in `relative` (a flight end's own
+        // background, laid out at the flight's size).
+        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot, uint relative)
         {
             EnsureInstances(s_instanceCount + instances.Count);
             for (int i = 0; i < instances.Count; i++)
             {
                 var instance = instances[i];
-                instance.Slot = slot;
+                instance.Slot = (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0 ? relative : slot;
                 s_instances[s_instanceCount] = instance;
                 s_textures[s_instanceCount] = textures[i];
                 s_textures2[s_instanceCount] = null;
@@ -632,8 +636,8 @@ namespace TimboJimbo.UINext
         // ── Flights ──────────────────────────────────────────────────────────────
 
         // Slots and clips for every flight placed, after the trees': its pair's (in its root's space, inside the shape of
-        // the flight it is a part of), its destination's nodes fitted into it, and its picture's nodes. Outer flights
-        // first, as a part's pair is cut to its outer flight's shape.
+        // the flight it is a part of), its destination's nodes fitted into it, its picture's nodes, and each end's own
+        // background laid out at its size. Outer flights first, as a part's pair is cut to its outer flight's shape.
         private static void AddFlightSlots()
         {
             s_build++;
@@ -667,9 +671,8 @@ namespace TimboJimbo.UINext
                 Clips = flight.PairClips,
             });
 
-            // The destination, live: what is in it fitted to the flight's width from its top, its own background stretched
-            // down the flight, at its own opacity (its transition's left out: the flight fades it in), cut only by clips
-            // inside it.
+            // The destination, live: what is in it fitted to the flight's width from its top, at its own opacity (its
+            // transition's left out: the flight fades it in), cut only by clips inside it.
             int d = destination.Index, end = tree.SubtreeEnd[d];
             flight.LiveSlots = s_slotCount;
             EnsureSlots(s_slotCount + end - d);
@@ -683,7 +686,6 @@ namespace TimboJimbo.UINext
                 float opacity;
                 if (i == d)
                 {
-                    size.y = rect.height / Mathf.Max(1e-4f, flight.LiveScale);
                     opacity = Mathf.Clamp01(destination.Opacity.Drawn);
                 }
                 else
@@ -702,6 +704,10 @@ namespace TimboJimbo.UINext
                 };
             }
             s_slotCount += end - d;
+            // Its own background (what it draws relative to its rect: its box, border and shadow, an image filling it),
+            // laid out at the flight's size, unscaled, as it would draw at that size: its corners keep their points, and
+            // the flight's shape, going from one end's corners to the other's, cuts it.
+            flight.LiveBackground = AddBackground(s_slots[flight.LiveSlots], rect, pixels);
 
             // The picture, as the source was drawn, fitted the same way.
             var picture = flight.Picture;
@@ -713,8 +719,6 @@ namespace TimboJimbo.UINext
                 var drawn = picture.Slots[k];
                 var world = flight.PictureMap * drawn.Transform;
                 var size = drawn.Size;
-                if (k == 0)
-                    size.y = rect.height / Mathf.Max(1e-4f, flight.PictureScale);
                 var clips = new Vector4(-1f, -1f, -1f, -1f);
                 for (int c = 0; c < 4; c++)
                 {
@@ -732,7 +736,18 @@ namespace TimboJimbo.UINext
                 };
             }
             s_slotCount += picture.Slots.Count;
+            flight.PictureBackground = picture.Slots.Count > 0 ? AddBackground(s_slots[flight.PictureSlots], rect, pixels) : -1;
         }
+
+        // The slot an end's own background is drawn in: the flight's rect, unscaled, as opaque, filtered and cut as the
+        // end's root.
+        private static int AddBackground(NodeSlot root, Rect rect, float pixels) => AddSlot(new NodeSlot
+        {
+            Row0 = new Vector4(1f, 0f, rect.x, root.Row0.w),
+            Row1 = new Vector4(0f, 1f, rect.y, root.Row1.w),
+            SizeOpacity = new Vector4(rect.width, rect.height, root.SizeOpacity.z, 1f / Mathf.Max(1e-4f, pixels)),
+            Clips = root.Clips,
+        });
 
         // The clips of a node in a flight: those made inside the flying node (not those around it, which a flight is out
         // of), through the flight's fit.
@@ -863,7 +878,10 @@ namespace TimboJimbo.UINext
                 var instance = picture.Instances[i];
                 int k = (int)instance.Slot;
                 if (k >= s_skip.Count || s_skip[k]) continue;
-                instance.Slot = (uint)(flight.PictureSlots + k);
+                // The source's own background is laid out at the flight's size; the rest is fitted.
+                instance.Slot = k == 0 && (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0
+                    ? (uint)flight.PictureBackground
+                    : (uint)(flight.PictureSlots + k);
                 s_instances[s_instanceCount] = instance;
                 s_textures[s_instanceCount] = picture.Textures[i];
                 s_textures2[s_instanceCount] = null;
@@ -889,7 +907,9 @@ namespace TimboJimbo.UINext
             if (node != flight.Destination && (node.PresentationLevel.Peek != 0 || node.FlightIn != null || node.FlightOut != null)) return;
             int slot = flight.LiveSlots + i - flight.Destination.Index;
             if (s_slots[slot].SizeOpacity.z <= 0f) return;
-            Emit(node.Instances, node.InstanceTextures, (uint)slot);
+            // The destination's own background is laid out at the flight's size; the rest is fitted.
+            uint relative = node == flight.Destination ? (uint)flight.LiveBackground : (uint)slot;
+            Emit(node.Instances, node.InstanceTextures, (uint)slot, relative);
 
             int first = s_children.Count;
             int end = tree.SubtreeEnd[i];
@@ -901,7 +921,7 @@ namespace TimboJimbo.UINext
             for (int c = 0; c < count; c++)
                 WalkLive(tree, flight, s_children[first + c]);
             s_children.RemoveRange(first, count);
-            Emit(node.OverlayInstances, node.OverlayTextures, (uint)slot);
+            Emit(node.OverlayInstances, node.OverlayTextures, (uint)slot, relative);
         }
 
         // ── Drawing ──────────────────────────────────────────────────────────────

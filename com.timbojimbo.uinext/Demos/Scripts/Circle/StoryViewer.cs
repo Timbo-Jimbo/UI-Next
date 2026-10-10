@@ -4,15 +4,15 @@ using UnityEngine;
 namespace TimboJimbo.UINext.Demos.Circle
 {
     /// <summary>
-    /// A story, opened full screen from its ring in the feed. The ring and the story share a match name and the ring's id,
-    /// and the ring is hidden as the story is presented and shown again as it is dismissed, so the story grows out of its
-    /// ring and shrinks back into it. A tap, back or a swipe down (following the finger) closes it.
+    /// A story, opened full screen from its ring in the feed. The avatar in the ring and the story share a match name and
+    /// the person's id, and the avatar is hidden as the story is presented and shown again as it is dismissed, so the
+    /// story grows out of the avatar and shrinks back into it. A tap, back or a swipe down (following the finger) closes it.
     /// </summary>
     [RequireComponent(typeof(Presentation))]
     public sealed class StoryViewer : MonoBehaviour
     {
         [SerializeField] private List<Pressable> _stories = new();
-        [SerializeField] private List<UINode> _rings = new();
+        [SerializeField] private List<UINode> _ringAvatars = new();
         [SerializeField] private UINode _story;
         [SerializeField] private Box _background;
         [SerializeField] private Box _avatar;
@@ -23,10 +23,10 @@ namespace TimboJimbo.UINext.Demos.Circle
         private Pressable _tap;
         private int _open = -1;
 
-        public void Setup(List<Pressable> stories, List<UINode> rings, UINode story, Box background, Box avatar, Label initials, Label name)
+        public void Setup(List<Pressable> stories, List<UINode> ringAvatars, UINode story, Box background, Box avatar, Label initials, Label name)
         {
             _stories = stories;
-            _rings = rings;
+            _ringAvatars = ringAvatars;
             _story = story;
             _background = background;
             _avatar = avatar;
@@ -37,8 +37,8 @@ namespace TimboJimbo.UINext.Demos.Circle
         private void OnEnable()
         {
             _presentation = GetComponent<Presentation>();
-            _presentation.Presenting += HideRing;
-            _presentation.Dismissing += ShowRing;
+            _presentation.Presenting += HideRingAvatar;
+            _presentation.Dismissing += ShowRingAvatar;
             for (int i = 0; i < _stories.Count; i++)
             {
                 int index = i;
@@ -51,13 +51,13 @@ namespace TimboJimbo.UINext.Demos.Circle
 
         private void OnDisable()
         {
-            _presentation.Presenting -= HideRing;
-            _presentation.Dismissing -= ShowRing;
+            _presentation.Presenting -= HideRingAvatar;
+            _presentation.Dismissing -= ShowRingAvatar;
             if (_tap != null)
                 _tap.Tapped -= Close;
         }
 
-        /// <summary>Opens the <paramref name="index"/>th person's story, growing out of their ring.</summary>
+        /// <summary>Opens the <paramref name="index"/>th person's story, growing out of the avatar in their ring.</summary>
         public void Open(int index)
         {
             if (_presentation.IsPresented) return;
@@ -78,18 +78,18 @@ namespace TimboJimbo.UINext.Demos.Circle
                 _presentation.Dismiss();
         }
 
-        // Inside the presentation's changes: the ring is hidden (keeping its place) as the story grows out of it, and shown
-        // again as the story shrinks back into it.
-        private void HideRing()
+        // Inside the presentation's changes: the ring's avatar is hidden (keeping its place) as the story grows out of it,
+        // and shown again as the story shrinks back into it.
+        private void HideRingAvatar()
         {
-            if (_open >= 0 && _open < _rings.Count)
-                _rings[_open].Display.Value = DisplayMode.Hidden;
+            if (_open >= 0 && _open < _ringAvatars.Count)
+                _ringAvatars[_open].Display.Value = DisplayMode.Hidden;
         }
 
-        private void ShowRing()
+        private void ShowRingAvatar()
         {
-            if (_open >= 0 && _open < _rings.Count)
-                _rings[_open].Display.Value = DisplayMode.Visible;
+            if (_open >= 0 && _open < _ringAvatars.Count)
+                _ringAvatars[_open].Display.Value = DisplayMode.Visible;
         }
     }
 }

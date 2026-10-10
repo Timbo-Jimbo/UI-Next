@@ -194,10 +194,11 @@ namespace TimboJimbo.UINext
         /// that one, flying from where it was drawn to its own place; shown while a node of the same name and id stays, it
         /// flies out of that one. The far end is a picture of the other node as it was drawn; the two cross-fade as one
         /// image, cut to one rounded shape whose corners go from the other's <see cref="ClipRadii"/> to its own. What is
-        /// inside it is fitted to the flight's width from its top, as the web's view transitions fit their pictures, while
-        /// its own background stretches with it; named nodes inside a pair fly to their own places, inside its shape. The
-        /// flight is drawn above everything at its level, carried by whatever moves it meanwhile (a scroll, a page sliding
-        /// in), and turns round from where it is drawn if the change is taken back. Empty: it is not matched.
+        /// inside it is fitted to the flight's width from its top (text to its height), as the web's view transitions fit
+        /// their pictures, while its own background is laid out at the flight's size, as it would draw at that size; named
+        /// nodes inside a pair fly to their own places, inside its shape. The flight is drawn above everything at its
+        /// level, carried by whatever moves it meanwhile (a scroll, a page sliding in), and turns round from where it is
+        /// drawn if the change is taken back. Empty: it is not matched.
         /// </summary>
         public UIValue<string> MatchName => _matchName;
 

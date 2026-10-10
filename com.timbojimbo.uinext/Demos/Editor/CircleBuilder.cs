@@ -57,14 +57,14 @@ namespace TimboJimboEditor.UINext.Demos
             var photos = new List<ScenePhoto>();
             var captions = new List<string>();
             var stories = new List<Pressable>();
-            var rings = new List<UINode>();
-            var homeScroll = Home(pages, photos, captions, stories, rings);
+            var ringAvatars = new List<UINode>();
+            var homeScroll = Home(pages, photos, captions, stories, ringAvatars);
             var chats = Chats(pages, out var chatsScroll, out var rows);
             var meScroll = Me(pages, out var darkSwitch, out var logOut);
 
             var tabs = TabBar(app, out var pill);
             var viewer = Viewer(app);
-            StoryScreen(app, stories, rings);
+            StoryScreen(app, stories, ringAvatars);
             Conversation(app, rows, chats);
             var dialog = LogOutDialog(app, out var dialogButtons);
 
@@ -76,7 +76,7 @@ namespace TimboJimboEditor.UINext.Demos
 
         // ── Home ─────────────────────────────────────────────────────────────────
 
-        private static ScrollView Home(UINode pages, List<ScenePhoto> photos, List<string> captions, List<Pressable> storyButtons, List<UINode> rings)
+        private static ScrollView Home(UINode pages, List<ScenePhoto> photos, List<string> captions, List<Pressable> storyButtons, List<UINode> ringAvatars)
         {
             var home = pages.Child("Home").Sized(Sizing.Percent(1f), Sizing.Grow()).Column();
             var header = home.Child("Header").Row().Pad(new Insets(20f, 20f, 12f, 8f)).Align(AlignX.Left, AlignY.Center);
@@ -95,22 +95,21 @@ namespace TimboJimboEditor.UINext.Demos
             {
                 var (name, initials, colour) = CircleData.People[i];
                 var story = stories.Child("Story").Column(6f).Align(AlignX.Center, AlignY.Top);
-                // The ring and the story it opens are matched by name and by the person's index.
+                // The avatar in the ring and the story it opens are matched by name and by the person's index.
                 story.MatchId.Value = i.ToString();
                 var ring = story.Child("Ring").Sized(Sizing.Fixed(68f), Sizing.Fixed(68f)).Center();
-                ring.MatchName.Value = "Story";
-                ring.ClipRadii.Value = 34f;
                 var ringBox = ring.Box(new Color32(0xFF, 0x5E, 0x9A, 0xFF), 34f);
                 ringBox.Gradient.Value = true;
                 ringBox.GradientTo.Value = new Color32(0xFF, 0xB3, 0x47, 0xFF);
                 ringBox.GradientAngle.Value = 45f;
                 var gap = ring.Child("Gap").Sized(Sizing.Fixed(62f), Sizing.Fixed(62f)).Center();
                 DemoKit.Fill(gap, s_background, 31f);
-                DemoKit.Avatar(gap, 56f, colour, initials);
+                var avatar = DemoKit.Avatar(gap, 56f, colour, initials);
+                avatar.MatchName.Value = "Story";
                 DemoKit.Text(story, "Name", name.Split(' ')[0], 12f, s_secondary);
                 storyButtons.Add(story.Pressable());
                 story.Scale.When(InteractionStates.Pressed, 0.92f);
-                rings.Add(ring);
+                ringAvatars.Add(avatar);
             }
 
             for (int p = 0; p < CircleData.Posts.Length; p++)
@@ -319,14 +318,14 @@ namespace TimboJimboEditor.UINext.Demos
 
         // ── Story viewer ─────────────────────────────────────────────────────────
 
-        private static void StoryScreen(UINode app, List<Pressable> stories, List<UINode> rings)
+        private static void StoryScreen(UINode app, List<Pressable> stories, List<UINode> ringAvatars)
         {
             var host = app.Child("Story Viewer").Column();
             var presentation = host.Add<Presentation>();
             presentation.Style = PresentationStyle.Cover;
             presentation.Transition = PresentationTransition.None;
             presentation.Dim.Value = Color.clear;
-            // The story and its ring share a match name; a swipe down or a tap takes it back into its ring.
+            // The story and the avatar in its ring share a match name; a swipe down or a tap takes it back into the avatar.
             var story = host.Child("Story").Sized(Sizing.Grow(), Sizing.Grow()).Column(14f).Pad(new Insets(16f, 16f, 60f, 40f));
             story.IgnoresSafeArea.Value = Edges.All;
             story.MatchName.Value = "Story";
@@ -347,7 +346,7 @@ namespace TimboJimboEditor.UINext.Demos
             var middle = story.Child("Middle").Sized(Sizing.Grow(), Sizing.Grow()).Center();
             middle.Child("Moment").Label("🌅", 96f);
 
-            host.Add<StoryViewer>().Setup(stories, rings, story, background, avatar.GetComponent<Box>(),
+            host.Add<StoryViewer>().Setup(stories, ringAvatars, story, background, avatar.GetComponent<Box>(),
                 avatar.transform.GetChild(0).GetComponent<Label>(), name);
         }
 

@@ -331,7 +331,7 @@ namespace TimboJimbo.UINext
             flight.Radii = Vector4.Max(Vector4.zero, radii + flight.Corners.Drawn);
             flight.Progress = Mathf.Clamp01(flight.Fade.Drawn);
             // What is in the destination is fitted to the flight's width from its top, text to its height, so its glyphs
-            // never swell with the width; its own background stretches.
+            // never swell with the width; its own background is laid out at the flight's size.
             flight.LiveScale = flight.Text ? rect.height / Mathf.Max(1e-3f, size.y) : rect.width / Mathf.Max(1e-3f, size.x);
             flight.FitMap = Scaled(rect.position, flight.LiveScale) * world.Inverse;
             flight.PictureScale = flight.Text
@@ -484,7 +484,8 @@ namespace TimboJimbo.UINext
         public float PictureScale = 1f;
 
         // The compositor's, for the build under way: the build it was last laid out for, whether it is drawn, its pair's
-        // slot and clips, its shape as a clip, and where its ends' slots start.
+        // slot and clips, its shape as a clip, where its ends' slots start, and the slots its ends' own backgrounds are
+        // laid out in, at its size (-1: none).
         internal int SlotsBuild = -1;
         internal bool InBuild;
         internal int PairSlot;
@@ -492,6 +493,8 @@ namespace TimboJimbo.UINext
         internal int ShapeClip;
         internal int LiveSlots;
         internal int PictureSlots;
+        internal int LiveBackground = -1;
+        internal int PictureBackground = -1;
 
         public Flight(MatchKey key, UINode source, UINode destination, bool takesOver, UINode sourceLevel, Picture picture)
         {
