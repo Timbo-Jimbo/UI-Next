@@ -74,7 +74,8 @@ As fundamental as position.
   soon as it would not take the way the finger moves. A draggable says which drags it takes, at a drag's start as well
   as when one is passed on.
 - A new drag heading past the end a scroll view is already at goes to a scroll view it is in that can still scroll
-  that way, from the start, as the engine already chains nested scroll views.
+  that way, from the start, as the engine already chains nested scroll views. So does a drag that catches it bouncing
+  back from past that end and heads further past it, and the scroll view springs back.
 
 ### Demos
 

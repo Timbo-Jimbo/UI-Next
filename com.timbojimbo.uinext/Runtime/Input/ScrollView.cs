@@ -23,8 +23,10 @@ namespace TimboJimbo.UINext
     /// or, if it passes drags on (<see cref="AtEnd"/>), the rest of the same drag goes to what is around it that takes it,
     /// as the scroll view in an iOS sheet hands the drag to the sheet: a scroll view it is in that can still go that way,
     /// or a <see cref="Draggable"/> that takes it (which hands it back as the finger turns); with nothing to take it, it
-    /// stretches. The wheel at an end scrolls a scroll view it is in. A pointer that goes down while it moves catches it, and does not press what is under it. It
-    /// draws its scroll indicators over what it holds while it moves.
+    /// stretches. The wheel at an end scrolls a scroll view it is in. A pointer that goes down while it moves catches it,
+    /// and does not press what is under it; caught bouncing back from past an end, a drag heading further past it goes
+    /// where a new drag from that end would, and it springs back. It draws its scroll indicators over what it holds while
+    /// it moves.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/UI Next/Scroll View")]
@@ -72,8 +74,10 @@ namespace TimboJimbo.UINext
         [NonSerialized] private Vector2 _start;
         [NonSerialized] private Vector2 _dragFrom;
         [NonSerialized] private Vector2 _dragOrigin;
-        // Whether the drag set off within its range: one that caught it past an end stretches it back, and passes nothing on.
+        // Whether the drag set off within its range: one that caught it past an end, pushing it back, passes nothing on.
         [NonSerialized] private bool _startedInRange;
+        // Caught past an end as the pointer went down: the drag's way decides whose it is.
+        [NonSerialized] private bool _caughtPastEnd;
         [NonSerialized] private bool _gliding;
         [NonSerialized] private Vector2 _velocity;
         [NonSerialized] private Vector2 _pageFrom;
@@ -195,6 +199,7 @@ namespace TimboJimbo.UINext
             StopGlide();
             _pointer = -1;
             _dragging = false;
+            _caughtPastEnd = false;
             if (Node.Scroller == this)
             {
                 Node.Scroller = null;
@@ -214,7 +219,7 @@ namespace TimboJimbo.UINext
         {
             Viewport = viewport;
             ContentSize = content;
-            if (_dragging || _gliding) return;
+            if (_dragging || _gliding || _caughtPastEnd) return;
             var offset = Offset.Peek;
             var clamped = Clamp(offset);
             if (clamped != offset)
@@ -239,11 +244,14 @@ namespace TimboJimbo.UINext
             if (_pointer >= 0) return;
             _pointer = e.PointerId;
             _start = e.StartPosition;
-            // Moving on its own: the pointer catches it where it is drawn, and takes the drag from the start.
+            // Moving on its own: the pointer catches it where it is drawn, and takes the drag from the start. Caught past
+            // an end, the drag's way decides whose it is, as it does for a new drag at that end.
             if (IsDecelerating && UIInput.Claim(this, e.PointerId))
             {
                 Catch();
-                BeginDrag(Vector2.zero);
+                _caughtPastEnd = Clamp(Offset.Peek) != Offset.Peek;
+                if (!_caughtPastEnd)
+                    BeginDrag(Vector2.zero);
             }
         }
 
@@ -253,7 +261,17 @@ namespace TimboJimbo.UINext
             var moved = UIInput.ToNodeVector(Node, e.Position - _start);
             if (!_dragging)
             {
-                if (!WantsDrag(moved) || OuterTakes(e.Position - _start) || !UIInput.Claim(this, e.PointerId)) return;
+                if (!WantsDrag(moved)) return;
+                if (_caughtPastEnd)
+                {
+                    _caughtPastEnd = false;
+                    if (HandOn(in e, e.Position - _start)) return;
+                }
+                else if (OuterTakes(e.Position - _start))
+                {
+                    return;
+                }
+                if (!UIInput.Claim(this, e.PointerId)) return;
                 // The content follows from here, so it does not jump by the slop.
                 BeginDrag(Mask(moved));
             }
@@ -264,7 +282,7 @@ namespace TimboJimbo.UINext
         {
             if (e.PointerId != _pointer) return;
             _pointer = -1;
-            if (!_dragging) return;
+            if (LetGoCaught() || !_dragging) return;
             _dragging = false;
             Release(-Mask(UIInput.ToNodeVector(Node, e.Velocity)));
         }
@@ -273,7 +291,7 @@ namespace TimboJimbo.UINext
         {
             if (e.PointerId != _pointer) return;
             _pointer = -1;
-            if (!_dragging) return;
+            if (LetGoCaught() || !_dragging) return;
             _dragging = false;
             Release(Vector2.zero);
         }
@@ -304,24 +322,64 @@ namespace TimboJimbo.UINext
         }
 
         // Past its end by `over` (its offset's units): the rest of the drag goes to the nearest thing around it that takes
-        // it, a scroll view it is in that can still go that way or a draggable that takes the way the finger goes, as the
-        // scroll view in an iOS sheet hands the drag to the sheet, and this stops at its end. What is below a presentation
-        // never takes its drags. False with nothing to take it.
+        // it, as the scroll view in an iOS sheet hands the drag to the sheet, and this stops at its end. False with nothing
+        // to take it.
         private bool PassOn(in PointerEvent e, Vector2 over, Vector2 end)
         {
             // The finger has gone as far past the end as the offset would have, the other way.
             var excess = RootVector(-over);
+            var to = Taker(excess);
+            return to != null && Pass(in e, excess, end, to);
+        }
+
+        // The nearest thing around it that takes a drag going `way` (its root's points): a scroll view it is in that can
+        // still go that way, or a draggable that takes the way the finger goes. What is below a presentation never takes
+        // its drags. Null with none.
+        private IPointerHandler Taker(Vector2 way)
+        {
             for (var parent = Node.Parent; parent != null; parent = parent.Parent)
             {
                 var outer = parent.Scroller;
                 if (outer != null && outer.isActiveAndEnabled && outer._pointer < 0
-                    && outer.CanScrollToward(UIInput.ToNodeVector(parent, excess)))
-                    return Pass(in e, excess, end, outer);
-                if (parent.TryGetComponent(out Draggable draggable) && draggable.Receives(excess))
-                    return Pass(in e, excess, end, draggable);
+                    && outer.CanScrollToward(UIInput.ToNodeVector(parent, way)))
+                    return outer;
+                if (parent.TryGetComponent(out Draggable draggable) && draggable.Receives(way))
+                    return draggable;
                 if (parent.PresentationLevel.Peek != 0) break;
             }
-            return false;
+            return null;
+        }
+
+        // Caught past an end, a drag heading further past it goes where a new drag from that end would: to a scroll view it
+        // is in that can still go that way or, if this passes drags on, to the nearest thing around it that takes it. That
+        // one takes the drag from where the finger is, and this springs back to its end. False if the drag is this one's.
+        private bool HandOn(in PointerEvent e, Vector2 rootTranslation)
+        {
+            if (CanScrollToward(UIInput.ToNodeVector(Node, rootTranslation))) return false;
+            if (!OuterTakes(rootTranslation) && _atEnd.Peek != ScrollEnd.PassOn) return false;
+            var to = Taker(rootTranslation);
+            if (to == null || !UIInput.Pass(this, to, e.PointerId)) return false;
+            _pointer = -1;
+            SpringBack();
+            if (to is ScrollView scroll) scroll.Receive(in e, e.Position);
+            else ((Draggable)to).Receive(in e, e.Position, this);
+            return true;
+        }
+
+        // Caught past an end and let go before it was dragged: it springs back to its end. False if it was not.
+        private bool LetGoCaught()
+        {
+            if (!_caughtPastEnd) return false;
+            _caughtPastEnd = false;
+            SpringBack();
+            return true;
+        }
+
+        // Caught past an end and not dragged: it springs back to its end, or to the page there.
+        private void SpringBack()
+        {
+            _pageFrom = Clamp(Offset.Peek);
+            Release(Vector2.zero);
         }
 
         private bool Pass(in PointerEvent e, Vector2 excess, Vector2 end, IPointerHandler to)

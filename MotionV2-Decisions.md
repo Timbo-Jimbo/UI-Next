@@ -37,13 +37,14 @@ One line per decision the brief left open, with the precedent followed.
 
 ## Handing a drag on
 
-- Passing a drag on is each scroll view's choice, `AtEnd` (Bounce, the default, or PassOn), and only a drag that set off within its range is passed on, so one that catches it bouncing past an end stretches it back (Tim, 10 October).
+- Passing a drag on is each scroll view's choice, `AtEnd` (Bounce, the default, or PassOn), and only a drag that set off within its range is passed on as it crosses an end, so one that catches it bouncing past an end and pushes it back keeps it (Tim, 10 October).
 - The drag passes the moment the offset would cross the end, with no rubber band first, from where the finger was as it reached the end, so the taker does not jump: UIKit's sheet takes the drag from the scroll view inside it at its top this way.
 - What is around it is asked nearest first, each scroll view that can still go that way and each draggable that takes the way the finger goes, stopping at a presentation: the web chains scrolling to the nearest scroller that can scroll.
 - Only a draggable hands the drag back; an outer scroll view keeps the rest of it: the brief names only the draggable, and the web latches a scroll chain to the scroller that took it.
 - A draggable hands back once the finger turns a way it does not take along the axis of the scroll view that passed it, so a sideways wobble does not: a sheet ignores sideways movement while it has the drag.
 - Handing back ends the draggable's drag with `Ended`, at no translation and no speed, rather than `Cancelled`: it was not cut short, and the speed goes back with the drag.
 - A new drag heading past the end a scroll view is already at still goes to a scroll view it is in that can scroll that way, from the start, as the engine already chained nested scroll views: passing on at an end is for the rest of a drag already under way (Tim, 10 October).
+- A drag that catches a scroll view bouncing back from past an end and heads further past it goes where a new drag from that end would, to a scroll view it is in that can scroll that way or, passing drags on, to what takes it, and the scroll view springs back to its end: the web latches a new gesture to the nearest scroller that can still scroll its way, and room past an end is not room to scroll (Tim, 10 October).
 
 ## Demos
 

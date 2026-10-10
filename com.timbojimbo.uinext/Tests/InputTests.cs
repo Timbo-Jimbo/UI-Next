@@ -302,7 +302,7 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
-        public void AScrollViewCaughtPastItsEndKeepsTheDragAndPassesNothingOn()
+        public void AScrollViewCaughtPastItsEndKeepsADragPushingItBackAndPassesNothingOn()
         {
             var (drag, scroll, sheet, list) = Sheet();
             // Bouncing back from past its top.
@@ -313,11 +313,11 @@ namespace TimboJimboTests.UINext
 
             var c = Center(list);
             Down(c);
-            Move(c - new Vector2(0f, 2f), 0.02);
-            Assert.IsTrue(scroll.IsDragging, "caught, the list keeps the drag");
+            Move(c - new Vector2(0f, 20f), 0.02);
+            Assert.IsTrue(scroll.IsDragging, "caught, the list keeps a drag pushing it back");
             Assert.IsFalse(drag.IsDragging, "and hands the sheet nothing");
             Assert.AreEqual(0f, sheet.Offset.Peek.y, 0.5f);
-            Up(c - new Vector2(0f, 2f), 0.04);
+            Up(c - new Vector2(0f, 20f), 0.04);
         }
 
         [Test]
