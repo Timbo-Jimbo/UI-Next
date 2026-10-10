@@ -24,7 +24,7 @@ One line per decision the brief left open, with the precedent followed.
 
 ## Velocity
 
-- A value set directly lands where it is set, still, cutting short any spring moving it (it used to head there on its spring): the brief's "a value set directly by anything else lands still"; SwiftUI does not animate a change made without an animation.
+- A value already moving that is set directly heads there keeping its speed, spring and change, as it always did, so a frame laid out again mid-flight glides on to its new place; set by a gesture's callbacks, it lands at once, under the finger, whether or not the gesture hands its speed on, so a drag grabbing a springing value stops it there (Tim, 10 October, in place of landing every direct set, SwiftUI's way, which snapped layout mid-flight).
 - Speed is kept in the units a value springs in (its converter's: points, OkLab for colours), not as a value of its own type: SwiftUI keeps velocity in `animatableData`'s `VectorArithmetic`.
 - A gesture's samples are fitted by least squares over the last tenth of a second, with the pointer's own tracker: UIKit's and Android's velocity trackers look back about that far.
 - The last sample is taken as the gesture lets go, where the value is, so a finger held still before lifting hands on no speed: the brief's "no rules of time"; UIKit's pan velocity is zero after a pause.

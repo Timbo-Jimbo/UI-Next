@@ -196,12 +196,8 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // Raises a change callback; what it sets directly is sampled, unless it hands no speed on.
-        private void Raise(Action<DragEvent> callback, DragEvent drag, double time)
-        {
-            if (_tracksVelocity) _velocity.Run(callback, drag, time);
-            else callback?.Invoke(drag);
-        }
+        // Raises a change callback: what it sets directly lands under the finger, and is sampled unless it hands no speed on.
+        private void Raise(Action<DragEvent> callback, DragEvent drag, double time) => _velocity.Run(callback, drag, time, _tracksVelocity);
 
         // ── A drag passed on ─────────────────────────────────────────────────────
 

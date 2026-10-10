@@ -16,7 +16,8 @@ namespace TimboJimbo.UINext
 
     /// <summary>
     /// The speed a gesture hands on, as SwiftUI's tracksVelocity: while its change callbacks run, the values they set
-    /// directly are sampled at the pointer's time, so each knows the speed the finger moves it at, and the animated change
+    /// directly land at once, under the finger, whatever was moving them, and (unless it hands no speed on) are sampled at
+    /// the pointer's time, so each knows the speed the finger moves it at, and the animated change
     /// made as the gesture lets go starts each at that speed. Once the gesture is over, whatever it moved that nothing took
     /// over lands still. The gesture's own lifetime decides, never a clock: the last sample is taken as it lets go, so a
     /// finger held still before lifting hands on no speed.
@@ -32,13 +33,23 @@ namespace TimboJimbo.UINext
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics() => Current = null;
 
-        /// <summary>Runs a change callback with <paramref name="argument"/>, sampling what it sets directly at <paramref name="time"/>.</summary>
-        public void Run<T>(Action<T> callback, T argument, double time)
+        // Whether the callback running samples what it sets: not for a gesture that hands no speed on.
+        private bool _samples;
+
+        /// <summary>Whether what the running callback sets directly is sampled.</summary>
+        internal bool Samples => _samples;
+
+        /// <summary>
+        /// Runs a change callback with <paramref name="argument"/>: what it sets directly lands at once, under the finger,
+        /// and is sampled at <paramref name="time"/> if it <paramref name="samples"/>.
+        /// </summary>
+        public void Run<T>(Action<T> callback, T argument, double time, bool samples = true)
         {
             if (callback == null) return;
             var previous = Current;
             Current = this;
             _time = time;
+            _samples = samples;
             try
             {
                 callback(argument);

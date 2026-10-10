@@ -55,8 +55,10 @@ As fundamental as position.
 - Springs keep their speed when a new change retargets them.
 - Gestures hand theirs on, as SwiftUI's `tracksVelocity` does. While a gesture's change callbacks run, the values they
   set directly are sampled, and the animated change made as the gesture lets go starts at that speed. Once the
-  gesture has ended, whatever it moved that nothing took over lands still, as does a value set directly by anything
-  else. No rules of time: the gesture's own lifetime decides.
+  gesture has ended, whatever it moved that nothing took over lands still. No rules of time: the gesture's own lifetime
+  decides.
+- A value already moving that is set directly heads there keeping its speed, so a frame laid out again mid-flight
+  glides on; set by a gesture's callbacks, it lands at once, under the finger.
 - A matched flight starts at the speed its source was drawn moving.
 - Motions add up. A page thrown away, whose offset springs home inside its dismissal, carries on at the speed of the
   throw as its presentation takes it out. Code never handles velocity.

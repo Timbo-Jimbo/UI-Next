@@ -179,12 +179,8 @@ namespace TimboJimbo.UINext
             Forget(slot);
         }
 
-        // Raises a change callback; what it sets directly is sampled, unless it hands no speed on.
-        private void Raise(Action<PinchEvent> callback, PinchEvent pinch, double time)
-        {
-            if (_tracksVelocity) _tracking.Run(callback, pinch, time);
-            else callback?.Invoke(pinch);
-        }
+        // Raises a change callback: what it sets directly lands under the fingers, and is sampled unless it hands no speed on.
+        private void Raise(Action<PinchEvent> callback, PinchEvent pinch, double time) => _tracking.Run(callback, pinch, time, _tracksVelocity);
 
         // It is cut short (at `time`, if a pointer said when): the change made as it goes starts at its speed, and then what
         // it moved that nothing took over lands still.

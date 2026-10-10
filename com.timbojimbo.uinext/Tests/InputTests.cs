@@ -25,6 +25,28 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void AValueADragSetsLandsUnderTheFingerWhateverWasMovingIt()
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
+            card.Box(Color.white);
+            var drag = card.Add<Draggable>();
+            // Even a drag that hands no speed on holds what it moves under the finger.
+            drag.TracksVelocity = false;
+            drag.Changed += e => card.Offset.Value = e.Translation;
+            Frame();
+            // Springing somewhere as the drag takes it.
+            UI.Animate(new UIAnimation(0.6f), () => card.Offset.Value = new Vector2(0f, 200f));
+            Frame(1f / 60f);
+            var start = Center(card);
+            Down(start);
+            Move(start + new Vector2(20f, 0f), 0.02);
+            Move(start + new Vector2(40f, 0f), 0.04);
+            Assert.IsFalse(card.Offset.IsAnimating, "its spring cut short");
+            Assert.AreEqual(card.Offset.Peek, card.Offset.Presented, "drawn where the drag put it");
+            Up(start + new Vector2(40f, 0f), 0.06);
+        }
+
+        [Test]
         public void ANewDragHeadingPastAScrollViewsEndScrollsTheScrollViewItIsIn()
         {
             var (outer, inner, box) = NestedScrolls(400f);

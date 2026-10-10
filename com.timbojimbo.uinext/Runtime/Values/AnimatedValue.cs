@@ -7,7 +7,9 @@ namespace TimboJimbo.UINext
     /// A value with two faces: its model, where it is going, and its presentation, where it is drawn right now, as
     /// Core Animation's model and presentation layers. Code running in the draw phase sees the presentation; everything
     /// else (layout, bindings, game code) sees the model. A change made inside <see cref="UI.Animate(UIAnimation, System.Action)"/>
-    /// springs the presentation from where it is drawn to the new model; any other change puts it there at once, still.
+    /// springs the presentation from where it is drawn to the new model. Any other change puts it there at once, still,
+    /// except that one already moving heads there keeping its speed, unless a gesture's callbacks set it, which lands it
+    /// under the finger.
     /// It knows the speed it moves at however it is moved (<see cref="Velocity"/>), and a spring set off on it starts at
     /// that speed: a value a gesture was moving carries on at the gesture's speed (see <see cref="Draggable.TracksVelocity"/>).
     /// Serializable only so that a <see cref="UIValue{T}"/>'s hierarchy is (Unity's analyzer asks); nothing here is saved.
@@ -147,8 +149,10 @@ namespace TimboJimbo.UINext
         /// <summary>
         /// Gives it a new model. Inside a change (<see cref="UITransaction.Current"/>) its presentation springs there on
         /// the change's animation, from where it is drawn at the speed it has; outside one, <paramref name="implicitAnimation"/>
-        /// (a state's) is used if given; otherwise it lands there at once, still, cutting short any spring moving it. Set
-        /// directly while a gesture's change callback runs, it is sampled for the speed the gesture hands on.
+        /// (a state's) is used if given; otherwise a value already moving heads there keeping its speed, spring and change,
+        /// so a frame laid out again mid-flight glides on to its new place, and one at rest lands there at once. Set directly
+        /// while a gesture's change callback runs, it lands at once, under the finger, cutting short any spring moving it,
+        /// and is sampled for the speed the gesture hands on.
         /// </summary>
         internal void SetModel(T value, UIAnimation? implicitAnimation, bool force = false)
         {
@@ -313,10 +317,18 @@ namespace TimboJimbo.UINext
                 return;
             }
             DropPending(arrived: false);
-            // Set directly, it lands where it is set, cutting short any spring moving it.
+            bool direct = transaction == null && implicitAnimation == null;
+            if (_slot >= 0 && direct && GestureVelocity.Current == null)
+            {
+                // Moving, and set directly by anything but a gesture: it heads there, keeping its speed, spring and change.
+                ForgetSpeed();
+                SpringStore.SetTarget(_slot, s_converter.ToVector(_model));
+                return;
+            }
+            // Set by a gesture, at rest, or in a change that lands at once: it lands where it is set.
             if (_slot >= 0)
                 SpringStore.Stop(_slot, arrived: transaction != null && SpringStore.TransactionOf(_slot) == transaction);
-            Land(direct: transaction == null && implicitAnimation == null);
+            Land(direct);
             _presentation.Notify();
         }
 
@@ -325,7 +337,7 @@ namespace TimboJimbo.UINext
         private void Land(bool direct)
         {
             var gesture = GestureVelocity.Current;
-            if (direct && gesture != null && s_converter != null)
+            if (direct && gesture != null && gesture.Samples && s_converter != null)
             {
                 _movingAt = Vector4.zero;
                 gesture.Sample(this);

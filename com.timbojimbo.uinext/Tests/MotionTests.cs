@@ -81,7 +81,7 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
-        public void ASetMadeDirectlyLandsStillCuttingShortItsSpring()
+        public void AMovingValueSetDirectlyHeadsThereKeepingItsSpeed()
         {
             var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));
             node.Box(Color.white);
@@ -89,13 +89,15 @@ namespace TimboJimboTests.UINext
             var change = UI.Animate(new UIAnimation(0.6f), () => node.Offset.Value = new Vector2(100f, 0f));
             Frame(1f / 60f);
             Run(0.1f);
-            Assert.Greater(node.Offset.Velocity.x, 0f);
+            var velocity = node.Offset.Velocity;
+            Assert.Greater(velocity.x, 0f);
+            var drawn = node.Offset.Presented;
             node.Offset.Value = new Vector2(40f, 0f);
-            Assert.AreEqual(new Vector2(40f, 0f), node.Offset.Presented, "it lands where it is set");
-            Assert.AreEqual(Vector4.zero, node.Offset.Velocity, "still");
+            Assert.AreEqual(drawn, node.Offset.Presented, "it carries on from where it is drawn");
+            Assert.AreEqual(velocity.x, node.Offset.Velocity.x, 1e-3f, "at the speed it had");
             Run(1f);
+            Assert.AreEqual(40f, node.Offset.Presented.x, 0.01f, "and lands where it was set");
             Assert.IsTrue(change.IsFinished);
-            Assert.IsFalse(change.Completed, "the change it cut short does not complete");
         }
 
         [Test]
