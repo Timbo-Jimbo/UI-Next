@@ -7,8 +7,9 @@ namespace TimboJimbo.UINext.Demos.Circle
     /// Circle, the demo app: three pages (Home, Chats, Me) side by side in a paging scroll view, under a floating tab
     /// bar. Tapping a tab scrolls to its page and springs the selection pill (floating on the selected tab) across;
     /// swiping between pages moves the pill when the page settles. Tapping the selected tab again scrolls its page to
-    /// the top. Feed photos open in the viewer; the Dark mode switch turns the Dark mode state on at the root, and every
-    /// colour from a token follows, animated.
+    /// the top. Feed photos open in the viewer, flying out of the feed; the Dark mode switch turns the Dark mode state on
+    /// at the root, and every colour from a token follows, animated. Log out grows its dialog out of its button: the two
+    /// share a match name.
     /// </summary>
     public sealed class CircleApp : MonoBehaviour
     {
@@ -63,8 +64,9 @@ namespace TimboJimbo.UINext.Demos.Circle
             {
                 int index = i;
                 var pressable = _photos[i].GetComponent<Pressable>();
+                // A post's photo is matched by the post's index, which its post gives it.
                 if (pressable != null)
-                    pressable.Tapped += () => _viewer.Open(_photos[index], _captions[index]);
+                    pressable.Tapped += () => _viewer.Open(_photos[index], _captions[index], index.ToString());
             }
             _pages.Scrolled += OnPagesScrolled;
             _darkSwitch.Changed += SetDark;

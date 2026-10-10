@@ -42,6 +42,16 @@ One line per decision the brief left open, with the precedent followed.
 - Handing back ends the draggable's drag with `Ended`, at no translation and no speed, rather than `Cancelled`: it was not cut short, and the speed goes back with the drag.
 - A drag that starts heading past the end a scroll view is at is taken by it and passed on at its first move, replacing the old start-of-drag chaining: one mechanism for both, as the brief's "the rest of the same drag".
 
+## Demos
+
+- Matched nodes are hidden with Display Hidden, so a grid, a list or a row of stories keeps the place of what flew away: SwiftUI hides a hero's source with `opacity(0)` or `isSource` for the same reason.
+- Presentations a flight carries in and out have no transition of their own (the alert growing out of Log out keeps its pop, which the flight follows): a matched flight is the transition, as an iOS hero transition replaces the push.
+- The swipe component dismisses when let go a third of the way or flicked away faster than 600 points a second, and springs back otherwise: UIKit's interactive dismissals finish on progress or velocity past a threshold.
+- Its shrink goes to three quarters at most, and its progress is how far along the ways it allows the finger has gone: the App Store's pulled-down story shrinks to about that.
+- Every showcase page and the showcase's sheet use it too (right to go back, down to dismiss), so "a page thrown away carries on at the speed of the throw as its presentation takes it out" can be seen: UINavigationController's swipe back and a sheet's swipe down.
+- Momentum and precision are shown with two stepped sliders that differ only in `TracksVelocity`, snapping on the same critically damped spring: the brief's own example of a precise control.
+- A chat row has an opaque background (the page's) instead of a clear one, so its picture is opaque as it grows into the conversation and nothing behind it shows through.
+
 ## Presentations
 
 - `Presenting` and `Dismissing` are C# events raised at the end of the presentation's own state changes, inside its change (shown and laid out, or taking no pointers, its content on its way): UIKit's `animate(alongsideTransition:)`, which runs code inside a presentation's animation.
