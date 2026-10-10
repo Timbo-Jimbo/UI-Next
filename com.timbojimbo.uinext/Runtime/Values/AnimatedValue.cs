@@ -10,7 +10,9 @@ namespace TimboJimbo.UINext
     /// springs the presentation from where it is drawn to the new model; any other change puts it there at once, still.
     /// It knows the speed it moves at however it is moved (<see cref="Velocity"/>), and a spring set off on it starts at
     /// that speed: a value a gesture was moving carries on at the gesture's speed (see <see cref="Draggable.TracksVelocity"/>).
+    /// Serializable only so that a <see cref="UIValue{T}"/>'s hierarchy is (Unity's analyzer asks); nothing here is saved.
     /// </summary>
+    [System.Serializable]
     public class AnimatedValue<T> : Observable, ISpringOwner, IPendingSpring, ISpeedSampled
     {
         private static readonly IValueConverter<T> s_converter = ValueConverters.Get<T>();

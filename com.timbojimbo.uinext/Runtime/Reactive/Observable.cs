@@ -5,7 +5,9 @@ namespace TimboJimbo.UINext
     /// <summary>
     /// Something computations can read and be told about when it changes. A read made while a
     /// <see cref="Computation"/> runs is recorded; a change invalidates every computation that read it in its last run.
+    /// Serializable only so that a <see cref="UIValue{T}"/>'s hierarchy is (Unity's analyzer asks); nothing here is saved.
     /// </summary>
+    [System.Serializable]
     public abstract class Observable
     {
         // The computations that read this in their last run.
