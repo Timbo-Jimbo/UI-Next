@@ -36,7 +36,7 @@ As SwiftUI's `matchedGeometryEffect`, drawn the way the web's view transitions d
   as one isolated image, so nothing behind shows through and a background never dips mid-flight.
 - Content is fitted to the flight's width from the top, as the web does, so a row growing into a page keeps its size
   rather than swelling. Text keeps its height, and a node's own background is laid out at the flight's size, as the node
-  would draw at that size.
+  would draw at that size, its shadow falling outside the flight's shape.
 - Named parts inside a pair fly to their own places, inside the whole's shape. A pair is one rounded shape whose
   corners morph from one end's to the other's.
 - What springs is the difference between where the flight started and where the destination belongs, closing to

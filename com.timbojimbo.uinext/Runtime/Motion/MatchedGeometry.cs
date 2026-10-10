@@ -485,7 +485,7 @@ namespace TimboJimbo.UINext
 
         // The compositor's, for the build under way: the build it was last laid out for, whether it is drawn, its pair's
         // slot and clips, its shape as a clip, where its ends' slots start, and the slots its ends' own backgrounds are
-        // laid out in, at its size (-1: none).
+        // laid out in, at its size, and their own shadows drawn in, under its pair (-1: none).
         internal int SlotsBuild = -1;
         internal bool InBuild;
         internal int PairSlot;
@@ -495,6 +495,8 @@ namespace TimboJimbo.UINext
         internal int PictureSlots;
         internal int LiveBackground = -1;
         internal int PictureBackground = -1;
+        internal int LiveShadow = -1;
+        internal int PictureShadow = -1;
 
         public Flight(MatchKey key, UINode source, UINode destination, bool takesOver, UINode sourceLevel, Picture picture)
         {

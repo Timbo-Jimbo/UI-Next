@@ -495,17 +495,13 @@ namespace TimboJimbo.UINext
             return target;
         }
 
-        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot) => Emit(instances, textures, slot, slot);
-
-        // A node's primitives in its slot, those it draws relative to its rect in `relative` (a flight end's own
-        // background, laid out at the flight's size).
-        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot, uint relative)
+        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot)
         {
             EnsureInstances(s_instanceCount + instances.Count);
             for (int i = 0; i < instances.Count; i++)
             {
                 var instance = instances[i];
-                instance.Slot = (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0 ? relative : slot;
+                instance.Slot = slot;
                 s_instances[s_instanceCount] = instance;
                 s_textures[s_instanceCount] = textures[i];
                 s_textures2[s_instanceCount] = null;
@@ -637,7 +633,8 @@ namespace TimboJimbo.UINext
 
         // Slots and clips for every flight placed, after the trees': its pair's (in its root's space, inside the shape of
         // the flight it is a part of), its destination's nodes fitted into it, its picture's nodes, and each end's own
-        // background laid out at its size. Outer flights first, as a part's pair is cut to its outer flight's shape.
+        // background laid out at its size and own shadow under its pair. Outer flights first, as a part's pair is cut to
+        // its outer flight's shape.
         private static void AddFlightSlots()
         {
             s_build++;
@@ -737,6 +734,12 @@ namespace TimboJimbo.UINext
             }
             s_slotCount += picture.Slots.Count;
             flight.PictureBackground = picture.Slots.Count > 0 ? AddBackground(s_slots[flight.PictureSlots], rect, pixels) : -1;
+            // Each end's own shadow is drawn under the pair, out of its shape, where the node's own would fall: laid out as
+            // its background, at its share of the cross-fade, cut only as the pair is.
+            flight.LiveShadow = AddShadow(s_slots[flight.LiveBackground], flight.Progress, flight.PairClips);
+            flight.PictureShadow = flight.PictureBackground >= 0
+                ? AddShadow(s_slots[flight.PictureBackground], 1f - flight.Progress, flight.PairClips)
+                : -1;
         }
 
         // The slot an end's own background is drawn in: the flight's rect, unscaled, as opaque, filtered and cut as the
@@ -748,6 +751,15 @@ namespace TimboJimbo.UINext
             SizeOpacity = new Vector4(rect.width, rect.height, root.SizeOpacity.z, 1f / Mathf.Max(1e-4f, pixels)),
             Clips = root.Clips,
         });
+
+        // The slot an end's own shadow is drawn in, under the pair: its background's, at its share of the cross-fade, cut
+        // only as the pair is.
+        private static int AddShadow(NodeSlot background, float share, Vector4 clips)
+        {
+            background.SizeOpacity.z *= share;
+            background.Clips = clips;
+            return AddSlot(background);
+        }
 
         // The clips of a node in a flight: those made inside the flying node (not those around it, which a flight is out
         // of), through the flight's fit.
@@ -817,7 +829,8 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // A flight's pair: its picture's and its destination's images, summed in a quad over its rect cut to its shape.
+        // A flight's pair: its picture's and its destination's images, summed in a quad over its rect cut to its shape, over
+        // each end's own shadow.
         private static void EmitFlight(UITree tree, Flight flight)
         {
             var root = tree.Root;
@@ -834,6 +847,15 @@ namespace TimboJimbo.UINext
             Groups.Add(new Group { Tree = tree, Target = picture, Region = region, Flight = flight, End = 0 });
             var live = GroupTarget(Groups.Count, xMax - x, yMax - y);
             Groups.Add(new Group { Tree = tree, Target = live, Region = region, Flight = flight, End = 1 });
+
+            // Each end's own shadow, under the pair rather than in its image, so it falls outside the flight's shape as the
+            // node's own would, faded with its end.
+            EmitShadows(flight.Picture.Instances, flight.PictureShadow, pictureRoot: true);
+            if (tree.Shown[flight.Destination.Index])
+            {
+                EmitShadows(flight.Destination.Instances, flight.LiveShadow, pictureRoot: false);
+                EmitShadows(flight.Destination.OverlayInstances, flight.LiveShadow, pictureRoot: false);
+            }
 
             EnsureInstances(s_instanceCount + 1);
             s_instances[s_instanceCount] = new PrimitiveInstance
@@ -878,7 +900,9 @@ namespace TimboJimbo.UINext
                 var instance = picture.Instances[i];
                 int k = (int)instance.Slot;
                 if (k >= s_skip.Count || s_skip[k]) continue;
-                // The source's own background is laid out at the flight's size; the rest is fitted.
+                // The source's own shadow is drawn under the pair and its own background laid out at the flight's size; the
+                // rest is fitted.
+                if (k == 0 && IsOwnShadow(instance)) continue;
                 instance.Slot = k == 0 && (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0
                     ? (uint)flight.PictureBackground
                     : (uint)(flight.PictureSlots + k);
@@ -907,9 +931,11 @@ namespace TimboJimbo.UINext
             if (node != flight.Destination && (node.PresentationLevel.Peek != 0 || node.FlightIn != null || node.FlightOut != null)) return;
             int slot = flight.LiveSlots + i - flight.Destination.Index;
             if (s_slots[slot].SizeOpacity.z <= 0f) return;
-            // The destination's own background is laid out at the flight's size; the rest is fitted.
-            uint relative = node == flight.Destination ? (uint)flight.LiveBackground : (uint)slot;
-            Emit(node.Instances, node.InstanceTextures, (uint)slot, relative);
+            // The destination's own shadow is drawn under the pair and its own background laid out at the flight's size;
+            // the rest is fitted.
+            bool root = node == flight.Destination;
+            if (root) EmitEndRoot(node.Instances, node.InstanceTextures, (uint)slot, (uint)flight.LiveBackground);
+            else Emit(node.Instances, node.InstanceTextures, (uint)slot);
 
             int first = s_children.Count;
             int end = tree.SubtreeEnd[i];
@@ -921,8 +947,48 @@ namespace TimboJimbo.UINext
             for (int c = 0; c < count; c++)
                 WalkLive(tree, flight, s_children[first + c]);
             s_children.RemoveRange(first, count);
-            Emit(node.OverlayInstances, node.OverlayTextures, (uint)slot, relative);
+            if (root) EmitEndRoot(node.OverlayInstances, node.OverlayTextures, (uint)slot, (uint)flight.LiveBackground);
+            else Emit(node.OverlayInstances, node.OverlayTextures, (uint)slot);
         }
+
+        // A flight's destination's own primitives: what it draws relative to its rect in `background`, laid out at the
+        // flight's size, but its own shadow, which is drawn under the pair; the rest in `slot`, fitted.
+        private static void EmitEndRoot(List<PrimitiveInstance> instances, List<Texture> textures, uint slot, uint background)
+        {
+            EnsureInstances(s_instanceCount + instances.Count);
+            for (int i = 0; i < instances.Count; i++)
+            {
+                var instance = instances[i];
+                if (IsOwnShadow(instance)) continue;
+                instance.Slot = (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0 ? background : slot;
+                s_instances[s_instanceCount] = instance;
+                s_textures[s_instanceCount] = textures[i];
+                s_textures2[s_instanceCount] = null;
+                s_instanceCount++;
+            }
+        }
+
+        // An end's own shadow, under its pair, in `slot`: what its root (for a picture, its first node) draws as a shadow
+        // of its rect.
+        private static void EmitShadows(List<PrimitiveInstance> instances, int slot, bool pictureRoot)
+        {
+            if (slot < 0 || s_slots[slot].SizeOpacity.z <= 0f) return;
+            for (int i = 0; i < instances.Count; i++)
+            {
+                var instance = instances[i];
+                if (!IsOwnShadow(instance) || (pictureRoot && instance.Slot != 0)) continue;
+                EnsureInstances(s_instanceCount + 1);
+                instance.Slot = (uint)slot;
+                s_instances[s_instanceCount] = instance;
+                s_textures[s_instanceCount] = null;
+                s_textures2[s_instanceCount] = null;
+                s_instanceCount++;
+            }
+        }
+
+        // Whether a primitive is a node's own shadow: a shadow of its rect.
+        private static bool IsOwnShadow(in PrimitiveInstance instance) =>
+            instance.Type == (uint)PrimitiveType.Shadow && (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0;
 
         // ── Drawing ──────────────────────────────────────────────────────────────
 
