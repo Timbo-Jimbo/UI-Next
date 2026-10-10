@@ -139,6 +139,92 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void ADraggableTakesOnlyTheDragsItSaysItTakes()
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(200f), Sizing.Fixed(200f));
+            card.Box(Color.white);
+            var drag = card.Add<Draggable>();
+            drag.Takes = t => t.y > 0f;
+            Frame();
+            var c = Center(card);
+            Down(c);
+            Move(c + new Vector2(0f, -30f), 0.05);
+            Assert.IsFalse(drag.IsDragging, "up is not a way it takes");
+            Up(c + new Vector2(0f, -30f), 0.1);
+            Down(c);
+            Move(c + new Vector2(0f, 30f), 0.15);
+            Assert.IsTrue(drag.IsDragging, "down is");
+            Up(c + new Vector2(0f, 30f), 0.2);
+        }
+
+        [Test]
+        public void AScrollViewAtItsTopPassesTheRestOfADragToADraggableThatTakesItAndTakesItBack()
+        {
+            // A sheet that is pulled down, with a list in it.
+            var sheet = Root.Node.Child("Sheet").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            sheet.Box(Color.white);
+            var drag = sheet.Add<Draggable>();
+            drag.Axis = ScrollAxis.Vertical;
+            drag.Takes = t => t.y > 0f;
+            drag.Began += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            drag.Changed += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            drag.Ended += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            var list = sheet.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            var scroll = list.Scroll();
+            for (int i = 0; i < 20; i++)
+                list.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            Frame();
+            scroll.ContentOffset = new Vector2(0f, 30f);
+            Frame();
+
+            var c = Center(list);
+            Down(c);
+            Move(c + new Vector2(0f, 20f), 0.02);
+            Move(c + new Vector2(0f, 40f), 0.04);
+            Assert.AreEqual(10f, scroll.ContentOffset.y, 0.5f, "the list scrolls back towards its top");
+            Move(c + new Vector2(0f, 80f), 0.06);
+            Assert.AreEqual(0f, scroll.ContentOffset.y, 0.5f, "it stops at its top");
+            Assert.IsTrue(drag.IsDragging, "the sheet has the rest of the drag");
+            Assert.AreEqual(30f, sheet.Offset.Peek.y, 0.5f, "and moves with it, from where the list stopped");
+            Move(c + new Vector2(0f, 100f), 0.08);
+            Assert.AreEqual(50f, sheet.Offset.Peek.y, 0.5f);
+
+            // The finger turns back up past where the sheet took the drag: it hands it back, and the list scrolls on.
+            Move(c + new Vector2(0f, 40f), 0.1);
+            Assert.IsFalse(drag.IsDragging);
+            Assert.AreEqual(0f, sheet.Offset.Peek.y, 0.5f);
+            Assert.IsTrue(scroll.IsDragging);
+            Assert.AreEqual(10f, scroll.ContentOffset.y, 0.5f);
+            Up(c + new Vector2(0f, 40f), 0.12);
+        }
+
+        [Test]
+        public void AScrollViewAtItsEndPassesTheRestOfADragToTheScrollViewItIsIn()
+        {
+            var page = Root.Node.Child("Page").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            var outer = page.Scroll();
+            page.Child("Top").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            var box = page.Child("Box").Sized(Sizing.Grow(), Sizing.Fixed(200f)).Column();
+            var inner = box.Scroll();
+            for (int i = 0; i < 10; i++)
+                box.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            page.Child("Bottom").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            Frame();
+            outer.ContentOffset = new Vector2(0f, 200f);
+            inner.ContentOffset = new Vector2(0f, 380f);
+            Frame();
+
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 50f), 0.04);
+            Assert.AreEqual(400f, inner.ContentOffset.y, 0.5f, "the list stops at its end");
+            Assert.IsTrue(outer.IsDragging, "the page has the rest of the drag");
+            Assert.AreEqual(220f, outer.ContentOffset.y, 0.5f, "and scrolls on with it");
+            Up(c - new Vector2(0f, 50f), 0.06);
+        }
+
+        [Test]
         public void TwoFingersSpreadingAndTurningPinch()
         {
             var photo = Root.Node.Child("Photo").Sized(Sizing.Fixed(300f), Sizing.Fixed(300f));

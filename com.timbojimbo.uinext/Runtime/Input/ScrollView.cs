@@ -6,11 +6,13 @@ namespace TimboJimbo.UINext
 {
     /// <summary>
     /// Makes a node scroll what is inside it, as UIScrollView: layout lets its children run past its edge the way it
-    /// scrolls, it clips them, and drags move them, rubber-banding past either end, gliding on when let go and slowing
-    /// as iOS's do, bouncing back into range, and coming to rest on a page when it pages. The mouse wheel scrolls it.
-    /// Already at an end, a new drag (or the wheel) past it scrolls a scroll view it is in instead, when that one can
-    /// go that way. A pointer that goes down while it moves catches it, and does not press what is under it. It draws
-    /// its scroll indicators over what it holds while it moves.
+    /// scrolls, it clips them, and drags move them, gliding on when let go and slowing as iOS's do, bouncing back into
+    /// range, and coming to rest on a page when it pages. The mouse wheel scrolls it. A drag that reaches an end passes
+    /// the rest of itself to what is around it that takes it, as the scroll view in an iOS sheet hands the drag to the
+    /// sheet: a scroll view it is in that can still go that way, or a <see cref="Draggable"/> that takes it (which hands it
+    /// back as the finger turns); with nothing to take it, it rubber-bands past the end. The wheel at an end scrolls a
+    /// scroll view it is in. A pointer that goes down while it moves catches it, and does not press what is under it. It
+    /// draws its scroll indicators over what it holds while it moves.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/UI Next/Scroll View")]
@@ -50,6 +52,9 @@ namespace TimboJimbo.UINext
 
         [NonSerialized] private int _pointer = -1;
         [NonSerialized] private bool _dragging;
+        // Where the drag is measured from, in its root's points: where the pointer went down, or where the drag was
+        // passed to it.
+        [NonSerialized] private Vector2 _start;
         [NonSerialized] private Vector2 _dragFrom;
         [NonSerialized] private Vector2 _dragOrigin;
         [NonSerialized] private bool _gliding;
@@ -204,19 +209,20 @@ namespace TimboJimbo.UINext
 
         private Vector2 Mask(Vector2 vector) => new(Scrolls(0) ? vector.x : 0f, Scrolls(1) ? vector.y : 0f);
 
+        /// <summary>A movement with only the parts of it along the way it scrolls.</summary>
+        internal Vector2 Along(Vector2 vector) => Mask(vector);
+
         // ── Dragging ─────────────────────────────────────────────────────────────
 
         void IPointerHandler.OnPointerDown(in PointerEvent e)
         {
             if (_pointer >= 0) return;
             _pointer = e.PointerId;
+            _start = e.StartPosition;
             // Moving on its own: the pointer catches it where it is drawn, and takes the drag from the start.
             if (IsDecelerating && UIInput.Claim(this, e.PointerId))
             {
-                var at = Offset.Presented;
-                StopGlide();
-                Offset.SetModel(at, null);
-                Offset.Settle();
+                Catch();
                 BeginDrag(Vector2.zero);
             }
         }
@@ -224,18 +230,14 @@ namespace TimboJimbo.UINext
         void IPointerHandler.OnPointerMove(in PointerEvent e)
         {
             if (e.PointerId != _pointer) return;
-            var translation = Mask(UIInput.ToNodeVector(Node, e.Translation));
+            var moved = UIInput.ToNodeVector(Node, e.Position - _start);
             if (!_dragging)
             {
-                var raw = UIInput.ToNodeVector(Node, e.Translation);
-                if (!WantsDrag(raw) || OuterTakes(e.Translation) || !UIInput.Claim(this, e.PointerId)) return;
+                if (!WantsDrag(moved) || !UIInput.Claim(this, e.PointerId)) return;
                 // The content follows from here, so it does not jump by the slop.
-                BeginDrag(translation);
+                BeginDrag(Mask(moved));
             }
-            var target = _dragFrom - (translation - _dragOrigin);
-            // It moves against the finger, at its speed.
-            Offset.MoveAt(Stretch(target), -Mask(UIInput.ToNodeVector(Node, e.Velocity)));
-            Scrolled?.Invoke(Offset.Peek);
+            Drag(in e, Mask(moved));
         }
 
         void IPointerHandler.OnPointerUp(in PointerEvent e)
@@ -270,21 +272,81 @@ namespace TimboJimbo.UINext
             return false;
         }
 
-        // A drag heading past the end this is already at goes to a scroll view it is in that can still scroll that way,
-        // as nested scroll views chain on the web: a new drag at the bottom of a list in a page scrolls the page. With
-        // none that can, it is this one's, and it rubber-bands. A drag already taken stays with the one that took it.
-        private bool OuterTakes(Vector2 rootTranslation)
+        // Moves what it holds against the finger, at its speed. Past an end, the rest of the drag goes to what is around it
+        // that takes it; with nothing to take it, it stretches.
+        private void Drag(in PointerEvent e, Vector2 translation)
         {
-            if (CanScrollToward(UIInput.ToNodeVector(Node, rootTranslation))) return false;
+            var target = _dragFrom - (translation - _dragOrigin);
+            var end = Clamp(target);
+            if (end != target && PassOn(in e, target - end, end)) return;
+            Offset.MoveAt(Stretch(target), -Mask(UIInput.ToNodeVector(Node, e.Velocity)));
+            Scrolled?.Invoke(Offset.Peek);
+        }
+
+        // Past its end by `over` (its offset's units): the rest of the drag goes to the nearest thing around it that takes
+        // it, a scroll view it is in that can still go that way or a draggable that takes the way the finger goes, as the
+        // scroll view in an iOS sheet hands the drag to the sheet, and this stops at its end. What is below a presentation
+        // never takes its drags. False with nothing to take it.
+        private bool PassOn(in PointerEvent e, Vector2 over, Vector2 end)
+        {
+            // The finger has gone as far past the end as the offset would have, the other way.
+            var excess = RootVector(-over);
             for (var parent = Node.Parent; parent != null; parent = parent.Parent)
             {
                 var outer = parent.Scroller;
-                if (outer != null && outer.isActiveAndEnabled && outer.CanScrollToward(UIInput.ToNodeVector(parent, rootTranslation)))
-                    return true;
-                // What is below a presentation never takes its drags.
+                if (outer != null && outer.isActiveAndEnabled && outer._pointer < 0
+                    && outer.CanScrollToward(UIInput.ToNodeVector(parent, excess)))
+                    return Pass(in e, excess, end, outer);
+                if (parent.TryGetComponent(out Draggable draggable) && draggable.Receives(excess))
+                    return Pass(in e, excess, end, draggable);
                 if (parent.PresentationLevel.Peek != 0) break;
             }
             return false;
+        }
+
+        private bool Pass(in PointerEvent e, Vector2 excess, Vector2 end, IPointerHandler to)
+        {
+            if (!UIInput.Pass(this, to, e.PointerId)) return false;
+            _pointer = -1;
+            _dragging = false;
+            Offset.MoveAt(end, Vector4.zero);
+            Scrolled?.Invoke(end);
+            HideIndicators();
+            // The rest of the drag is measured from where the finger was as this reached its end.
+            var start = e.Position - excess;
+            if (to is ScrollView scroll) scroll.Receive(in e, start);
+            else ((Draggable)to).Receive(in e, start, this);
+            return true;
+        }
+
+        /// <summary>
+        /// Takes the rest of a drag, measured from <paramref name="start"/> (its root's points): one a scroll view inside it
+        /// passes on at its end, or one a draggable it passed a drag to hands back as the finger turns.
+        /// </summary>
+        internal void Receive(in PointerEvent e, Vector2 start)
+        {
+            _pointer = e.PointerId;
+            _start = start;
+            if (IsDecelerating)
+                Catch();
+            BeginDrag(Vector2.zero);
+            Drag(in e, Mask(UIInput.ToNodeVector(Node, e.Position - start)));
+        }
+
+        // Moving on its own, it stops where it is drawn, still.
+        private void Catch()
+        {
+            var at = Offset.Presented;
+            StopGlide();
+            Offset.SetModel(at, null);
+            Offset.Settle();
+        }
+
+        // A vector in its own space as one in its root's points, as it is drawn.
+        private Vector2 RootVector(Vector2 local)
+        {
+            var node = Node;
+            return node.Tree != null && node.Index >= 0 ? node.Tree.World[node.Index].ApplyVector(local) : local;
         }
 
         // Whether a drag of `moved` (in its own space) has room to scroll it, along the axis the drag mostly follows: the

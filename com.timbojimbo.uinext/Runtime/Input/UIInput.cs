@@ -124,6 +124,20 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
+        /// Hands a pointer <paramref name="from"/> has claimed to <paramref name="to"/> for the rest of its drag, as a scroll
+        /// view at its end passes the drag to what is around it and a draggable hands it back: from now on only
+        /// <paramref name="to"/> hears it, cancelled or not before. False unless <paramref name="from"/> has it.
+        /// </summary>
+        internal static bool Pass(IPointerHandler from, IPointerHandler to, int pointerId)
+        {
+            if (!s_tracks.TryGetValue(pointerId, out var track) || track.Owner != from) return false;
+            track.Owner = to;
+            track.Handlers.Clear();
+            track.Handlers.Add(to);
+            return true;
+        }
+
+        /// <summary>
         /// Makes <paramref name="handler"/> the one a tap of this pointer goes to, unless one deeper already is: so a
         /// button inside a button takes the tap, not both.
         /// </summary>
