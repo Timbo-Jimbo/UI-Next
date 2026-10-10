@@ -304,10 +304,11 @@ namespace TimboJimboEditor.UINext.Demos
             var photo = photoNode.Add<ScenePhoto>();
             photo.CornerRadius.Value = 0f;
             photoNode.Pressable();
-            photoNode.Add<Draggable>().Axis = ScrollAxis.Both;
-            var swipe = photoNode.Add<SwipeToDismiss>();
-            swipe.Setup(presentation, SwipeDirections.Any);
             photoNode.Add<Pinchable>();
+            // Thrown away any way by a drag anywhere in the viewer, on the photo or the backdrop, following the finger.
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            var swipe = host.Add<SwipeToDismiss>();
+            swipe.Setup(presentation, SwipeDirections.Any, panel: photoNode);
             var caption = host.Child("Caption").Pad(24f, 0f).Label("", 16f, Color.white);
             caption.Alignment.Value = TextAnchor.UpperCenter;
             caption.Node.Opacity.Value = 0f;
@@ -466,6 +467,9 @@ namespace TimboJimboEditor.UINext.Demos
                 else DemoKit.Text(button, "Title", label, 16f, s_text, bold: true);
                 buttons.Add(button.Pressable());
             }
+            // Thrown away by a drag anywhere in it, on the alert or the dim around it, following the finger.
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            host.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Any, panel: alert);
             return presentation;
         }
     }

@@ -52,7 +52,10 @@ One line per decision the brief left open, with the precedent followed.
 - A story grows out of the avatar inside its ring, not the whole ring, which stays in the feed round the avatar's place (Tim, 10 October).
 - Presentations a flight carries in and out have no transition of their own, Log out's alert included, its button hiding as it comes and showing as it goes so the alert flies back into it: a matched flight is the transition, as an iOS hero transition replaces the push (Tim, 10 October).
 - The swipe component dismisses when let go a third of the way or flicked away faster than 600 points a second, and springs back otherwise: UIKit's interactive dismissals finish on progress or velocity past a threshold.
-- Its shrink goes to three quarters at most, and its progress is how far along the ways it allows the finger has gone: the App Store's pulled-down story shrinks to about that.
+- Its shrink goes to three quarters at most, and its progress is how far along the ways it allows the panel has gone: the App Store's pulled-down story shrinks to about that.
+- It moves the panel as far as the finger up to where letting go takes it away, and past that with the scroll view's rubber band, sized by its node along the way the finger went (Tim, 10 October).
+- The photo viewer, the store's dialog and Log out's alert are thrown away by a drag anywhere in their presentation, on the panel or the backdrop around it: the swipe component moves a panel inside its node when given one, as the first version's throw did (Tim, 10 October).
+- The store's price flies inside the pair with its icon and name (Tim, 10 October).
 - Every showcase page and the showcase's sheet use it too (right to go back, down to dismiss), so "a page thrown away carries on at the speed of the throw as its presentation takes it out" can be seen: UINavigationController's swipe back and a sheet's swipe down.
 - Momentum and precision are shown with two stepped sliders that differ only in `TracksVelocity`, snapping on the same critically damped spring: the brief's own example of a precise control.
 - A chat row has an opaque background (the page's) instead of a clear one, so its picture is opaque as it grows into the conversation and nothing behind it shows through.

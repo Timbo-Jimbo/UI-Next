@@ -748,8 +748,8 @@ namespace TimboJimboEditor.UINext.Demos
         private static void StorePage(UINode page, UINode body)
         {
             // A grid of items; each grows into a dialog and flies home. An item and the dialog's card are matched by name
-            // and the item's index, and so are their icons and names, which fly inside them.
-            var grid = Case(body, "Tap an item").Row(12f);
+            // and the item's index, and so are their icons, names and prices, which fly inside them.
+            var grid = Case(body, "Tap an item (drag it away to close)").Row(12f);
             grid.Wrap.Value = Wrap.Grid(2);
             var items = new List<Pressable>();
             for (int i = 0; i < StoreDemo.Items.Length; i++)
@@ -766,7 +766,7 @@ namespace TimboJimboEditor.UINext.Demos
                 icon.Box(colour, 20f);
                 icon.Child("Emoji").Label(emoji, 36f);
                 item.Child("Name").Label(name, 15f, Text, bold: true).Node.MatchName.Value = "Name";
-                item.Child("Price").Label(price, 13f, Secondary);
+                item.Child("Price").Label(price, 13f, Secondary).Node.MatchName.Value = "Price";
                 items.Add(item.Pressable());
                 item.Scale.When(InteractionStates.Pressed, 0.96f);
             }
@@ -790,10 +790,15 @@ namespace TimboJimboEditor.UINext.Demos
             var nameLabel = card.Child("Name").Label("", 22f, Text, bold: true);
             nameLabel.Node.MatchName.Value = "Name";
             var priceLabel = card.Child("Price").Label("", 16f, Secondary);
+            priceLabel.Node.MatchName.Value = "Price";
             var buy = Button(card, "Add to bag", Accent, Color.white);
             buy.Node.Width.Value = Sizing.Grow();
             var close = Button(card, "Close", new Color(0.47f, 0.47f, 0.5f, 0.15f), Text);
             close.Node.Width.Value = Sizing.Grow();
+
+            // Thrown away by a drag anywhere in it, on the card or the dim around it, following the finger.
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            host.Add<SwipeToDismiss>().Setup(dialog, SwipeDirections.Any, panel: card);
 
             page.Add<StoreDemo>().Setup(items, dialog, card, iconBox, emojiLabel, nameLabel, priceLabel, new List<Pressable> { buy, close });
         }

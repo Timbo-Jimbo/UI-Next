@@ -17,11 +17,14 @@ namespace TimboJimbo.UINext.Demos
 
     /// <summary>
     /// The one component behind every swipe to dismiss in the demos. A drag the ways it allows (chosen within its
-    /// draggable's axis) follows the finger, or shrinks the panel in place, and raises <see cref="Progress"/> for whatever
-    /// fades or rounds with it; let go far or fast enough, it dismisses its presentation, and otherwise the panel springs
-    /// back. The panel springs home inside the presentation's own changes, so thrown away it carries on at the speed of
-    /// the throw as its presentation takes it out, and presented again mid-throw it slides back from where it is. A scroll
-    /// view inside it at its end hands it the rest of a drag, and takes it back as the finger turns.
+    /// draggable's axis) moves the panel with the finger, or shrinks it in place, and raises <see cref="Progress"/> for
+    /// whatever fades or rounds with it; let go far or fast enough, it dismisses its presentation, and otherwise the panel
+    /// springs back. The panel goes as far as the finger up to where letting go takes it away, and past that only part of
+    /// the way, less the further it goes, with a scroll view's rubber band. The panel is its own node, or one inside it,
+    /// so a drag anywhere in a presentation, on its backdrop too, takes the panel away. The panel springs home inside the
+    /// presentation's own changes, so thrown away it carries on at the speed of the throw as its presentation takes it
+    /// out, and presented again mid-throw it slides back from where it is. A scroll view inside it at its end hands it the
+    /// rest of a drag, and takes it back as the finger turns.
     /// </summary>
     [RequireComponent(typeof(Draggable))]
     public sealed class SwipeToDismiss : MonoBehaviour
@@ -37,9 +40,15 @@ namespace TimboJimbo.UINext.Demos
         [Tooltip("How far a swipe goes to take it all the way, in points.")]
         [SerializeField, Min(1f)] private float _distance = 300f;
 
+        [Tooltip("What a swipe moves (empty: its own node): a panel inside it, so a drag anywhere around the panel moves it.")]
+        [SerializeField] private UINode _panel;
+
         // Let go past this much of the way, or flicked away this fast (points a second), it is dismissed.
         private const float Far = 0.35f;
         private const float Fast = 600f;
+
+        // Past where letting go takes it away, how much of the way a drag goes, as a scroll view's rubber band (iOS's).
+        private const float RubberBand = 0.55f;
 
         // How small it shrinks to, all the way.
         private const float Smallest = 0.75f;
@@ -47,16 +56,21 @@ namespace TimboJimbo.UINext.Demos
         private Draggable _drag;
         private UINode _node;
 
+        // What it moves.
+        private UINode Panel => _panel != null ? _panel : _node;
+
         /// <summary>How far it has been swiped, 0 to 1: raised as it moves, and inside the change that springs it back (0) or takes it away (1).</summary>
         public event Action<float> Progress;
 
-        public void Setup(Presentation presentation, SwipeDirections directions, bool shrinks = false, float distance = 300f)
+        public void Setup(Presentation presentation, SwipeDirections directions, bool shrinks = false, float distance = 300f,
+            UINode panel = null)
         {
             if (isActiveAndEnabled) Unwatch();
             _presentation = presentation;
             _directions = directions;
             _shrinks = shrinks;
             _distance = distance;
+            _panel = panel;
             if (isActiveAndEnabled) Watch();
         }
 
@@ -118,12 +132,27 @@ namespace TimboJimbo.UINext.Demos
         private void Follow(DragEvent e)
         {
             var moved = Allowed(e.Translation);
-            float progress = Mathf.Clamp01(moved.magnitude / _distance);
+            float distance = moved.magnitude;
+            var direction = distance > 0f ? moved / distance : Vector2.zero;
+            // The rubber band's size: its node's along the way the finger went, as a scroll view's is its own.
+            var size = _node.LaidOutRect.size;
+            float shown = Shown(distance, Mathf.Abs(direction.x) * size.x + Mathf.Abs(direction.y) * size.y);
+            float progress = Mathf.Clamp01(shown / _distance);
             if (_shrinks)
-                _node.Scale.Value = Mathf.Lerp(1f, Smallest, progress);
+                Panel.Scale.Value = Mathf.Lerp(1f, Smallest, progress);
             else
-                _node.Offset.Value = moved;
+                Panel.Offset.Value = direction * shown;
             Progress?.Invoke(progress);
+        }
+
+        // How far a drag of `distance` points moves it: as far as the finger up to where letting go takes it away, and
+        // past that only part of the way, less the further it goes, as a scroll view `size` big stretches past its end.
+        private float Shown(float distance, float size)
+        {
+            float free = Far * _distance;
+            if (distance <= free) return distance;
+            size = Mathf.Max(1f, size);
+            return free + (1f - 1f / ((distance - free) * RubberBand / size + 1f)) * size;
         }
 
         private void LetGo(DragEvent e)
@@ -143,16 +172,16 @@ namespace TimboJimbo.UINext.Demos
         // At rest, inside a change: springing back, or presented again.
         private void Rest()
         {
-            _node.Offset.Value = Vector2.zero;
-            _node.Scale.Value = 1f;
+            Panel.Offset.Value = Vector2.zero;
+            Panel.Scale.Value = 1f;
             Progress?.Invoke(0f);
         }
 
         // Inside the dismissal: the panel springs home as the presentation takes it out, whatever went with it going on.
         private void Away()
         {
-            _node.Offset.Value = Vector2.zero;
-            _node.Scale.Value = 1f;
+            Panel.Offset.Value = Vector2.zero;
+            Panel.Scale.Value = 1f;
             Progress?.Invoke(1f);
         }
     }

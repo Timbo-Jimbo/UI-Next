@@ -81,15 +81,17 @@ As fundamental as position.
 
 Rebuildable from code through the existing `Tools/UI Next/Demos` builders.
 
-- **Showcase, Store:** a grid of items, each growing into a dialog and flying home.
+- **Showcase, Store:** a grid of items, each growing into a dialog and flying home, its icon, name and price flying
+  inside it. A drag anywhere in the dialog throws it away.
 - **Showcase, App Store:** Today cards opening into full-screen stories. A pull down past a story's top shrinks it in
   place, and letting go closes it back into the list, which scrolls the card into view.
-- **Circle:** the photo viewer flies out of the feed and home again, thrown away in any direction or pinched. A chat
+- **Circle:** the photo viewer flies out of the feed and home again, thrown away in any direction, from the photo or its backdrop, or pinched. A chat
   row grows open into its full-screen conversation, its avatar and name becoming the header and its preview fading,
   and collapses back into the row. Stories grow out of their rings and shrink back into them. Log out grows its dialog
-  out of its button.
+  out of its button, and a drag anywhere throws the dialog away.
 - **One demo component behind every swipe to dismiss:** the directions it allows, chosen within its draggable's axis;
-  following the finger or shrinking in place; a progress event for whatever fades or rounds with the throw. Reopened
+  following the finger or shrinking in place, freely up to where letting go takes it away and with a scroll view's
+  rubber band past that; moving its own node or a panel inside it; a progress event for whatever fades or rounds with the throw. Reopened
   mid-throw, the panel slides back from where it is.
 
 ### Out of scope
