@@ -137,6 +137,18 @@ namespace TimboJimbo.UINext
             return true;
         }
 
+        /// <summary>The latest event of pointer <paramref name="pointerId"/>, where it is now: for a drag handed on without a move.</summary>
+        internal static bool TryEventOf(int pointerId, out PointerEvent e)
+        {
+            if (!s_tracks.TryGetValue(pointerId, out var track))
+            {
+                e = default;
+                return false;
+            }
+            e = track.Event(track.Last, track.LastTime);
+            return true;
+        }
+
         /// <summary>
         /// Makes <paramref name="handler"/> the one a tap of this pointer goes to, unless one deeper already is: so a
         /// button inside a button takes the tap, not both.

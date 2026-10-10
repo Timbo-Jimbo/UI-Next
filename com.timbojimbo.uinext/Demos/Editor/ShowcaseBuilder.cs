@@ -845,6 +845,8 @@ namespace TimboJimboEditor.UINext.Demos
             scroll.Box(Background);
             var storyScroll = scroll.Scroll();
             storyScroll.ShowsIndicators.Value = false;
+            // At its top, the rest of a pull down goes to the swipe, which shrinks the story; pushed back up, it scrolls on.
+            storyScroll.AtEnd.Value = ScrollEnd.PassOn;
             var hero = scroll.Child("Art").Column(6f).Pad(new Insets(22f, 22f, 72f, 22f));
             hero.Sized(Sizing.Grow(), Sizing.Fixed(460f));
             var heroArt = hero.Box(Palette[0]);

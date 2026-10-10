@@ -10,7 +10,7 @@ One line per decision the brief left open, with the precedent followed.
 - One shown node takes over from the first hidden namesake found, and failing that flies out of the first staying one: SwiftUI pairs one source with one destination per id.
 - A pair's corners are each end's `ClipRadii`, whether or not it clips: a UIKit layer's `cornerRadius` is both its shape and its clip.
 - The picture is the source's own primitives as last drawn, kept with their nodes' places, rather than a bitmap, so it stays sharp as it grows: the stack's drawing is already a display list, as Core Animation's snapshot views keep what they render.
-- What is inside an end is fitted by scaling it evenly to the flight's width from its top; the end's own primitives that follow its size (its box, its border) stretch down the flight, and everything else (text, children) keeps its proportions: the web's default `::view-transition-old/new` (width 100%, height auto, at the top), with the brief's stretched background.
+- What is inside an end is fitted by scaling it evenly to the flight's width from its top; the end's own primitives that follow its size (its box, its border) stretch down the flight, and everything else keeps its proportions: the web's default `::view-transition-old/new` (width 100%, height auto, at the top), with the brief's stretched background. Text is fitted to the flight's height instead, so its glyphs never swell with the width (Tim, 10 October, as the brief asks).
 - The two ends are each drawn to an image of their own and summed in one quad (`PrimitiveType.Pair`), so nothing behind shows through: the web's `mix-blend-mode: plus-lighter` inside an isolated image pair.
 - The live end leaves out the destination's own transition opacity (a presentation's fade), as the flight's cross-fade brings it in; its transition's movement and scale still carry the flight: the web's new image is the element's painting, and the brief's "a page sliding in carries the flight".
 - A flight is drawn at the higher of the levels its two ends were drawn at, so one flying home from a presentation going away is drawn over it, out of every clip: the web draws view transitions in the top layer, above everything.
@@ -35,17 +35,18 @@ One line per decision the brief left open, with the precedent followed.
 
 ## Handing a drag on
 
+- Passing a drag on is each scroll view's choice, `AtEnd` (Bounce, the default, or PassOn), and only a drag that set off within its range is passed on, so one that catches it bouncing past an end stretches it back (Tim, 10 October).
 - The drag passes the moment the offset would cross the end, with no rubber band first, from where the finger was as it reached the end, so the taker does not jump: UIKit's sheet takes the drag from the scroll view inside it at its top this way.
 - What is around it is asked nearest first, each scroll view that can still go that way and each draggable that takes the way the finger goes, stopping at a presentation: the web chains scrolling to the nearest scroller that can scroll.
 - Only a draggable hands the drag back; an outer scroll view keeps the rest of it: the brief names only the draggable, and the web latches a scroll chain to the scroller that took it.
 - A draggable hands back once the finger turns a way it does not take along the axis of the scroll view that passed it, so a sideways wobble does not: a sheet ignores sideways movement while it has the drag.
 - Handing back ends the draggable's drag with `Ended`, at no translation and no speed, rather than `Cancelled`: it was not cut short, and the speed goes back with the drag.
-- A drag that starts heading past the end a scroll view is at is taken by it and passed on at its first move, replacing the old start-of-drag chaining: one mechanism for both, as the brief's "the rest of the same drag".
+- A new drag heading past the end a scroll view is already at still goes to a scroll view it is in that can scroll that way, from the start, as the engine already chained nested scroll views: passing on at an end is for the rest of a drag already under way (Tim, 10 October).
 
 ## Demos
 
 - Matched nodes are hidden with Display Hidden, so a grid, a list or a row of stories keeps the place of what flew away: SwiftUI hides a hero's source with `opacity(0)` or `isSource` for the same reason.
-- Presentations a flight carries in and out have no transition of their own (the alert growing out of Log out keeps its pop, which the flight follows): a matched flight is the transition, as an iOS hero transition replaces the push.
+- Presentations a flight carries in and out have no transition of their own, Log out's alert included, its button hiding as it comes and showing as it goes so the alert flies back into it: a matched flight is the transition, as an iOS hero transition replaces the push (Tim, 10 October).
 - The swipe component dismisses when let go a third of the way or flicked away faster than 600 points a second, and springs back otherwise: UIKit's interactive dismissals finish on progress or velocity past a threshold.
 - Its shrink goes to three quarters at most, and its progress is how far along the ways it allows the finger has gone: the App Store's pulled-down story shrinks to about that.
 - Every showcase page and the showcase's sheet use it too (right to go back, down to dismiss), so "a page thrown away carries on at the speed of the throw as its presentation takes it out" can be seen: UINavigationController's swipe back and a sheet's swipe down.

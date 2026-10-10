@@ -224,11 +224,20 @@ namespace TimboJimbo.UINext
                 fadeSpeed = -turned.Fade.Velocity.x;
             }
             var animation = transaction.Animation;
-            flight.Offset.SpringTo(Vector4.zero, candidate.Velocity, animation, transaction);
+            // Drawn at its destination's place plus its offset: the offset sets off at the source's speed less the speed
+            // the destination is already drawn moving at, so the pair moves on as the source did.
+            var velocity = candidate.Velocity;
+            if (destination.Tree != null)
+                velocity -= DrawnVelocity(destination.Tree, destination);
+            flight.Offset.SpringTo(Vector4.zero, velocity, animation, transaction);
             flight.Corners.SpringTo(Vector4.zero, candidate.RadiiVelocity, animation, transaction);
             flight.Fade.Jump(fade);
             flight.Fade.SpringTo(1f, new Vector4(fadeSpeed, 0f, 0f, 0f), animation, transaction);
 
+            // A flight still under way into the destination gives way to this one.
+            var older = destination.FlightIn;
+            if (older != null && older != turned && Flights.Contains(older))
+                Drop(older);
             destination.FlightIn = flight;
             if (takesOver && source != null)
             {
@@ -277,7 +286,9 @@ namespace TimboJimbo.UINext
                 var destination = flight.Destination;
                 bool gone = destination == null || !destination.isActiveAndEnabled || destination.Tree == null || destination.Index < 0;
                 bool landed = !flight.Offset.IsAnimating && !flight.Corners.IsAnimating && !flight.Fade.IsAnimating;
-                if (gone || landed)
+                // Hidden outside a change, its destination lands no more.
+                bool hidden = !gone && !IsShown(destination);
+                if (gone || hidden || landed)
                     Drop(flight);
             }
             foreach (var flight in Flights)
@@ -314,10 +325,13 @@ namespace TimboJimbo.UINext
             flight.Rect = rect;
             flight.Radii = Vector4.Max(Vector4.zero, radii + flight.Corners.Drawn);
             flight.Progress = Mathf.Clamp01(flight.Fade.Drawn);
-            // What is in the destination is fitted to the flight's width from its top; its own background stretches.
-            flight.LiveScale = rect.width / Mathf.Max(1e-3f, size.x);
+            // What is in the destination is fitted to the flight's width from its top, text to its height, so its glyphs
+            // never swell with the width; its own background stretches.
+            flight.LiveScale = flight.Text ? rect.height / Mathf.Max(1e-3f, size.y) : rect.width / Mathf.Max(1e-3f, size.x);
             flight.FitMap = Scaled(rect.position, flight.LiveScale) * world.Inverse;
-            flight.PictureScale = rect.width / Mathf.Max(1e-3f, flight.Picture.Size.x);
+            flight.PictureScale = flight.Text
+                ? rect.height / Mathf.Max(1e-3f, flight.Picture.Size.y)
+                : rect.width / Mathf.Max(1e-3f, flight.Picture.Size.x);
             flight.PictureMap = Scaled(rect.position, flight.PictureScale);
         }
 
@@ -431,6 +445,9 @@ namespace TimboJimbo.UINext
         public readonly UINode SourceLevel;
         public readonly Picture Picture;
 
+        // Whether its ends are text, fitted to the flight's height rather than its width.
+        public readonly bool Text;
+
         // The flight whose pair holds this one's ends, which it flies inside the shape of (null at the top).
         public Flight Outer;
 
@@ -476,6 +493,7 @@ namespace TimboJimbo.UINext
             TakesOver = takesOver;
             SourceLevel = sourceLevel;
             Picture = picture;
+            Text = destination != null && destination.TryGetComponent(out Label _);
         }
     }
 

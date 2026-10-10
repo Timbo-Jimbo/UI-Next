@@ -4,14 +4,26 @@ using UnityEngine;
 
 namespace TimboJimbo.UINext
 {
+    /// <summary>What a drag does past a scroll view's end.</summary>
+    public enum ScrollEnd
+    {
+        /// <summary>It stretches past the end and bounces back, as iOS's do.</summary>
+        Bounce,
+
+        /// <summary>The rest of the same drag goes to what is around it that takes it: a scroll view it is in, or a draggable.</summary>
+        PassOn,
+    }
+
     /// <summary>
     /// Makes a node scroll what is inside it, as UIScrollView: layout lets its children run past its edge the way it
     /// scrolls, it clips them, and drags move them, gliding on when let go and slowing as iOS's do, bouncing back into
-    /// range, and coming to rest on a page when it pages. The mouse wheel scrolls it. A drag that reaches an end passes
-    /// the rest of itself to what is around it that takes it, as the scroll view in an iOS sheet hands the drag to the
-    /// sheet: a scroll view it is in that can still go that way, or a <see cref="Draggable"/> that takes it (which hands it
-    /// back as the finger turns); with nothing to take it, it rubber-bands past the end. The wheel at an end scrolls a
-    /// scroll view it is in. A pointer that goes down while it moves catches it, and does not press what is under it. It
+    /// range, and coming to rest on a page when it pages. The mouse wheel scrolls it. A new drag heading past an end it is
+    /// already at goes to a scroll view it is in that can still scroll that way, as nested scroll views chain on the web:
+    /// a new drag at the bottom of a list in a page scrolls the page. Past an end, a drag stretches it and it bounces back;
+    /// or, if it passes drags on (<see cref="AtEnd"/>), the rest of the same drag goes to what is around it that takes it,
+    /// as the scroll view in an iOS sheet hands the drag to the sheet: a scroll view it is in that can still go that way,
+    /// or a <see cref="Draggable"/> that takes it (which hands it back as the finger turns); with nothing to take it, it
+    /// stretches. The wheel at an end scrolls a scroll view it is in. A pointer that goes down while it moves catches it, and does not press what is under it. It
     /// draws its scroll indicators over what it holds while it moves.
     /// </summary>
     [DisallowMultipleComponent]
@@ -22,6 +34,9 @@ namespace TimboJimbo.UINext
 
         [Tooltip("Whether it stretches past its ends while dragged and bounces back, as iOS's do.")]
         [SerializeField] private UIValue<bool> _bounces = true;
+
+        [Tooltip("Past an end: stretch and bounce back, or pass the rest of the drag to what is around it that takes it.")]
+        [SerializeField] private UIValue<ScrollEnd> _atEnd = ScrollEnd.Bounce;
 
         [Tooltip("Pages: it comes to rest on a whole page of what it shows.")]
         [SerializeField] private UIValue<ScrollSnap> _snap = ScrollSnap.None;
@@ -57,6 +72,8 @@ namespace TimboJimbo.UINext
         [NonSerialized] private Vector2 _start;
         [NonSerialized] private Vector2 _dragFrom;
         [NonSerialized] private Vector2 _dragOrigin;
+        // Whether the drag set off within its range: one that caught it past an end stretches it back, and passes nothing on.
+        [NonSerialized] private bool _startedInRange;
         [NonSerialized] private bool _gliding;
         [NonSerialized] private Vector2 _velocity;
         [NonSerialized] private Vector2 _pageFrom;
@@ -68,6 +85,9 @@ namespace TimboJimbo.UINext
         public UIValue<ScrollAxis> Axis => _axis;
 
         public UIValue<bool> Bounces => _bounces;
+
+        /// <summary>What a drag does past an end: stretches it, which bounces back, or goes on to what is around it that takes it.</summary>
+        public UIValue<ScrollEnd> AtEnd => _atEnd;
         public UIValue<ScrollSnap> Snap => _snap;
         public UIValue<bool> ShowsIndicators => _showsIndicators;
         public UIValue<Color> IndicatorColor => _indicatorColor;
@@ -233,7 +253,7 @@ namespace TimboJimbo.UINext
             var moved = UIInput.ToNodeVector(Node, e.Position - _start);
             if (!_dragging)
             {
-                if (!WantsDrag(moved) || !UIInput.Claim(this, e.PointerId)) return;
+                if (!WantsDrag(moved) || OuterTakes(e.Position - _start) || !UIInput.Claim(this, e.PointerId)) return;
                 // The content follows from here, so it does not jump by the slop.
                 BeginDrag(Mask(moved));
             }
@@ -272,13 +292,13 @@ namespace TimboJimbo.UINext
             return false;
         }
 
-        // Moves what it holds against the finger, at its speed. Past an end, the rest of the drag goes to what is around it
-        // that takes it; with nothing to take it, it stretches.
+        // Moves what it holds against the finger, at its speed. Past an end, a drag that set off within its range goes on to
+        // what is around it that takes it, if it passes drags on; otherwise it stretches.
         private void Drag(in PointerEvent e, Vector2 translation)
         {
             var target = _dragFrom - (translation - _dragOrigin);
             var end = Clamp(target);
-            if (end != target && PassOn(in e, target - end, end)) return;
+            if (end != target && _atEnd.Peek == ScrollEnd.PassOn && _startedInRange && PassOn(in e, target - end, end)) return;
             Offset.MoveAt(Stretch(target), -Mask(UIInput.ToNodeVector(Node, e.Velocity)));
             Scrolled?.Invoke(Offset.Peek);
         }
@@ -349,6 +369,23 @@ namespace TimboJimbo.UINext
             return node.Tree != null && node.Index >= 0 ? node.Tree.World[node.Index].ApplyVector(local) : local;
         }
 
+        // A new drag heading past the end this is already at goes to a scroll view it is in that can still scroll that way,
+        // as nested scroll views chain on the web: a new drag at the bottom of a list in a page scrolls the page. With none
+        // that can, it is this one's. A drag already taken stays with the one that took it.
+        private bool OuterTakes(Vector2 rootTranslation)
+        {
+            if (CanScrollToward(UIInput.ToNodeVector(Node, rootTranslation))) return false;
+            for (var parent = Node.Parent; parent != null; parent = parent.Parent)
+            {
+                var outer = parent.Scroller;
+                if (outer != null && outer.isActiveAndEnabled && outer.CanScrollToward(UIInput.ToNodeVector(parent, rootTranslation)))
+                    return true;
+                // What is below a presentation never takes its drags.
+                if (parent.PresentationLevel.Peek != 0) break;
+            }
+            return false;
+        }
+
         // Whether a drag of `moved` (in its own space) has room to scroll it, along the axis the drag mostly follows: the
         // offset moves against the finger.
         private bool CanScrollToward(Vector2 moved)
@@ -364,6 +401,7 @@ namespace TimboJimbo.UINext
             _dragging = true;
             _dragOrigin = origin;
             _dragFrom = Offset.Peek;
+            _startedInRange = Clamp(_dragFrom) == _dragFrom;
             _pageFrom = Clamp(_dragFrom);
             ShowIndicators();
         }
@@ -495,6 +533,8 @@ namespace TimboJimbo.UINext
             _gliding = false;
             _velocity = Vector2.zero;
             s_gliding.Remove(this);
+            // Stopped, it is still.
+            Offset.MoveAt(Offset.Peek, Vector4.zero);
         }
 
         // ── Wheel ────────────────────────────────────────────────────────────────

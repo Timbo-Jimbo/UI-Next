@@ -6,6 +6,68 @@ namespace TimboJimboTests.UINext
 {
     public sealed class InputTests : UITestScene
     {
+        // A page that scrolls, with a box of rows in it that scrolls too: the page at 200 of its 400, the box at `inner` of its 400.
+        private (ScrollView outer, ScrollView inner, UINode box) NestedScrolls(float innerAt)
+        {
+            var page = Root.Node.Child("Page").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            var outer = page.Scroll();
+            page.Child("Top").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            var box = page.Child("Box").Sized(Sizing.Grow(), Sizing.Fixed(200f)).Column();
+            var inner = box.Scroll();
+            for (int i = 0; i < 10; i++)
+                box.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            page.Child("Bottom").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            Frame();
+            outer.ContentOffset = new Vector2(0f, 200f);
+            inner.ContentOffset = new Vector2(0f, innerAt);
+            Frame();
+            return (outer, inner, box);
+        }
+
+        [Test]
+        public void ANewDragHeadingPastAScrollViewsEndScrollsTheScrollViewItIsIn()
+        {
+            var (outer, inner, box) = NestedScrolls(400f);
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 50f), 0.04);
+            Assert.IsFalse(inner.IsDragging, "the box at its end does not take a new drag heading past it");
+            Assert.IsTrue(outer.IsDragging, "the page takes it from the start");
+            Assert.AreEqual(400f, inner.ContentOffset.y, 0.5f);
+            Assert.AreEqual(240f, outer.ContentOffset.y, 0.5f, "and scrolls with it, from where it took it");
+            Up(c - new Vector2(0f, 50f), 0.06);
+        }
+
+        [Test]
+        public void AScrollViewThatBouncesKeepsADragThatCrossesItsEnd()
+        {
+            var (outer, inner, box) = NestedScrolls(380f);
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 50f), 0.04);
+            Assert.IsTrue(inner.IsDragging, "the box keeps the drag");
+            Assert.IsFalse(outer.IsDragging);
+            Assert.Greater(inner.ContentOffset.y, 400f, "stretched past its end, to bounce back");
+            Up(c - new Vector2(0f, 50f), 0.06);
+        }
+
+        [Test]
+        public void AScrollViewHeldStillMidDragIsStill()
+        {
+            var (_, inner, box) = NestedScrolls(100f);
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 30f), 0.04);
+            Assert.AreNotEqual(0f, inner.Offset.Velocity.y, "moving with the finger");
+            Frame(1f / 60f);
+            Frame(1f / 60f);
+            Assert.AreEqual(0f, inner.Offset.Velocity.y, 1e-3f, "held still, it is still");
+            Up(c - new Vector2(0f, 30f), 0.2);
+        }
+
         private const int Finger = UIInput.TouchIdBase;
 
         private void Down(Vector2 point) => UIInput.Down(Finger, PointerKind.Touch, Screen(point), 0);
@@ -171,6 +233,7 @@ namespace TimboJimboTests.UINext
             drag.Ended += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
             var list = sheet.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column();
             var scroll = list.Scroll();
+            scroll.AtEnd.Value = ScrollEnd.PassOn;
             for (int i = 0; i < 20; i++)
                 list.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
             Frame();
@@ -198,14 +261,66 @@ namespace TimboJimboTests.UINext
             Up(c + new Vector2(0f, 40f), 0.12);
         }
 
+        // A sheet that takes a pull down, with a list in it that passes drags on at its ends.
+        private (Draggable drag, ScrollView scroll, UINode sheet, UINode list) Sheet()
+        {
+            var sheet = Root.Node.Child("Sheet").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            sheet.Box(Color.white);
+            var drag = sheet.Add<Draggable>();
+            drag.Axis = ScrollAxis.Vertical;
+            drag.Takes = t => t.y > 0f;
+            drag.Changed += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            var list = sheet.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            var scroll = list.Scroll();
+            scroll.AtEnd.Value = ScrollEnd.PassOn;
+            for (int i = 0; i < 20; i++)
+                list.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            Frame();
+            return (drag, scroll, sheet, list);
+        }
+
         [Test]
-        public void AScrollViewAtItsEndPassesTheRestOfADragToTheScrollViewItIsIn()
+        public void AScrollViewCaughtPastItsEndKeepsTheDragAndPassesNothingOn()
+        {
+            var (drag, scroll, sheet, list) = Sheet();
+            // Bouncing back from past its top.
+            scroll.Offset.Jump(new Vector2(0f, -30f));
+            UI.Animate(new UIAnimation(0.5f), () => scroll.Offset.Value = Vector2.zero);
+            Frame(1f / 60f);
+            Assert.IsTrue(scroll.IsDecelerating);
+
+            var c = Center(list);
+            Down(c);
+            Move(c - new Vector2(0f, 2f), 0.02);
+            Assert.IsTrue(scroll.IsDragging, "caught, the list keeps the drag");
+            Assert.IsFalse(drag.IsDragging, "and hands the sheet nothing");
+            Assert.AreEqual(0f, sheet.Offset.Peek.y, 0.5f);
+            Up(c - new Vector2(0f, 2f), 0.04);
+        }
+
+        [Test]
+        public void ADraggableDisabledWhileAScrollViewPassedItADragHandsItBack()
+        {
+            var (drag, scroll, _, list) = Sheet();
+            var c = Center(list);
+            Down(c);
+            Move(c + new Vector2(0f, 20f), 0.02);
+            Move(c + new Vector2(0f, 60f), 0.04);
+            Assert.IsTrue(drag.IsDragging, "the sheet has the rest of the drag");
+            drag.enabled = false;
+            Assert.IsTrue(scroll.IsDragging, "disabled, it gives the drag back to the list");
+            Up(c + new Vector2(0f, 60f), 0.06);
+        }
+
+        [Test]
+        public void AScrollViewAtItsEndPassesTheRestOfADragToTheScrollViewItIsInWhenItPassesDragsOn()
         {
             var page = Root.Node.Child("Page").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
             var outer = page.Scroll();
             page.Child("Top").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
             var box = page.Child("Box").Sized(Sizing.Grow(), Sizing.Fixed(200f)).Column();
             var inner = box.Scroll();
+            inner.AtEnd.Value = ScrollEnd.PassOn;
             for (int i = 0; i < 10; i++)
                 box.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
             page.Child("Bottom").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);

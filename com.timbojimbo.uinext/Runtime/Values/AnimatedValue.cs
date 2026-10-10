@@ -46,6 +46,7 @@ namespace TimboJimbo.UINext
         // Set any other way, it is still.
         private VelocityTracker _samples;
         private Vector4 _movingAt;
+        private int _movingFrame;
 
         public AnimatedValue() : this(default) { }
 
@@ -114,7 +115,11 @@ namespace TimboJimbo.UINext
         /// way. A value that does not interpolate has no speed.
         /// </summary>
         public Vector4 Velocity =>
-            _slot >= 0 ? SpringStore.Velocity(_slot) : _samples != null && _samples.Count > 0 ? _samples.Velocity : _movingAt;
+            _slot >= 0 ? SpringStore.Velocity(_slot) : _samples != null && _samples.Count > 0 ? _samples.Velocity : MovingAt;
+
+        // The speed what moves it frame by frame (a scroll's drag or glide) last gave it, while that was this frame or the
+        // last: not moved since (a finger held still, a glide stopped), it is still.
+        private Vector4 MovingAt => UIFrame.FrameIndex - _movingFrame <= 1 ? _movingAt : Vector4.zero;
 
         // Where it is drawn now, without tracking the read or setting off a change held for its first drawing.
         internal T Drawn
@@ -187,7 +192,10 @@ namespace TimboJimbo.UINext
         {
             SetModel(value, null);
             if (_slot < 0 && s_converter != null)
+            {
                 _movingAt = velocity;
+                _movingFrame = UIFrame.FrameIndex;
+            }
         }
 
         /// <summary>
@@ -221,7 +229,10 @@ namespace TimboJimbo.UINext
             _presentation.Notify();
         }
 
-        /// <summary>Puts it at <paramref name="value"/> at once, model and presentation, still, whatever change is being made.</summary>
+        /// <summary>
+        /// Puts it at <paramref name="value"/> at once, model and presentation, still, whatever change is being made. A
+        /// spring the change being made set off on it ends as arrived: the change itself put it here, so it still completes.
+        /// </summary>
         internal void Jump(T value)
         {
             DropPending(arrived: false);
@@ -230,7 +241,7 @@ namespace TimboJimbo.UINext
             _model = value;
             if (changed) NotifyChanged();
             if (_slot >= 0)
-                SpringStore.Stop(_slot, arrived: false);
+                SpringStore.Stop(_slot, arrived: UITransaction.Current != null && SpringStore.TransactionOf(_slot) == UITransaction.Current);
             else if (changed)
                 _presentation.Notify();
         }

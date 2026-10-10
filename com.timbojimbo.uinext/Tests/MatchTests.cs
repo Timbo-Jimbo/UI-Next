@@ -68,6 +68,55 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void TakingOverANodeLeavingByItsOwnTransitionStillCompletesTheChange()
+        {
+            var (small, big) = Pair();
+            small.Add<DisplayTransition>();
+            Frame();
+            var change = UI.Animate(new UIAnimation(0.5f), () =>
+            {
+                small.Display.Value = DisplayMode.None;
+                big.Display.Value = DisplayMode.Visible;
+            });
+            Assert.IsNotNull(big.FlightIn, "the shown node takes over from the one leaving");
+            Run(2f);
+            Assert.IsTrue(change.Completed, "its leaving was the change's own, ended as arrived");
+        }
+
+        [Test]
+        public void AFlightWhoseDestinationIsHiddenOutsideAChangeIsLetGo()
+        {
+            var (small, big) = Pair();
+            Swap(small, big);
+            Frame(1f / 60f);
+            Assert.IsNotNull(big.FlightIn);
+            big.Display.Value = DisplayMode.None;
+            Frame(1f / 60f);
+            Assert.IsNull(big.FlightIn, "its destination hidden, it lands no more");
+        }
+
+        [Test]
+        public void TextInAFlightKeepsItsHeightRatherThanSwellingToTheWidth()
+        {
+            // Two lines one height, one short and one long: fitted to the width, the short one's text would swell.
+            var shortLine = Root.Node.Child("Short").Float(AttachPoint.LeftTop, AttachPoint.LeftTop, new Vector2(20f, 100f));
+            shortLine.Label("Hi", 20f);
+            shortLine.MatchName.Value = "Title";
+            var longLine = Root.Node.Child("Long").Float(AttachPoint.LeftTop, AttachPoint.LeftTop, new Vector2(20f, 300f));
+            longLine.Label("Hi there, everyone", 20f);
+            longLine.MatchName.Value = "Title";
+            longLine.Display.Value = DisplayMode.None;
+            Frame();
+            Swap(shortLine, longLine);
+            Frame(1f / 60f);
+            var flight = longLine.FlightIn;
+            Assert.IsNotNull(flight);
+            var size = (Vector2)longLine.Tree.Slots[longLine.Index].SizeOpacity;
+            Assert.AreEqual(flight.Rect.height / size.y, flight.LiveScale, 1e-3f, "fitted to the flight's height");
+            Assert.AreEqual(1f, flight.LiveScale, 0.05f, "lines of one height draw their text at its size");
+        }
+
+        [Test]
         public void WhatIsInsideIsFittedToTheFlightsWidthAndItsBackgroundStretches()
         {
             var (small, big) = Pair();

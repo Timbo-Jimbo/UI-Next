@@ -52,10 +52,12 @@ namespace TimboJimbo.UINext.Demos
 
         public void Setup(Presentation presentation, SwipeDirections directions, bool shrinks = false, float distance = 300f)
         {
+            if (isActiveAndEnabled) Unwatch();
             _presentation = presentation;
             _directions = directions;
             _shrinks = shrinks;
             _distance = distance;
+            if (isActiveAndEnabled) Watch();
         }
 
         private void OnEnable()
@@ -67,9 +69,7 @@ namespace TimboJimbo.UINext.Demos
             _drag.Changed += Follow;
             _drag.Ended += LetGo;
             _drag.Cancelled += SpringBack;
-            if (_presentation == null) return;
-            _presentation.Presenting += Rest;
-            _presentation.Dismissing += Away;
+            Watch();
         }
 
         private void OnDisable()
@@ -79,6 +79,18 @@ namespace TimboJimbo.UINext.Demos
             _drag.Changed -= Follow;
             _drag.Ended -= LetGo;
             _drag.Cancelled -= SpringBack;
+            Unwatch();
+        }
+
+        private void Watch()
+        {
+            if (_presentation == null) return;
+            _presentation.Presenting += Rest;
+            _presentation.Dismissing += Away;
+        }
+
+        private void Unwatch()
+        {
             if (_presentation == null) return;
             _presentation.Presenting -= Rest;
             _presentation.Dismissing -= Away;

@@ -9,7 +9,8 @@ namespace TimboJimbo.UINext.Demos.Circle
     /// swiping between pages moves the pill when the page settles. Tapping the selected tab again scrolls its page to
     /// the top. Feed photos open in the viewer, flying out of the feed; the Dark mode switch turns the Dark mode state on
     /// at the root, and every colour from a token follows, animated. Log out grows its dialog out of its button: the two
-    /// share a match name.
+    /// share a match name, and the button hides as the dialog comes and shows again as it goes, so the dialog takes over
+    /// from it and shrinks back into it.
     /// </summary>
     public sealed class CircleApp : MonoBehaviour
     {
@@ -70,7 +71,8 @@ namespace TimboJimbo.UINext.Demos.Circle
             }
             _pages.Scrolled += OnPagesScrolled;
             _darkSwitch.Changed += SetDark;
-            _logOut.Tapped += () => _logOutDialog.Present();
+            _logOut.Tapped += OpenLogOut;
+            _logOutDialog.Dismissing += OnLogOutDismissing;
             foreach (var button in _logOutButtons)
                 button.Tapped += () => _logOutDialog.Dismiss();
         }
@@ -79,7 +81,23 @@ namespace TimboJimbo.UINext.Demos.Circle
         {
             _pages.Scrolled -= OnPagesScrolled;
             _darkSwitch.Changed -= SetDark;
+            _logOut.Tapped -= OpenLogOut;
+            _logOutDialog.Dismissing -= OnLogOutDismissing;
         }
+
+        // One change: the button goes and the dialog comes, so the dialog takes over from the button and grows out of it.
+        private void OpenLogOut()
+        {
+            if (_logOutDialog.IsPresented) return;
+            UI.Animate(_logOutDialog.Animation, () =>
+            {
+                _logOut.Node.Display.Value = DisplayMode.Hidden;
+                _logOutDialog.Present();
+            });
+        }
+
+        // Inside the change that takes the dialog away: the button comes back, taking over from the dialog as it shrinks home.
+        private void OnLogOutDismissing() => _logOut.Node.Display.Value = DisplayMode.Visible;
 
         /// <summary>Shows the <paramref name="index"/>th page; the page showing already scrolls back to its top.</summary>
         public void Select(int index)

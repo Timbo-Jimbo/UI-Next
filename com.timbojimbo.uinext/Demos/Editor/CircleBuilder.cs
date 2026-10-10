@@ -439,11 +439,12 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var host = app.Child("Log Out Dialog").Center();
             var presentation = host.Add<Presentation>();
-            presentation.Transition = PresentationTransition.Pop;
-            presentation.Animation = new UIAnimation(0.35f, 0.15f);
+            // It grows out of the Log out button by name: the match is its transition.
+            presentation.Transition = PresentationTransition.None;
+            presentation.Animation = new UIAnimation(0.4f, 0.1f);
             var alert = host.Child("Alert").Column(14f).Pad(22f).Align(AlignX.Center, AlignY.Top);
             alert.Width.Value = Sizing.Fixed(290f);
-            // It grows out of the Log out button, which stays.
+            // It takes over from the Log out button, which hides as it comes and shows again as it goes (CircleApp).
             alert.MatchName.Value = "Log out";
             alert.ClipRadii.Value = 20f;
             DemoKit.Shadow(DemoKit.Fill(alert, s_card, 20f), 0.2f, 30f, 10f);

@@ -104,11 +104,17 @@ namespace TimboJimbo.UINext
         private void OnDisable()
         {
             bool dragging = _dragging;
+            int pointer = _pointer;
+            var passedBy = _passedBy;
             _pointer = -1;
             _dragging = false;
             _passedBy = null;
             if (dragging) Cancel();
             else _velocity.Forget();
+            // A drag a scroll view passed it goes back to that scroll view, which carries on with it from here.
+            if (dragging && passedBy != null && passedBy.isActiveAndEnabled && UIInput.TryEventOf(pointer, out var e)
+                && UIInput.Pass(this, passedBy, pointer))
+                passedBy.Receive(in e, e.Position);
         }
 
         void IPointerHandler.OnPointerDown(in PointerEvent e)

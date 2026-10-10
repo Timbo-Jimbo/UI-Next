@@ -66,10 +66,12 @@ As fundamental as position.
 
 ### Handing a drag on
 
-- A scroll view at an end either bounces, or passes the rest of the same drag to what is around it: an outer scroll
-  view that can scroll that way, or a draggable that takes it. The draggable hands the drag back as soon as it would
-  not take the way the finger moves. A draggable says which drags it takes, at a drag's start as well as when one is
-  passed on.
+- A scroll view at an end either bounces, or, if it is set to, passes the rest of the same drag to what is around it:
+  an outer scroll view that can scroll that way, or a draggable that takes it. The draggable hands the drag back as
+  soon as it would not take the way the finger moves. A draggable says which drags it takes, at a drag's start as well
+  as when one is passed on.
+- A new drag heading past the end a scroll view is already at goes to a scroll view it is in that can still scroll
+  that way, from the start, as the engine already chains nested scroll views.
 
 ### Demos
 
