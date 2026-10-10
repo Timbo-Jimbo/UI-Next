@@ -72,6 +72,14 @@ namespace TimboJimbo.UINext
         [Tooltip("Whether it takes the pointer. Off, presses go to what is under it.")]
         [SerializeField] private UIValue<bool> _hitTestable = true;
 
+        // ── Matched ──────────────────────────────────────────────────────────────
+
+        [Tooltip("The name it is matched by. Shown in a change that hides a node of the same name and id, it flies from where that one was drawn to its own place; shown while one stays, it flies out of it.")]
+        [SerializeField] private UIValue<string> _matchName = "";
+
+        [Tooltip("The id it and everything inside it are matched by, with their names, so many of a kind (a list's rows) stay distinct. Empty: the id of the nearest node above that has one.")]
+        [SerializeField] private UIValue<string> _matchId = "";
+
         /// <summary>How wide it is: fit, grow, fixed or percent.</summary>
         public UIValue<Sizing> Width => _width;
 
@@ -168,7 +176,10 @@ namespace TimboJimbo.UINext
         /// <summary>Whether it cuts what is inside it to its rect.</summary>
         public UIValue<bool> Clips => _clips;
 
-        /// <summary>The corner radii its clip uses.</summary>
+        /// <summary>
+        /// Its shape's corner radii: what its clip uses, and the corners of a matched flight's shape at its end (see
+        /// <see cref="MatchName"/>), whether it clips or not.
+        /// </summary>
         public UIValue<CornerRadii> ClipRadii => _clipRadii;
 
         /// <summary>Whether it is drawn above everything in its screen, out of its ancestors' clips.</summary>
@@ -176,6 +187,27 @@ namespace TimboJimbo.UINext
 
         /// <summary>Whether it takes the pointer.</summary>
         public UIValue<bool> HitTestable => _hitTestable;
+
+        /// <summary>
+        /// The name it is matched by, as SwiftUI's matchedGeometryEffect: shown inside a change
+        /// (<see cref="UI.Animate(UIAnimation, Action)"/>) that hides a node of the same name and id, it takes over from
+        /// that one, flying from where it was drawn to its own place; shown while a node of the same name and id stays, it
+        /// flies out of that one. The far end is a picture of the other node as it was drawn; the two cross-fade as one
+        /// image, cut to one rounded shape whose corners go from the other's <see cref="ClipRadii"/> to its own. What is
+        /// inside it is fitted to the flight's width from its top (text to its height), as the web's view transitions fit
+        /// their pictures, while its own background is laid out at the flight's size, as it would draw at that size, and its
+        /// shadow falls outside the flight's shape; named nodes inside a pair fly to their own places, inside its shape. The
+        /// flight is drawn above everything at its level, carried by whatever moves it meanwhile (a scroll, a page sliding
+        /// in), and turns round from where it is drawn if the change is taken back. Empty: it is not matched.
+        /// </summary>
+        public UIValue<string> MatchName => _matchName;
+
+        /// <summary>
+        /// The id it and everything inside it are matched by, with their names, so that many of a kind stay distinct: a
+        /// list's rows each have the row's id, and the page a row opens into is given it. Empty: the id of the nearest node
+        /// above it that has one.
+        /// </summary>
+        public UIValue<string> MatchId => _matchId;
 
         // ── Runtime ──────────────────────────────────────────────────────────────
 
@@ -219,6 +251,19 @@ namespace TimboJimbo.UINext
 
         // Told when it comes into layout, with where it is laid out (a DisplayTransition bringing it in from there).
         [NonSerialized] internal Action<Rect> EnteredLayout;
+
+        // As compositing last drew it, kept on the node so a picture of it can be taken whatever its tree has done since:
+        // its slot (where, how big, its clips in its tree's clip shapes), how opaque it is on its own, whether it was shown,
+        // and the compositing pass that drew it.
+        [NonSerialized] internal NodeSlot DrawnSlot;
+        [NonSerialized] internal float DrawnOpacity;
+        [NonSerialized] internal bool DrawnShown;
+        [NonSerialized] internal int DrawnPass = -1;
+
+        // The flight it is drawn in while it flies to its place (a matched node shown), and the flight that took over from
+        // it, whose picture of it flies instead (a matched node hidden).
+        [NonSerialized] internal Flight FlightIn;
+        [NonSerialized] internal Flight FlightOut;
 
         // A cross-fade of its drawing: what it drew before, and how far the new drawing has faded in (made the first
         // time it cross-fades).
@@ -558,7 +603,7 @@ namespace TimboJimbo.UINext
             action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
             action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity); action(_blur);
             action(_saturation); action(_brightness); action(_mask); action(_avoidsKeyboard);
-            action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable);
+            action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable); action(_matchName); action(_matchId);
         }
     }
 }

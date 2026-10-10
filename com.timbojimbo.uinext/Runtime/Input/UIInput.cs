@@ -40,7 +40,7 @@ namespace TimboJimbo.UINext
             public readonly VelocityTracker Velocity = new();
 
             public PointerEvent Event(Vector2 point, double time) =>
-                new(PointerId, Kind, Root, point, Start, time, Velocity.Velocity, Node);
+                new(PointerId, Kind, Root, point, Start, time, (Vector2)Velocity.Velocity, Node);
         }
 
         private static readonly Dictionary<int, Track> s_tracks = new();
@@ -120,6 +120,32 @@ namespace TimboJimbo.UINext
                 if (Alive(other))
                     other.OnPointerCancel(in e);
             GiveBack(others);
+            return true;
+        }
+
+        /// <summary>
+        /// Hands a pointer <paramref name="from"/> has claimed to <paramref name="to"/> for the rest of its drag, as a scroll
+        /// view at its end passes the drag to what is around it and a draggable hands it back: from now on only
+        /// <paramref name="to"/> hears it, cancelled or not before. False unless <paramref name="from"/> has it.
+        /// </summary>
+        internal static bool Pass(IPointerHandler from, IPointerHandler to, int pointerId)
+        {
+            if (!s_tracks.TryGetValue(pointerId, out var track) || track.Owner != from) return false;
+            track.Owner = to;
+            track.Handlers.Clear();
+            track.Handlers.Add(to);
+            return true;
+        }
+
+        /// <summary>The latest event of pointer <paramref name="pointerId"/>, where it is now: for a drag handed on without a move.</summary>
+        internal static bool TryEventOf(int pointerId, out PointerEvent e)
+        {
+            if (!s_tracks.TryGetValue(pointerId, out var track))
+            {
+                e = default;
+                return false;
+            }
+            e = track.Event(track.Last, track.LastTime);
             return true;
         }
 

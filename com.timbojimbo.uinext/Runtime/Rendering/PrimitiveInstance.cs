@@ -23,6 +23,12 @@ namespace TimboJimbo.UINext
 
         /// <summary>A group's image, already premultiplied, drawn at its group's opacity.</summary>
         Group = 5,
+
+        /// <summary>
+        /// A matched pair: two premultiplied images (a picture of where a flight came from, and where it goes), summed as
+        /// they cross-fade (by Color's alpha), cut to a rounded rect.
+        /// </summary>
+        Pair = 6,
     }
 
     /// <summary>Flags a primitive carries.</summary>
@@ -60,7 +66,7 @@ namespace TimboJimbo.UINext
         public uint Slot;
         public uint Type;
         public uint Flags;
-        // Which of its batch's textures it samples; set by the compositor.
+        // Which of its batch's textures it samples, and in the next four bits a second (a pair's); set by the compositor.
         public uint Texture;
 
         public const int Stride = 6 * 16 + 4 * 4;

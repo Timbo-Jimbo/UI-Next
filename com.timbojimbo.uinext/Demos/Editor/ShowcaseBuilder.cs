@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TimboJimbo.UINext;
+using TimboJimbo.UINext.Demos;
 using TimboJimbo.UINext.Demos.Circle;
 using TimboJimbo.UINext.Demos.Showcase;
 using UnityEditor;
@@ -71,6 +72,8 @@ namespace TimboJimboEditor.UINext.Demos
             Add("🪟", "Presentations", PresentPage);
             Add("✂️", "Clips and order", OrderPage);
             Add("🔗", "Bindings", BindingsPage);
+            Add("🛍️", "Store", StorePage);
+            Add("📰", "App Store", AppStorePage);
             showcase.Setup(entries, pages, backs);
         }
 
@@ -103,6 +106,9 @@ namespace TimboJimboEditor.UINext.Demos
             var content = host.Child("Content").Sized(Sizing.Grow(), Sizing.Grow()).Column();
             content.IgnoresSafeArea.Value = Edges.All;
             content.Box(Background);
+            // A swipe right takes the page back off, carrying on at the swipe's speed as it slides out.
+            content.Add<Draggable>().Axis = ScrollAxis.Horizontal;
+            content.Add<SwipeToDismiss>().Setup(page, SwipeDirections.Right);
             var header = content.Child("Header").Row(8f).Pad(new Insets(8f, 16f, 10f, 10f)).Align(AlignX.Left, AlignY.Center);
             header.Width.Value = Sizing.Grow();
             header.Box(Card);
@@ -270,6 +276,31 @@ namespace TimboJimboEditor.UINext.Demos
             var weather = fadeCase.Child("Weather").Pad(18f, 12f).Align(AlignX.Left, AlignY.Center);
             weather.Box(Card, 14f);
             var weatherText = weather.Child("Text").Label("☀️ Sunny", 22f, Text, bold: true);
+
+            // Two stepped sliders, alike but for whether their drag hands its speed on.
+            var speedCase = Case(body, "Momentum or precision (flick a knob)").Column(10f);
+            var knobs = new List<Draggable>();
+            foreach (var (name, tracksVelocity) in new[] { ("Momentum", true), ("Precise", false) })
+            {
+                speedCase.Child(name).Label(name, 13f, Secondary);
+                var track = speedCase.Child(name + " Slider").Sized(Sizing.Grow(), Sizing.Fixed(36f)).Pad(4f).Align(AlignX.Left, AlignY.Center);
+                track.Box(Card, 18f);
+                // Five steps, marked where the knob's middle comes to rest.
+                var marks = track.Child("Steps").Row().Float(AttachPoint.LeftTop, AttachPoint.LeftTop);
+                marks.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
+                for (int i = 0; i < 5; i++)
+                {
+                    var step = marks.Child("Step").Sized(Sizing.Percent(0.2f), Sizing.Grow()).Center();
+                    step.Child("Mark").Sized(Sizing.Fixed(6f), Sizing.Fixed(6f)).Box(new Color(0.47f, 0.47f, 0.5f, 0.3f), 3f);
+                }
+                var knob = track.Child("Knob").Sized(Sizing.Percent(0.2f), Sizing.Fixed(28f));
+                DemoKit.Shadow(knob.Box(Accent, 14f), 0.2f, 4f, 2f);
+                var drag = knob.Add<Draggable>();
+                drag.Axis = ScrollAxis.Horizontal;
+                drag.TracksVelocity = tracksVelocity;
+                knobs.Add(drag);
+            }
+            page.Add<MomentumDemo>().Setup(knobs, 5);
 
             page.Add<AnimateDemo>().Setup(tracks, animations, card.Pressable(), toggles, items, weather.Pressable(), weatherText);
         }
@@ -466,7 +497,7 @@ namespace TimboJimboEditor.UINext.Demos
                 tile.Child("Number").Label((i + 1).ToString(), 22f, Color.white, bold: true);
             }
 
-            var listDemo = Case(body, "A list in a box (at its end, a new drag scrolls the page)");
+            var listDemo = Case(body, "A list in a box (at its end, the drag goes on to the page)");
             var listBox = listDemo.Child("List").Column().Sized(Sizing.Grow(), Sizing.Fixed(300f));
             listBox.Box(Card, 14f);
             listBox.Clip(14f);
@@ -504,8 +535,10 @@ namespace TimboJimboEditor.UINext.Demos
             sheetCard.Width.Value = Sizing.Grow();
             sheetCard.IgnoresSafeArea.Value = Edges.Bottom;
             sheetCard.Box(Card, new CornerRadii(24f, 24f, 0f, 0f));
+            sheetCard.Add<Draggable>().Axis = ScrollAxis.Vertical;
+            sheetCard.Add<SwipeToDismiss>().Setup(sheet, SwipeDirections.Down);
             sheetCard.Child("Title").Label("A sheet", 22f, Text, bold: true);
-            var sheetBody = sheetCard.Child("Body").Label("Tap the dim or press back to dismiss it, or present an alert over it.", 15f, Secondary);
+            var sheetBody = sheetCard.Child("Body").Label("Swipe it down, tap the dim or press back to dismiss it, or present an alert over it.", 15f, Secondary);
             sheetBody.Node.Width.Value = Sizing.Grow();
             var alertOverSheet = Button(sheetCard, "Present an alert over it", Accent, Color.white);
             alertOverSheet.Node.Width.Value = Sizing.Grow();
@@ -710,6 +743,140 @@ namespace TimboJimboEditor.UINext.Demos
             plus.Node.Width.Value = Sizing.Fixed(80f);
 
             page.Add<BindingsDemo>().Setup(minus, plus, count, level, bar, badgeBox);
+        }
+
+        private static void StorePage(UINode page, UINode body)
+        {
+            // A grid of items; each grows into a dialog and flies home. An item and the dialog's card are matched by name
+            // and the item's index, and so are their icons, names and prices, which fly inside them.
+            var grid = Case(body, "Tap an item (drag it away to close)").Row(12f);
+            grid.Wrap.Value = Wrap.Grid(2);
+            var items = new List<Pressable>();
+            for (int i = 0; i < StoreDemo.Items.Length; i++)
+            {
+                var (emoji, name, price, colour) = StoreDemo.Items[i];
+                var item = grid.Child(name).Column(8f).Pad(14f).Align(AlignX.Center, AlignY.Top);
+                item.MatchName.Value = "Item";
+                item.MatchId.Value = i.ToString();
+                item.ClipRadii.Value = 18f;
+                item.Box(Card, 18f);
+                var icon = item.Child("Icon").Sized(Sizing.Fixed(72f), Sizing.Fixed(72f)).Center();
+                icon.MatchName.Value = "Icon";
+                icon.ClipRadii.Value = 20f;
+                icon.Box(colour, 20f);
+                icon.Child("Emoji").Label(emoji, 36f);
+                item.Child("Name").Label(name, 15f, Text, bold: true).Node.MatchName.Value = "Name";
+                item.Child("Price").Label(price, 13f, Secondary).Node.MatchName.Value = "Price";
+                items.Add(item.Pressable());
+                item.Scale.When(InteractionStates.Pressed, 0.96f);
+            }
+
+            // The dialog: its card takes the id of the item it opens from.
+            var app = page.transform.parent.GetComponent<UINode>();
+            var host = app.Child("Store Dialog").Center();
+            var dialog = host.Add<Presentation>();
+            dialog.Transition = PresentationTransition.None;
+            dialog.Animation = new UIAnimation(0.45f, 0.1f);
+            var card = host.Child("Card").Column(12f).Pad(24f).Align(AlignX.Center, AlignY.Top);
+            card.Width.Value = Sizing.Fixed(300f);
+            card.MatchName.Value = "Item";
+            card.ClipRadii.Value = 26f;
+            card.Box(Card, 26f);
+            var bigIcon = card.Child("Icon").Sized(Sizing.Fixed(150f), Sizing.Fixed(150f)).Center();
+            bigIcon.MatchName.Value = "Icon";
+            bigIcon.ClipRadii.Value = 36f;
+            var iconBox = bigIcon.Box(Accent, 36f);
+            var emojiLabel = bigIcon.Child("Emoji").Label("", 76f);
+            var nameLabel = card.Child("Name").Label("", 22f, Text, bold: true);
+            nameLabel.Node.MatchName.Value = "Name";
+            var priceLabel = card.Child("Price").Label("", 16f, Secondary);
+            priceLabel.Node.MatchName.Value = "Price";
+            var buy = Button(card, "Add to bag", Accent, Color.white);
+            buy.Node.Width.Value = Sizing.Grow();
+            var close = Button(card, "Close", new Color(0.47f, 0.47f, 0.5f, 0.15f), Text);
+            close.Node.Width.Value = Sizing.Grow();
+
+            // Thrown away by a drag anywhere in it, on the card or the dim around it, following the finger.
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            host.Add<SwipeToDismiss>().Setup(dialog, SwipeDirections.Any, panel: card);
+
+            page.Add<StoreDemo>().Setup(items, dialog, card, iconBox, emojiLabel, nameLabel, priceLabel, new List<Pressable> { buy, close });
+        }
+
+        private static void AppStorePage(UINode page, UINode body)
+        {
+            // Today cards; each opens into a full-screen story, matched to it by name and its index, its title flying into
+            // the story's.
+            var cards = new List<Pressable>();
+            var today = Case(body, "Today (pull a story down to close it)").Column(20f);
+            for (int i = 0; i < AppStoreDemo.Stories.Length; i++)
+            {
+                var (kicker, title, from, to) = AppStoreDemo.Stories[i];
+                var card = today.Child("Card " + (i + 1)).Column(6f).Pad(22f);
+                card.Sized(Sizing.Grow(), Sizing.Fixed(360f));
+                card.MatchName.Value = "Today";
+                card.MatchId.Value = i.ToString();
+                card.ClipRadii.Value = 22f;
+                var art = card.Box(from, 22f);
+                art.Gradient.Value = true;
+                art.GradientTo.Value = to;
+                DemoKit.Shadow(art, 0.15f, 20f, 8f);
+                card.Child("Kicker").Label(kicker, 13f, new Color(1f, 1f, 1f, 0.8f), bold: true);
+                var heading = card.Child("Title").Label(title, 28f, Color.white, bold: true);
+                heading.Node.Width.Value = Sizing.Grow();
+                heading.Node.MatchName.Value = "Title";
+                cards.Add(card.Pressable());
+                card.Scale.When(InteractionStates.Pressed, 0.97f);
+            }
+
+            // The story: a cover, its content taking the card's id as it opens. Pulled down past its top it shrinks in
+            // place: its scroll view hands the drag to its swipe.
+            var app = page.transform.parent.GetComponent<UINode>();
+            var host = app.Child("Today Story").Column();
+            var story = host.Add<Presentation>();
+            story.Style = PresentationStyle.Cover;
+            story.Transition = PresentationTransition.None;
+            story.Dim.Value = Color.clear;
+            story.Animation = new UIAnimation(0.5f, 0.12f);
+            // It clips what is in it to its corners, which round as it shrinks.
+            var content = host.Child("Content").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            content.IgnoresSafeArea.Value = Edges.All;
+            content.MatchName.Value = "Today";
+            content.Clips.Value = true;
+            content.Add<Draggable>().Axis = ScrollAxis.Vertical;
+            var swipe = content.Add<SwipeToDismiss>();
+            swipe.Setup(story, SwipeDirections.Down, shrinks: true);
+            var scroll = content.Child("Scroll").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            scroll.Box(Background);
+            var storyScroll = scroll.Scroll();
+            storyScroll.ShowsIndicators.Value = false;
+            // At its top, the rest of a pull down goes to the swipe, which shrinks the story; pushed back up, it scrolls on.
+            storyScroll.AtEnd.Value = ScrollEnd.PassOn;
+            var hero = scroll.Child("Art").Column(6f).Pad(new Insets(22f, 22f, 72f, 22f));
+            hero.Sized(Sizing.Grow(), Sizing.Fixed(460f));
+            var heroArt = hero.Box(Palette[0]);
+            heroArt.Gradient.Value = true;
+            var heroKicker = hero.Child("Kicker").Label("", 13f, new Color(1f, 1f, 1f, 0.8f), bold: true);
+            var heroTitle = hero.Child("Title").Label("", 34f, Color.white, bold: true);
+            heroTitle.Node.Width.Value = Sizing.Grow();
+            heroTitle.Node.MatchName.Value = "Title";
+            var text = scroll.Child("Text").Column(14f).Pad(22f);
+            text.Width.Value = Sizing.Grow();
+            foreach (var paragraph in new[]
+                     {
+                         "Every story here grows out of its card, and closes back into it.",
+                         "Pull it down from the top and it shrinks where it is, its corners rounding. Let go to close it, or turn back up and it scrolls on.",
+                         "Its title flies on its own, inside the card's shape, from the card's place to the story's.",
+                         "Closing, the list scrolls the card into view as the story lands in it.",
+                     })
+                text.Child("Paragraph").Label(paragraph, 17f, Text).Node.Width.Value = Sizing.Grow();
+            var close = content.Child("Close").Sized(Sizing.Fixed(32f), Sizing.Fixed(32f)).Center()
+                .Float(AttachPoint.RightTop, AttachPoint.RightTop, new Vector2(-16f, 56f));
+            close.Box(new Color(0f, 0f, 0f, 0.35f), 16f);
+            close.Child("Mark").Label("✕", 15f, Color.white, bold: true);
+
+            page.Add<AppStoreDemo>().Setup(cards, body.GetComponent<ScrollView>(), story, content, heroArt, heroKicker, heroTitle,
+                storyScroll, swipe, close.Pressable());
         }
     }
 }

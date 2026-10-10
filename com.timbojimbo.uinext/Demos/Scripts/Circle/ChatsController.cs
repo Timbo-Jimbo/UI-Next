@@ -4,10 +4,11 @@ using UnityEngine;
 namespace TimboJimbo.UINext.Demos.Circle
 {
     /// <summary>
-    /// Circle's chats: tapping a row pushes its conversation over the list (a Cover presentation that slides in, the
-    /// list culled once it is in place). Back, the back button or a swipe from anywhere in it to the right takes it
-    /// away again, following the finger. Quick replies, and what is typed in the composer, add a bubble that pops in at
-    /// the end of the thread, which scrolls to it.
+    /// Circle's chats: tapping a row grows it open into its conversation (a Cover presentation, the list culled once it
+    /// is in place): the row and the conversation share a match name and the row's id, so the conversation flies out of
+    /// the row, the row's avatar and name flying into the header's and its preview fading. Back, the back button or a
+    /// swipe to the right (following the finger) collapses it back into the row. Quick replies, and what is typed in the
+    /// composer, add a bubble that pops in at the end of the thread, which scrolls to it.
     /// </summary>
     public sealed class ChatsController : MonoBehaviour
     {
@@ -29,7 +30,8 @@ namespace TimboJimbo.UINext.Demos.Circle
         [SerializeField] private Pressable _send;
 #endif
 
-        private Draggable _swipe;
+        // The row the conversation open is of.
+        private int _open = -1;
 
         // Around a bubble's text.
         private static readonly Vector2 BubblePadding = new(14f, 9f);
@@ -127,14 +129,8 @@ namespace TimboJimbo.UINext.Demos.Circle
                 _replies[i].Tapped += () => Send(CircleData.Replies[index % CircleData.Replies.Length]);
             }
             _back.Tapped += Close;
-            _swipe = _content.GetComponent<Draggable>();
-            if (_swipe != null)
-            {
-                _swipe.Changed += OnSwipe;
-                _swipe.Ended += OnSwipeEnded;
-                _swipe.Cancelled += SpringBack;
-            }
-            _conversation.Dismissed += OnDismissed;
+            _conversation.Presenting += HideRow;
+            _conversation.Dismissing += ShowRow;
         }
 
         private void OnDisable()
@@ -148,16 +144,11 @@ namespace TimboJimbo.UINext.Demos.Circle
             }
 #endif
             _back.Tapped -= Close;
-            if (_swipe != null)
-            {
-                _swipe.Changed -= OnSwipe;
-                _swipe.Ended -= OnSwipeEnded;
-                _swipe.Cancelled -= SpringBack;
-            }
-            _conversation.Dismissed -= OnDismissed;
+            _conversation.Presenting -= HideRow;
+            _conversation.Dismissing -= ShowRow;
         }
 
-        /// <summary>Pushes the <paramref name="index"/>th chat's conversation.</summary>
+        /// <summary>Grows the <paramref name="index"/>th chat's row open into its conversation.</summary>
         public void Open(int index)
         {
             if (_conversation.IsPresented) return;
@@ -166,6 +157,8 @@ namespace TimboJimbo.UINext.Demos.Circle
             _avatar.Fill.Value = colour;
             _initials.Text.Value = initials;
             _name.Text.Value = name;
+            // The row's id: the conversation is matched to its row.
+            _content.MatchId.Value = index.ToString();
 
             // Out of the tree at once (disabled), gone at the end of the frame.
             for (int i = _thread.transform.childCount - 1; i >= 0; i--)
@@ -176,8 +169,24 @@ namespace TimboJimbo.UINext.Demos.Circle
             }
             for (int i = 0; i < thread.Length; i++)
                 AddBubble(thread[i], mine: i % 2 == 1);
+            _open = index;
             _conversation.Present();
+        }
+
+        // Inside the presentation's changes: the row is hidden (keeping its place) as the conversation grows out of it,
+        // and shown again as it collapses back into it.
+        private void HideRow()
+        {
+            if (_open < 0) return;
+            _rows[_open].Node.Display.Value = DisplayMode.Hidden;
+            // The thread opens at its end, where it is laid out now.
             _threadScroll.ScrollTo(new Vector2(0f, _threadScroll.Range.y), animated: false);
+        }
+
+        private void ShowRow()
+        {
+            if (_open >= 0)
+                _rows[_open].Node.Display.Value = DisplayMode.Visible;
         }
 
         public void Close()
@@ -223,25 +232,5 @@ namespace TimboJimbo.UINext.Demos.Circle
             return bubble;
         }
 
-        // A swipe right takes the conversation with the finger.
-        private void OnSwipe(DragEvent e)
-        {
-            _content.Offset.Value = new Vector2(Mathf.Max(0f, e.Translation.x), 0f);
-            _content.Offset.Settle();
-        }
-
-        private void OnSwipeEnded(DragEvent e)
-        {
-            if (e.Translation.x > 120f || e.Velocity.x > 600f) Close();
-            else SpringBack();
-        }
-
-        private void SpringBack() => UI.Animate(UIAnimation.Snappy, () => _content.Offset.Value = Vector2.zero);
-
-        private void OnDismissed()
-        {
-            _content.Offset.Value = Vector2.zero;
-            _content.Offset.Settle();
-        }
     }
 }

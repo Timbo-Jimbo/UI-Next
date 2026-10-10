@@ -110,11 +110,12 @@ namespace TimboJimboEditor.UINext.Demos
             return box;
         }
 
-        /// <summary>A round avatar of a colour with initials on it.</summary>
+        /// <summary>A round avatar of a colour with initials on it (round in a matched flight too).</summary>
         public static UINode Avatar(UINode parent, float size, Color colour, string initials)
         {
             var avatar = parent.Child("Avatar").Sized(Sizing.Fixed(size), Sizing.Fixed(size)).Center();
             avatar.Box(colour, size * 0.5f);
+            avatar.ClipRadii.Value = size * 0.5f;
             avatar.Child("Initials").Label(initials, size * 0.36f, Color.white, bold: true);
             return avatar;
         }

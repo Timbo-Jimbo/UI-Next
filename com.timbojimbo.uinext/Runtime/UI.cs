@@ -10,8 +10,9 @@ namespace TimboJimbo.UINext
         /// Makes the change <paramref name="update"/> makes and moves what it changes on <paramref name="animation"/>,
         /// as SwiftUI's withAnimation and UIKit's animate with layoutIfNeeded: what changed before goes where it goes at
         /// once; then the update runs; then everything it changed, and every rect its layout moves, springs from where
-        /// it is drawn at the speed it has. Called inside another change's update, it is part of that change. Outside play
-        /// mode the change lands at once.
+        /// it is drawn at the speed it has. A node it shows with the <see cref="UINode.MatchName"/> and id of one it hides
+        /// flies from where that one was drawn. Called inside another change's update, it is part of that change. Outside
+        /// play mode the change lands at once.
         /// </summary>
         public static UITransaction Animate(UIAnimation animation, Action update)
         {
@@ -33,11 +34,13 @@ namespace TimboJimbo.UINext
             }
 
             UIScheduler.Flush(Phase.Layout);
+            MatchedGeometry.Begin();
             UITransaction.Current = transaction;
             try
             {
                 update();
                 UIScheduler.Flush(Phase.Layout);
+                MatchedGeometry.End(transaction);
             }
             finally
             {

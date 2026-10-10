@@ -81,6 +81,48 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void AMovingValueSetDirectlyHeadsThereKeepingItsSpeed()
+        {
+            var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));
+            node.Box(Color.white);
+            Frame();
+            var change = UI.Animate(new UIAnimation(0.6f), () => node.Offset.Value = new Vector2(100f, 0f));
+            Frame(1f / 60f);
+            Run(0.1f);
+            var velocity = node.Offset.Velocity;
+            Assert.Greater(velocity.x, 0f);
+            var drawn = node.Offset.Presented;
+            node.Offset.Value = new Vector2(40f, 0f);
+            Assert.AreEqual(drawn, node.Offset.Presented, "it carries on from where it is drawn");
+            Assert.AreEqual(velocity.x, node.Offset.Velocity.x, 1e-3f, "at the speed it had");
+            Run(1f);
+            Assert.AreEqual(40f, node.Offset.Presented.x, 0.01f, "and lands where it was set");
+            Assert.IsTrue(change.IsFinished);
+        }
+
+        [Test]
+        public void EveryValueThatInterpolatesKeepsItsSpeed()
+        {
+            var label = Root.Node.Child("Label").Label("Speed", 20f);
+            var node = label.Node;
+            var box = node.Box(Color.white);
+            Frame();
+            UI.Animate(new UIAnimation(0.6f), () =>
+            {
+                box.Fill.Value = Color.black;
+                box.CornerRadii.Value = 5f;
+                node.Padding.Value = Insets.All(10f);
+            });
+            Frame(1f / 60f);
+            Run(0.1f);
+            Assert.Less(box.Fill.Velocity.x, 0f, "a colour darkening: its lightness falling");
+            Assert.Greater(box.CornerRadii.Velocity.x, 0f, "corner radii");
+            Assert.Greater(node.Padding.Velocity.x, 0f, "insets (the label draws inside them)");
+            Assert.Greater(node.Frame.Velocity.z, 0f, "and a rect, growing as its padding does");
+            Assert.AreEqual(Vector4.zero, node.Display.Velocity, "a value that does not interpolate has no speed");
+        }
+
+        [Test]
         public void ANodeHiddenInsideAnimateStaysDrawnWhileItGoes()
         {
             var column = Root.Node.Column();

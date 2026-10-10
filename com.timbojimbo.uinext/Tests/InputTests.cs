@@ -6,6 +6,90 @@ namespace TimboJimboTests.UINext
 {
     public sealed class InputTests : UITestScene
     {
+        // A page that scrolls, with a box of rows in it that scrolls too: the page at 200 of its 400, the box at `inner` of its 400.
+        private (ScrollView outer, ScrollView inner, UINode box) NestedScrolls(float innerAt)
+        {
+            var page = Root.Node.Child("Page").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            var outer = page.Scroll();
+            page.Child("Top").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            var box = page.Child("Box").Sized(Sizing.Grow(), Sizing.Fixed(200f)).Column();
+            var inner = box.Scroll();
+            for (int i = 0; i < 10; i++)
+                box.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            page.Child("Bottom").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            Frame();
+            outer.ContentOffset = new Vector2(0f, 200f);
+            inner.ContentOffset = new Vector2(0f, innerAt);
+            Frame();
+            return (outer, inner, box);
+        }
+
+        [Test]
+        public void AValueADragSetsLandsUnderTheFingerWhateverWasMovingIt()
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
+            card.Box(Color.white);
+            var drag = card.Add<Draggable>();
+            // Even a drag that hands no speed on holds what it moves under the finger.
+            drag.TracksVelocity = false;
+            drag.Changed += e => card.Offset.Value = e.Translation;
+            Frame();
+            // Springing somewhere as the drag takes it.
+            UI.Animate(new UIAnimation(0.6f), () => card.Offset.Value = new Vector2(0f, 200f));
+            Frame(1f / 60f);
+            var start = Center(card);
+            Down(start);
+            Move(start + new Vector2(20f, 0f), 0.02);
+            Move(start + new Vector2(40f, 0f), 0.04);
+            Assert.IsFalse(card.Offset.IsAnimating, "its spring cut short");
+            Assert.AreEqual(card.Offset.Peek, card.Offset.Presented, "drawn where the drag put it");
+            Up(start + new Vector2(40f, 0f), 0.06);
+        }
+
+        [Test]
+        public void ANewDragHeadingPastAScrollViewsEndScrollsTheScrollViewItIsIn()
+        {
+            var (outer, inner, box) = NestedScrolls(400f);
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 50f), 0.04);
+            Assert.IsFalse(inner.IsDragging, "the box at its end does not take a new drag heading past it");
+            Assert.IsTrue(outer.IsDragging, "the page takes it from the start");
+            Assert.AreEqual(400f, inner.ContentOffset.y, 0.5f);
+            Assert.AreEqual(240f, outer.ContentOffset.y, 0.5f, "and scrolls with it, from where it took it");
+            Up(c - new Vector2(0f, 50f), 0.06);
+        }
+
+        [Test]
+        public void AScrollViewThatBouncesKeepsADragThatCrossesItsEnd()
+        {
+            var (outer, inner, box) = NestedScrolls(380f);
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 50f), 0.04);
+            Assert.IsTrue(inner.IsDragging, "the box keeps the drag");
+            Assert.IsFalse(outer.IsDragging);
+            Assert.Greater(inner.ContentOffset.y, 400f, "stretched past its end, to bounce back");
+            Up(c - new Vector2(0f, 50f), 0.06);
+        }
+
+        [Test]
+        public void AScrollViewHeldStillMidDragIsStill()
+        {
+            var (_, inner, box) = NestedScrolls(100f);
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 30f), 0.04);
+            Assert.AreNotEqual(0f, inner.Offset.Velocity.y, "moving with the finger");
+            Frame(1f / 60f);
+            Frame(1f / 60f);
+            Assert.AreEqual(0f, inner.Offset.Velocity.y, 1e-3f, "held still, it is still");
+            Up(c - new Vector2(0f, 30f), 0.2);
+        }
+
         private const int Finger = UIInput.TouchIdBase;
 
         private void Down(Vector2 point) => UIInput.Down(Finger, PointerKind.Touch, Screen(point), 0);
@@ -71,6 +155,210 @@ namespace TimboJimboTests.UINext
             Up(center, 1.0);
             Assert.AreEqual(caught, view.PresentedOffset.y, 0.5f, "it stopped where it was caught");
             Assert.AreEqual(0, taps);
+        }
+
+        // A card dragged down at 1250 points a second, which springs home as it lets go: the speed of its offset as it
+        // sets off home.
+        private Vector4 Throw(bool tracksVelocity, bool springsHome = true)
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(200f), Sizing.Fixed(200f));
+            card.Box(Color.white);
+            var drag = card.Add<Draggable>();
+            drag.TracksVelocity = tracksVelocity;
+            drag.Changed += e => card.Offset.Value = e.Translation;
+            var handedOn = new Vector4(float.NaN, float.NaN, 0f, 0f);
+            drag.Ended += e =>
+            {
+                if (springsHome)
+                    UI.Animate(new UIAnimation(0.5f), () => card.Offset.Value = Vector2.zero);
+                handedOn = card.Offset.Velocity;
+            };
+            Frame();
+            var c = Center(card);
+            Down(c);
+            for (int i = 1; i <= 6; i++)
+                Move(c + new Vector2(0f, 20f * i), 0.016 * i);
+            Up(c + new Vector2(0f, 120f), 0.1);
+            return handedOn;
+        }
+
+        [Test]
+        public void ADragHandsTheSpeedItMovedAValueOnToTheChangeMadeAsItLetsGo()
+        {
+            var velocity = Throw(tracksVelocity: true);
+            Assert.Greater(velocity.y, 800f, "the spring home sets off at the finger's speed");
+        }
+
+        [Test]
+        public void ADragThatTracksNoVelocityLetsGoStill()
+        {
+            var velocity = Throw(tracksVelocity: false);
+            Assert.AreEqual(0f, velocity.y, 1e-4f, "a precise control's snap starts still");
+        }
+
+        [Test]
+        public void OnceADragIsOverWhatItMovedThatNothingTookOverLandsStill()
+        {
+            Throw(tracksVelocity: true, springsHome: false);
+            var card = Root.Node.transform.Find("Card").GetComponent<UINode>();
+            Assert.AreEqual(Vector4.zero, card.Offset.Velocity);
+        }
+
+        [Test]
+        public void AScrollViewsOffsetMovesAtTheSpeedItGlides()
+        {
+            var list = Root.Node.Child("List").Sized(Sizing.Fixed(300f), Sizing.Fixed(300f)).Column();
+            var scroll = list.Scroll();
+            for (int i = 0; i < 30; i++)
+                list.Child("Row").Sized(Sizing.Fixed(300f), Sizing.Fixed(60f)).Box(Color.white);
+            Frame();
+            var c = Center(list);
+            Down(c);
+            Move(c + new Vector2(0f, -40f), 0.02);
+            Move(c + new Vector2(0f, -120f), 0.04);
+            Up(c + new Vector2(0f, -120f), 0.05);
+            Run(0.05f);
+            Assert.IsTrue(scroll.IsDecelerating);
+            Assert.Greater(scroll.Offset.Velocity.y, 100f, "gliding on, its offset has the glide's speed");
+        }
+
+        [Test]
+        public void ADraggableTakesOnlyTheDragsItSaysItTakes()
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(200f), Sizing.Fixed(200f));
+            card.Box(Color.white);
+            var drag = card.Add<Draggable>();
+            drag.Takes = t => t.y > 0f;
+            Frame();
+            var c = Center(card);
+            Down(c);
+            Move(c + new Vector2(0f, -30f), 0.05);
+            Assert.IsFalse(drag.IsDragging, "up is not a way it takes");
+            Up(c + new Vector2(0f, -30f), 0.1);
+            Down(c);
+            Move(c + new Vector2(0f, 30f), 0.15);
+            Assert.IsTrue(drag.IsDragging, "down is");
+            Up(c + new Vector2(0f, 30f), 0.2);
+        }
+
+        [Test]
+        public void AScrollViewAtItsTopPassesTheRestOfADragToADraggableThatTakesItAndTakesItBack()
+        {
+            // A sheet that is pulled down, with a list in it.
+            var sheet = Root.Node.Child("Sheet").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            sheet.Box(Color.white);
+            var drag = sheet.Add<Draggable>();
+            drag.Axis = ScrollAxis.Vertical;
+            drag.Takes = t => t.y > 0f;
+            drag.Began += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            drag.Changed += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            drag.Ended += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            var list = sheet.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            var scroll = list.Scroll();
+            scroll.AtEnd.Value = ScrollEnd.PassOn;
+            for (int i = 0; i < 20; i++)
+                list.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            Frame();
+            scroll.ContentOffset = new Vector2(0f, 30f);
+            Frame();
+
+            var c = Center(list);
+            Down(c);
+            Move(c + new Vector2(0f, 20f), 0.02);
+            Move(c + new Vector2(0f, 40f), 0.04);
+            Assert.AreEqual(10f, scroll.ContentOffset.y, 0.5f, "the list scrolls back towards its top");
+            Move(c + new Vector2(0f, 80f), 0.06);
+            Assert.AreEqual(0f, scroll.ContentOffset.y, 0.5f, "it stops at its top");
+            Assert.IsTrue(drag.IsDragging, "the sheet has the rest of the drag");
+            Assert.AreEqual(30f, sheet.Offset.Peek.y, 0.5f, "and moves with it, from where the list stopped");
+            Move(c + new Vector2(0f, 100f), 0.08);
+            Assert.AreEqual(50f, sheet.Offset.Peek.y, 0.5f);
+
+            // The finger turns back up past where the sheet took the drag: it hands it back, and the list scrolls on.
+            Move(c + new Vector2(0f, 40f), 0.1);
+            Assert.IsFalse(drag.IsDragging);
+            Assert.AreEqual(0f, sheet.Offset.Peek.y, 0.5f);
+            Assert.IsTrue(scroll.IsDragging);
+            Assert.AreEqual(10f, scroll.ContentOffset.y, 0.5f);
+            Up(c + new Vector2(0f, 40f), 0.12);
+        }
+
+        // A sheet that takes a pull down, with a list in it that passes drags on at its ends.
+        private (Draggable drag, ScrollView scroll, UINode sheet, UINode list) Sheet()
+        {
+            var sheet = Root.Node.Child("Sheet").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            sheet.Box(Color.white);
+            var drag = sheet.Add<Draggable>();
+            drag.Axis = ScrollAxis.Vertical;
+            drag.Takes = t => t.y > 0f;
+            drag.Changed += e => sheet.Offset.Value = new Vector2(0f, e.Translation.y);
+            var list = sheet.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            var scroll = list.Scroll();
+            scroll.AtEnd.Value = ScrollEnd.PassOn;
+            for (int i = 0; i < 20; i++)
+                list.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            Frame();
+            return (drag, scroll, sheet, list);
+        }
+
+        [Test]
+        public void AScrollViewCaughtPastItsEndKeepsADragPushingItBackAndPassesNothingOn()
+        {
+            var (drag, scroll, sheet, list) = Sheet();
+            // Bouncing back from past its top.
+            scroll.Offset.Jump(new Vector2(0f, -30f));
+            UI.Animate(new UIAnimation(0.5f), () => scroll.Offset.Value = Vector2.zero);
+            Frame(1f / 60f);
+            Assert.IsTrue(scroll.IsDecelerating);
+
+            var c = Center(list);
+            Down(c);
+            Move(c - new Vector2(0f, 20f), 0.02);
+            Assert.IsTrue(scroll.IsDragging, "caught, the list keeps a drag pushing it back");
+            Assert.IsFalse(drag.IsDragging, "and hands the sheet nothing");
+            Assert.AreEqual(0f, sheet.Offset.Peek.y, 0.5f);
+            Up(c - new Vector2(0f, 20f), 0.04);
+        }
+
+        [Test]
+        public void ADraggableDisabledWhileAScrollViewPassedItADragHandsItBack()
+        {
+            var (drag, scroll, _, list) = Sheet();
+            var c = Center(list);
+            Down(c);
+            Move(c + new Vector2(0f, 20f), 0.02);
+            Move(c + new Vector2(0f, 60f), 0.04);
+            Assert.IsTrue(drag.IsDragging, "the sheet has the rest of the drag");
+            drag.enabled = false;
+            Assert.IsTrue(scroll.IsDragging, "disabled, it gives the drag back to the list");
+            Up(c + new Vector2(0f, 60f), 0.06);
+        }
+
+        [Test]
+        public void AScrollViewAtItsEndPassesTheRestOfADragToTheScrollViewItIsInWhenItPassesDragsOn()
+        {
+            var page = Root.Node.Child("Page").Sized(Sizing.Fixed(300f), Sizing.Fixed(400f)).Column();
+            var outer = page.Scroll();
+            page.Child("Top").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            var box = page.Child("Box").Sized(Sizing.Grow(), Sizing.Fixed(200f)).Column();
+            var inner = box.Scroll();
+            inner.AtEnd.Value = ScrollEnd.PassOn;
+            for (int i = 0; i < 10; i++)
+                box.Child("Row").Sized(Sizing.Grow(), Sizing.Fixed(60f)).Box(Color.white);
+            page.Child("Bottom").Sized(Sizing.Grow(), Sizing.Fixed(300f)).Box(Color.white);
+            Frame();
+            outer.ContentOffset = new Vector2(0f, 200f);
+            inner.ContentOffset = new Vector2(0f, 380f);
+            Frame();
+
+            var c = Center(box);
+            Down(c);
+            Move(c - new Vector2(0f, 10f), 0.02);
+            Move(c - new Vector2(0f, 50f), 0.04);
+            Assert.AreEqual(400f, inner.ContentOffset.y, 0.5f, "the list stops at its end");
+            Assert.IsTrue(outer.IsDragging, "the page has the rest of the drag");
+            Assert.AreEqual(220f, outer.ContentOffset.y, 0.5f, "and scrolls on with it");
+            Up(c - new Vector2(0f, 50f), 0.06);
         }
 
         [Test]

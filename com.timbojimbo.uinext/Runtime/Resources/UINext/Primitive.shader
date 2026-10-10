@@ -1,7 +1,8 @@
 // Every primitive the UI draws, from one structured buffer: the vertex shader expands each record into a quad in its
 // node's space and places it in its root's, and the fragment shader draws it as a signed distance field (shapes,
-// shadows, images cut to rounded corners, SDF glyphs) or a texture (bitmap glyphs), cut by up to four rounded-rect
-// clips, with premultiplied alpha. Colours are sRGB values and blend as they are (the project blends in gamma).
+// shadows, images cut to rounded corners, SDF glyphs) or a texture (bitmap glyphs, group images, a matched pair's two
+// images summed), cut by up to four rounded-rect clips, with premultiplied alpha. Colours are sRGB values and blend as
+// they are (the project blends in gamma).
 Shader "Hidden/TimboJimbo/UINext/Primitive"
 {
     Properties
@@ -118,9 +119,10 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 rect.zw = max(rect.zw, 0);
 
                 // Room around it for anti-aliasing (a pixel and a half, in its own units) and for a shadow's blur; none
-                // for a glyph, whose quad has its own and whose neighbours in the atlas lie just past it.
-                bool glyph = inst.type >= 3u;
-                float margin = glyph ? 0 : 1.5 * max(slot.sizeOpacity.w, 0.01) + (inst.type == 1u ? inst.params.y * 2.5 : 0);
+                // for a glyph, whose quad has its own and whose neighbours in the atlas lie just past it, or for a group's
+                // image, which covers its region exactly.
+                bool glyph = inst.type == 3u || inst.type == 4u;
+                float margin = glyph || inst.type == 5u ? 0 : 1.5 * max(slot.sizeOpacity.w, 0.01) + (inst.type == 1u ? inst.params.y * 2.5 : 0);
                 float2 corner = kCorners[vertexID % 6];
                 float2 p = rect.xy - margin + corner * (rect.zw + 2 * margin);
                 float2 t = (p - rect.xy) / max(rect.zw, 1e-5);
@@ -154,7 +156,8 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 float2 uvMax = max(inst.uv.xy, inst.uv.xy + inst.uv.zw);
                 // Gradients taken before choosing the texture, so the choice is free to branch.
                 float2 uvDx = ddx(i.uv), uvDy = ddy(i.uv);
-                float4 tex = SampleTexture(inst.textureIndex, clamp(i.uv, uvMin, uvMax), uvDx, uvDy);
+                float2 uv = clamp(i.uv, uvMin, uvMax);
+                float4 tex = SampleTexture(inst.textureIndex & 15u, uv, uvDx, uvDy);
                 float fieldPixel = max(fwidth(tex.a), 1e-4);
 
                 // A group's image: premultiplied already, drawn at the group's opacity, covering the root.
@@ -163,7 +166,19 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
 
                 float4 color = inst.color;
                 float coverage = 1;
-                if (inst.type == 0u)
+                bool premultiplied = false;
+                if (inst.type == 6u)
+                {
+                    // A matched pair: the picture of where it came from and the node it goes to, each an image of its own
+                    // (premultiplied), cross-faded by summing them, as the web's view transitions blend an image pair
+                    // (plus-lighter), so where both are opaque it stays opaque all the way; cut to the pair's rounded shape.
+                    float4 live = SampleTexture((inst.textureIndex >> 4) & 15u, uv, uvDx, uvDy);
+                    color = min(tex * (1.0 - inst.color.a) + live * inst.color.a, 1.0);
+                    float d = SdRoundRect(i.local, i.halfSize, inst.radii);
+                    coverage = saturate(0.5 - d / aa);
+                    premultiplied = true;
+                }
+                else if (inst.type == 0u)
                 {
                     float d = SdRoundRect(i.local, i.halfSize, inst.radii);
                     coverage = saturate(0.5 - d / aa);
@@ -217,6 +232,10 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                     float scale = sqrt(abs(c.inverse0.x * c.inverse1.y - c.inverse0.y * c.inverse1.x));
                     coverage *= saturate(0.5 - d / max(rootAA * scale, 1e-5));
                 }
+
+                // A pair is drawn as its images were, their filters applied already.
+                if (premultiplied)
+                    return color * (coverage * slot.sizeOpacity.z);
 
                 float alpha = saturate(color.a) * coverage * slot.sizeOpacity.z;
                 // Its colour filters, on the premultiplied colour: towards grey by its saturation, then by its brightness.

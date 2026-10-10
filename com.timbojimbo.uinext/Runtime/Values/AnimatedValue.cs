@@ -7,9 +7,15 @@ namespace TimboJimbo.UINext
     /// A value with two faces: its model, where it is going, and its presentation, where it is drawn right now, as
     /// Core Animation's model and presentation layers. Code running in the draw phase sees the presentation; everything
     /// else (layout, bindings, game code) sees the model. A change made inside <see cref="UI.Animate(UIAnimation, System.Action)"/>
-    /// springs the presentation from where it is drawn to the new model; any other change puts it there at once.
+    /// springs the presentation from where it is drawn to the new model. Any other change puts it there at once, still,
+    /// except that one already moving heads there keeping its speed, unless a gesture's callbacks set it, which lands it
+    /// under the finger.
+    /// It knows the speed it moves at however it is moved (<see cref="Velocity"/>), and a spring set off on it starts at
+    /// that speed: a value a gesture was moving carries on at the gesture's speed (see <see cref="Draggable.TracksVelocity"/>).
+    /// Serializable only so that a <see cref="UIValue{T}"/>'s hierarchy is (Unity's analyzer asks); nothing here is saved.
     /// </summary>
-    public class AnimatedValue<T> : Observable, ISpringOwner, IPendingSpring
+    [System.Serializable]
+    public class AnimatedValue<T> : Observable, ISpringOwner, IPendingSpring, ISpeedSampled
     {
         private static readonly IValueConverter<T> s_converter = ValueConverters.Get<T>();
         private static readonly EqualityComparer<T> s_comparer = EqualityComparer<T>.Default;
@@ -34,9 +40,17 @@ namespace TimboJimbo.UINext
         // or the frame after ends and it lands where it goes. The change is held open meanwhile.
         private bool _pending;
         private Vector4 _pendingFrom;
+        private Vector4 _pendingVelocity;
         private UIAnimation _pendingAnimation;
         private UITransaction _pendingTransaction;
         private int _pendingFrame;
+
+        // How fast it moves while no spring moves it, in converted units a second: sampled as a gesture's change callbacks
+        // set it, until the gesture is over; or given by what moves it and knows its speed (a scroll dragged or gliding).
+        // Set any other way, it is still.
+        private VelocityTracker _samples;
+        private Vector4 _movingAt;
+        private int _movingFrame;
 
         public AnimatedValue() : this(default) { }
 
@@ -98,8 +112,33 @@ namespace TimboJimbo.UINext
         /// <summary>Whether it is moving towards its model (or about to, as it is first drawn).</summary>
         public bool IsAnimating => _slot >= 0 || _pending;
 
-        /// <summary>How fast it is moving, in converted units a second (zero at rest).</summary>
-        public Vector4 Velocity => _slot >= 0 ? SpringStore.Velocity(_slot) : Vector4.zero;
+        /// <summary>
+        /// How fast it is moving, in converted units a second (the units its <see cref="IValueConverter{T}"/> turns it into:
+        /// points for positions and sizes, OkLab for colours): on a spring, the spring's speed; while a gesture's change
+        /// callbacks set it, the speed they move it at, until the gesture is over; zero once it lands or is set any other
+        /// way. A value that does not interpolate has no speed.
+        /// </summary>
+        public Vector4 Velocity =>
+            _slot >= 0 ? SpringStore.Velocity(_slot) : _samples != null && _samples.Count > 0 ? _samples.Velocity : MovingAt;
+
+        // The speed what moves it frame by frame (a scroll's drag or glide) last gave it, while that was this frame or the
+        // last: not moved since (a finger held still, a glide stopped), it is still.
+        private Vector4 MovingAt => UIFrame.FrameIndex - _movingFrame <= 1 ? _movingAt : Vector4.zero;
+
+        // Where it is drawn now, without tracking the read or setting off a change held for its first drawing.
+        internal T Drawn
+        {
+            get
+            {
+                if (_slot >= 0) return s_converter.FromVector(SpringStore.Value(_slot));
+                if (_pending) return s_converter.FromVector(_pendingFrom);
+                return _model;
+            }
+        }
+
+        // Where it will be drawn `seconds` from now if it keeps the speed it has.
+        internal T DrawnAhead(float seconds) =>
+            s_converter == null ? Drawn : s_converter.FromVector(s_converter.ToVector(Drawn) + Velocity * seconds);
 
         // Whether anything draws it, so springs run only for values someone sees.
         internal bool HasPresentationReaders => _presentation.Readers.Count > 0;
@@ -109,8 +148,11 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Gives it a new model. Inside a change (<see cref="UITransaction.Current"/>) its presentation springs there on
-        /// the change's animation; outside one, <paramref name="implicitAnimation"/> (a state's) is used if given; a value
-        /// already moving with neither heads there keeping its speed; otherwise it lands at once.
+        /// the change's animation, from where it is drawn at the speed it has; outside one, <paramref name="implicitAnimation"/>
+        /// (a state's) is used if given; otherwise a value already moving heads there keeping its speed, spring and change,
+        /// so a frame laid out again mid-flight glides on to its new place, and one at rest lands there at once. Set directly
+        /// while a gesture's change callback runs, it lands at once, under the finger, cutting short any spring moving it,
+        /// and is sampled for the speed the gesture hands on.
         /// </summary>
         internal void SetModel(T value, UIAnimation? implicitAnimation, bool force = false)
         {
@@ -122,26 +164,11 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
-        /// Moves its presentation the way it would have moved had the model just changed from <paramref name="drawnFrom"/>,
-        /// with a velocity (a fling): for gestures handing their speed on.
-        /// </summary>
-        internal void Fling(Vector4 velocity, UIAnimation animation)
-        {
-            if (s_converter == null || !UIFrame.Live) return;
-            DropPending(arrived: false);
-            if (_slot < 0)
-                _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, s_converter.ToVector(_model));
-            SpringStore.Retarget(_slot, s_converter.ToVector(_model), animation, null);
-            SpringStore.AddVelocity(_slot, velocity);
-            _presentation.Notify();
-        }
-
-        /// <summary>
         /// Gives it a new model and springs its presentation there on <paramref name="animation"/> from where it is
         /// drawn, moving at <paramref name="velocity"/> (converted units a second): a scroll bouncing back from past its
-        /// edge, a dragged sheet let go of. Part of no change.
+        /// edge, a flight setting off. Held by <paramref name="transaction"/>, if given, as a change's springs are.
         /// </summary>
-        internal void SpringTo(T value, Vector4 velocity, UIAnimation animation)
+        internal void SpringTo(T value, Vector4 velocity, UIAnimation animation, UITransaction transaction = null)
         {
             if (s_converter == null || !UIFrame.Live || animation.AtOnce)
             {
@@ -156,8 +183,35 @@ namespace TimboJimbo.UINext
             if (changed) NotifyChanged();
             if (_slot < 0)
                 _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, from);
-            SpringStore.Retarget(_slot, s_converter.ToVector(value), animation, null);
+            SpringStore.Retarget(_slot, s_converter.ToVector(value), animation, transaction);
             SpringStore.SetVelocity(_slot, velocity);
+            ForgetSpeed();
+            _presentation.Notify();
+        }
+
+        /// <summary>
+        /// Puts it at <paramref name="value"/> at once, model and presentation, moving at <paramref name="velocity"/>
+        /// (converted units a second) until it is next set: for what moves it on its own and knows its speed (a scroll
+        /// dragged or gliding), so a change made meanwhile sets off at that speed.
+        /// </summary>
+        internal void MoveAt(T value, Vector4 velocity)
+        {
+            SetModel(value, null);
+            if (_slot < 0 && s_converter != null)
+            {
+                _movingAt = velocity;
+                _movingFrame = UIFrame.FrameIndex;
+            }
+        }
+
+        /// <summary>
+        /// Moves where it is drawn by <paramref name="by"/> (converted units), keeping where it is going, its speed and its
+        /// change: a spring set off before anything says where it starts (a flight, placed on its first frame).
+        /// </summary>
+        internal void Displace(Vector4 by)
+        {
+            if (_slot < 0) return;
+            SpringStore.SetValue(_slot, SpringStore.Value(_slot) + by);
             _presentation.Notify();
         }
 
@@ -181,26 +235,38 @@ namespace TimboJimbo.UINext
             _presentation.Notify();
         }
 
-        /// <summary>Puts it at <paramref name="value"/> at once, model and presentation, whatever change is being made.</summary>
+        /// <summary>
+        /// Puts it at <paramref name="value"/> at once, model and presentation, still, whatever change is being made. A
+        /// spring the change being made set off on it ends as arrived: the change itself put it here, so it still completes.
+        /// </summary>
         internal void Jump(T value)
         {
             DropPending(arrived: false);
+            ForgetSpeed();
             bool changed = !s_comparer.Equals(_model, value);
             _model = value;
             if (changed) NotifyChanged();
             if (_slot >= 0)
-                SpringStore.Stop(_slot, arrived: false);
+                SpringStore.Stop(_slot, arrived: UITransaction.Current != null && SpringStore.TransactionOf(_slot) == UITransaction.Current);
             else if (changed)
                 _presentation.Notify();
         }
 
-        /// <summary>Puts its presentation where its model is, at rest, cutting short any change moving it.</summary>
+        /// <summary>Puts its presentation where its model is, still, cutting short any change moving it.</summary>
         public void Settle()
         {
+            ForgetSpeed();
             if (DropPending(arrived: false))
                 _presentation.Notify();
             if (_slot < 0) return;
             SpringStore.Stop(_slot, arrived: false);
+        }
+
+        // It has no speed but a spring's: what a gesture sampled, or what moved it, is forgotten.
+        private void ForgetSpeed()
+        {
+            _samples?.Clear();
+            _movingAt = Vector4.zero;
         }
 
         /// <summary>A change of a value that cannot interpolate was made on <paramref name="animation"/>.</summary>
@@ -217,10 +283,14 @@ namespace TimboJimbo.UINext
             {
                 if (_slot < 0)
                 {
+                    // From where it is drawn, at the speed it is moving: a value a gesture moved carries on at its speed.
                     var from = _pending ? _pendingFrom : s_converter.ToVector(previous);
+                    var velocity = _pending ? _pendingVelocity : Velocity;
                     _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, from);
+                    SpringStore.SetVelocity(_slot, velocity);
                 }
                 SpringStore.Retarget(_slot, s_converter.ToVector(_model), animation.Value, transaction);
+                ForgetSpeed();
                 DropPending(arrived: _pendingTransaction == transaction);
                 return;
             }
@@ -231,6 +301,8 @@ namespace TimboJimbo.UINext
                 {
                     _pending = true;
                     _pendingFrom = s_converter.ToVector(previous);
+                    _pendingVelocity = Velocity;
+                    ForgetSpeed();
                     PendingSprings.Add(this);
                 }
                 if (_pendingTransaction != transaction)
@@ -245,18 +317,36 @@ namespace TimboJimbo.UINext
                 return;
             }
             DropPending(arrived: false);
-            if (_slot >= 0 && transaction == null && implicitAnimation == null)
+            bool direct = transaction == null && implicitAnimation == null;
+            if (_slot >= 0 && direct && GestureVelocity.Current == null)
             {
-                // Moving, and changed outside any change: it heads there, keeping its speed, spring and change.
+                // Moving, and set directly by anything but a gesture: it heads there, keeping its speed, spring and change.
+                ForgetSpeed();
                 SpringStore.SetTarget(_slot, s_converter.ToVector(_model));
                 return;
             }
+            // Set by a gesture, at rest, or in a change that lands at once: it lands where it is set.
             if (_slot >= 0)
                 SpringStore.Stop(_slot, arrived: transaction != null && SpringStore.TransactionOf(_slot) == transaction);
+            Land(direct);
             _presentation.Notify();
         }
 
-        // The first drawing to read a change held for it: it springs from where it was drawn.
+        // It landed where it was set: still, unless a gesture's change callback set it, which samples it for the speed the
+        // gesture hands on.
+        private void Land(bool direct)
+        {
+            var gesture = GestureVelocity.Current;
+            if (direct && gesture != null && gesture.Samples && s_converter != null)
+            {
+                _movingAt = Vector4.zero;
+                gesture.Sample(this);
+                return;
+            }
+            ForgetSpeed();
+        }
+
+        // The first drawing to read a change held for it: it springs from where it was drawn, at the speed it had.
         private void StartPending()
         {
             var transaction = _pendingTransaction;
@@ -265,6 +355,7 @@ namespace TimboJimbo.UINext
             if (_slot < 0 && UIFrame.Live)
             {
                 _slot = SpringStore.Allocate(this, s_converter.Dimensions, _rest, _pendingFrom);
+                SpringStore.SetVelocity(_slot, _pendingVelocity);
                 SpringStore.Retarget(_slot, s_converter.ToVector(_model), _pendingAnimation, transaction);
             }
             transaction?.Release(arrived: true);
@@ -289,6 +380,14 @@ namespace TimboJimbo.UINext
             _presentation.Notify();
             return true;
         }
+
+        void ISpeedSampled.AddSample(double time)
+        {
+            if (s_converter == null) return;
+            (_samples ??= new VelocityTracker()).Add(s_converter.ToVector(_model), time);
+        }
+
+        void ISpeedSampled.ForgetSamples() => _samples?.Clear();
 
         void ISpringOwner.OnSpringMoved() => _presentation.Notify();
 

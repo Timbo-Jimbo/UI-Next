@@ -80,17 +80,23 @@ namespace TimboJimbo.UINext
         bool OnScroll(Vector2 delta);
     }
 
-    /// <summary>A pointer's recent positions, for how fast it was moving when it let go.</summary>
+    /// <summary>
+    /// Something's recent places (a pointer's position, a value a gesture sets), for how fast it was moving: a pointer as
+    /// it lets go, a value as the gesture moving it lets go. Up to four components, as a spring moves.
+    /// </summary>
     internal sealed class VelocityTracker
     {
         // Samples over this long count, as UIKit's and Android's trackers look back about a tenth of a second.
         private const double Window = 0.1;
         private const int Capacity = 16;
 
-        private readonly Vector2[] _positions = new Vector2[Capacity];
+        private readonly Vector4[] _values = new Vector4[Capacity];
         private readonly double[] _times = new double[Capacity];
         private int _count;
         private int _next;
+
+        /// <summary>How many samples it holds.</summary>
+        public int Count => _count;
 
         public void Clear()
         {
@@ -98,24 +104,24 @@ namespace TimboJimbo.UINext
             _next = 0;
         }
 
-        public void Add(Vector2 position, double time)
+        public void Add(Vector4 value, double time)
         {
-            _positions[_next] = position;
+            _values[_next] = value;
             _times[_next] = time;
             _next = (_next + 1) % Capacity;
             if (_count < Capacity) _count++;
         }
 
-        /// <summary>Points a second, by a least-squares line through the recent samples on each axis.</summary>
-        public Vector2 Velocity
+        /// <summary>Units a second, by a least-squares line through the samples on each axis, looking back from the newest.</summary>
+        public Vector4 Velocity
         {
             get
             {
-                if (_count < 2) return Vector2.zero;
+                if (_count < 2) return Vector4.zero;
                 int newest = (_next - 1 + Capacity) % Capacity;
                 double now = _times[newest];
                 double sumT = 0, sumTT = 0;
-                Vector2 sumP = Vector2.zero, sumTP = Vector2.zero;
+                Vector4 sumP = Vector4.zero, sumTP = Vector4.zero;
                 int n = 0;
                 for (int k = 0; k < _count; k++)
                 {
@@ -125,13 +131,13 @@ namespace TimboJimbo.UINext
                     float t = (float)-age;
                     sumT += t;
                     sumTT += t * t;
-                    sumP += _positions[i];
-                    sumTP += _positions[i] * t;
+                    sumP += _values[i];
+                    sumTP += _values[i] * t;
                     n++;
                 }
-                if (n < 2) return Vector2.zero;
+                if (n < 2) return Vector4.zero;
                 double denominator = n * sumTT - sumT * sumT;
-                if (denominator < 1e-9) return Vector2.zero;
+                if (denominator < 1e-9) return Vector4.zero;
                 return (sumTP * n - sumP * (float)sumT) / (float)denominator;
             }
         }

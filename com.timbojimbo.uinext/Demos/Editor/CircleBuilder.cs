@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using TimboJimbo.UINext;
+using TimboJimbo.UINext.Demos;
 using TimboJimbo.UINext.Demos.Circle;
 using UnityEditor;
 using UnityEngine;
@@ -55,25 +56,27 @@ namespace TimboJimboEditor.UINext.Demos
 
             var photos = new List<ScenePhoto>();
             var captions = new List<string>();
-            var homeScroll = Home(pages, photos, captions);
+            var stories = new List<Pressable>();
+            var ringAvatars = new List<UINode>();
+            var homeScroll = Home(pages, photos, captions, stories, ringAvatars);
             var chats = Chats(pages, out var chatsScroll, out var rows);
             var meScroll = Me(pages, out var darkSwitch, out var logOut);
 
             var tabs = TabBar(app, out var pill);
             var viewer = Viewer(app);
-            var conversation = Conversation(app, rows, chats);
+            StoryScreen(app, stories, ringAvatars);
+            Conversation(app, rows, chats);
             var dialog = LogOutDialog(app, out var dialogButtons);
 
             circle.Setup(tabs, pill, pager, new List<ScrollView> { homeScroll, chatsScroll, meScroll }, photos, captions, viewer, s_dark,
                 darkSwitch, logOut, dialog, dialogButtons);
-            _ = conversation;
         }
 
         private static Color Darker(Color colour) => new(colour.r * 0.8f, colour.g * 0.8f, colour.b * 0.8f, colour.a);
 
         // ── Home ─────────────────────────────────────────────────────────────────
 
-        private static ScrollView Home(UINode pages, List<ScenePhoto> photos, List<string> captions)
+        private static ScrollView Home(UINode pages, List<ScenePhoto> photos, List<string> captions, List<Pressable> storyButtons, List<UINode> ringAvatars)
         {
             var home = pages.Child("Home").Sized(Sizing.Percent(1f), Sizing.Grow()).Column();
             var header = home.Child("Header").Row().Pad(new Insets(20f, 20f, 12f, 8f)).Align(AlignX.Left, AlignY.Center);
@@ -92,6 +95,8 @@ namespace TimboJimboEditor.UINext.Demos
             {
                 var (name, initials, colour) = CircleData.People[i];
                 var story = stories.Child("Story").Column(6f).Align(AlignX.Center, AlignY.Top);
+                // The avatar in the ring and the story it opens are matched by name and by the person's index.
+                story.MatchId.Value = i.ToString();
                 var ring = story.Child("Ring").Sized(Sizing.Fixed(68f), Sizing.Fixed(68f)).Center();
                 var ringBox = ring.Box(new Color32(0xFF, 0x5E, 0x9A, 0xFF), 34f);
                 ringBox.Gradient.Value = true;
@@ -99,10 +104,12 @@ namespace TimboJimboEditor.UINext.Demos
                 ringBox.GradientAngle.Value = 45f;
                 var gap = ring.Child("Gap").Sized(Sizing.Fixed(62f), Sizing.Fixed(62f)).Center();
                 DemoKit.Fill(gap, s_background, 31f);
-                DemoKit.Avatar(gap, 56f, colour, initials);
+                var avatar = DemoKit.Avatar(gap, 56f, colour, initials);
+                avatar.MatchName.Value = "Story";
                 DemoKit.Text(story, "Name", name.Split(' ')[0], 12f, s_secondary);
-                story.Pressable();
+                storyButtons.Add(story.Pressable());
                 story.Scale.When(InteractionStates.Pressed, 0.92f);
+                ringAvatars.Add(avatar);
             }
 
             for (int p = 0; p < CircleData.Posts.Length; p++)
@@ -111,6 +118,8 @@ namespace TimboJimboEditor.UINext.Demos
                 var (name, initials, colour) = CircleData.People[person];
                 var row = feed.Child("Post").Pad(16f, 0f);
                 row.Width.Value = Sizing.Grow();
+                // What is matched inside a post is told apart by the post's index.
+                row.MatchId.Value = p.ToString();
                 var card = row.Child("Card").Column(12f).Pad(16f);
                 card.Width.Value = Sizing.Grow();
                 DemoKit.Shadow(DemoKit.Fill(card, s_card, 22f), 0.06f, 18f, 4f);
@@ -124,6 +133,8 @@ namespace TimboJimboEditor.UINext.Demos
                 var photoNode = card.Child("Photo");
                 photoNode.Width.Value = Sizing.Grow();
                 photoNode.AspectRatio.Value = 4f / 3f;
+                photoNode.MatchName.Value = "Photo";
+                photoNode.ClipRadii.Value = 14f;
                 var photo = photoNode.Add<ScenePhoto>();
                 photo.Show(scene);
                 photoNode.Pressable();
@@ -164,18 +175,23 @@ namespace TimboJimboEditor.UINext.Demos
             var list = chats.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column().Pad(new Insets(0f, 0f, 0f, 120f));
             scroll = list.Scroll();
             rows = new List<Pressable>();
-            foreach (var (person, time, preview, _) in CircleData.Chats)
+            for (int c = 0; c < CircleData.Chats.Length; c++)
             {
+                var (person, time, preview, _) = CircleData.Chats[c];
                 var (name, initials, colour) = CircleData.People[person];
                 var row = list.Child("Chat").Row(14f).Pad(20f, 12f).Align(AlignX.Left, AlignY.Center);
                 row.Width.Value = Sizing.Grow();
-                var rowBox = row.Box(Color.clear);
+                // The row grows into its conversation: matched by name and the chat's index, its avatar and name flying
+                // into the conversation's header.
+                row.MatchName.Value = "Chat";
+                row.MatchId.Value = c.ToString();
+                var rowBox = DemoKit.Fill(row, s_background);
                 rowBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.15f));
                 rowBox.Fill.When(InteractionStates.Focused, new Color(Accent.r, Accent.g, Accent.b, 0.12f));
-                DemoKit.Avatar(row, 50f, colour, initials);
+                DemoKit.Avatar(row, 50f, colour, initials).MatchName.Value = "Avatar";
                 var middle = row.Child("Middle").Column(3f);
                 middle.Width.Value = Sizing.Grow();
-                DemoKit.Text(middle, "Name", name, 16f, s_text, bold: true);
+                DemoKit.Text(middle, "Name", name, 16f, s_text, bold: true).Node.MatchName.Value = "Name";
                 var line = DemoKit.Text(middle, "Preview", preview, 14f, s_secondary);
                 line.MaxLines.Value = 1;
                 line.Node.Width.Value = Sizing.Grow();
@@ -216,10 +232,14 @@ namespace TimboJimboEditor.UINext.Demos
 
             var button = me.Child("Log out").Center();
             button.Sized(Sizing.Grow(), Sizing.Fixed(50f));
+            // Its dialog grows out of it: the two share a match name.
+            button.MatchName.Value = "Log out";
+            button.ClipRadii.Value = 14f;
             var buttonBox = DemoKit.Fill(button, s_card, 14f);
             buttonBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.25f));
             DemoKit.FocusRing(buttonBox, new Color(Red.r, Red.g, Red.b, 0.5f));
-            button.Child("Title").Label("Log out", 17f, Red, bold: true);
+            // Its label turns into the dialog's title as the dialog grows out of it: named alike.
+            button.Child("Title").Label("Log out", 17f, Red, bold: true).Node.MatchName.Value = "Log out title";
             logOut = button.Pressable();
             return scroll;
         }
@@ -271,23 +291,64 @@ namespace TimboJimboEditor.UINext.Demos
             presentation.Transition = PresentationTransition.None;
             presentation.Dim.Value = Color.clear;
             presentation.DismissOnBackdrop = false;
+            // The backdrop and caption fade in as the photo flies out of the feed.
             var backdrop = host.Child("Backdrop").Float(AttachPoint.LeftTop, AttachPoint.LeftTop);
             backdrop.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
             backdrop.Box(Color.black);
+            backdrop.Opacity.Value = 0f;
             backdrop.Pressable();
             var photoNode = host.Child("Photo");
             photoNode.Width.Value = Sizing.Grow();
             photoNode.AspectRatio.Value = 4f / 3f;
+            photoNode.MatchName.Value = "Photo";
             var photo = photoNode.Add<ScenePhoto>();
             photo.CornerRadius.Value = 0f;
             photoNode.Pressable();
-            photoNode.Add<Draggable>().Axis = ScrollAxis.Vertical;
             photoNode.Add<Pinchable>();
+            // Thrown away any way by a drag anywhere in the viewer, on the photo or the backdrop, following the finger.
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            var swipe = host.Add<SwipeToDismiss>();
+            swipe.Setup(presentation, SwipeDirections.Any, panel: photoNode);
             var caption = host.Child("Caption").Pad(24f, 0f).Label("", 16f, Color.white);
             caption.Alignment.Value = TextAnchor.UpperCenter;
+            caption.Node.Opacity.Value = 0f;
             var viewer = host.Add<PhotoViewer>();
-            viewer.Setup(backdrop, photo, caption);
+            viewer.Setup(backdrop, photo, caption, swipe);
             return viewer;
+        }
+
+        // ── Story viewer ─────────────────────────────────────────────────────────
+
+        private static void StoryScreen(UINode app, List<Pressable> stories, List<UINode> ringAvatars)
+        {
+            var host = app.Child("Story Viewer").Column();
+            var presentation = host.Add<Presentation>();
+            presentation.Style = PresentationStyle.Cover;
+            presentation.Transition = PresentationTransition.None;
+            presentation.Dim.Value = Color.clear;
+            // The story and the avatar in its ring share a match name; a swipe down or a tap takes it back into the avatar.
+            var story = host.Child("Story").Sized(Sizing.Grow(), Sizing.Grow()).Column(14f).Pad(new Insets(16f, 16f, 60f, 40f));
+            story.IgnoresSafeArea.Value = Edges.All;
+            story.MatchName.Value = "Story";
+            story.Clips.Value = true;
+            var background = story.Box(Color.gray);
+            background.Gradient.Value = true;
+            background.GradientAngle.Value = 90f;
+            story.Pressable();
+            story.Add<Draggable>().Axis = ScrollAxis.Vertical;
+            story.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Down);
+
+            var progress = story.Child("Progress").Sized(Sizing.Grow(), Sizing.Fixed(3f));
+            progress.Box(new Color(1f, 1f, 1f, 0.9f), 1.5f);
+            var head = story.Child("Header").Row(10f).Align(AlignX.Left, AlignY.Center);
+            var avatar = DemoKit.Avatar(head, 36f, Color.gray, "");
+            var name = head.Child("Name").Label("", 16f, Color.white, bold: true);
+            head.Child("Time").Label("2h", 14f, new Color(1f, 1f, 1f, 0.7f));
+            var middle = story.Child("Middle").Sized(Sizing.Grow(), Sizing.Grow()).Center();
+            middle.Child("Moment").Label("🌅", 96f);
+
+            host.Add<StoryViewer>().Setup(stories, ringAvatars, story, background, avatar.GetComponent<Box>(),
+                avatar.transform.GetChild(0).GetComponent<Label>(), name);
         }
 
         // ── Conversation ─────────────────────────────────────────────────────────
@@ -297,14 +358,17 @@ namespace TimboJimboEditor.UINext.Demos
             var host = app.Child("Conversation").Column();
             var presentation = host.Add<Presentation>();
             presentation.Style = PresentationStyle.Cover;
-            presentation.Transition = PresentationTransition.Push;
+            // It grows out of its row and collapses back into it (matched), rather than sliding.
+            presentation.Transition = PresentationTransition.None;
             presentation.Dim.Value = new Color(0f, 0f, 0f, 0.2f);
-            presentation.Animation = new UIAnimation(0.4f);
+            presentation.Animation = new UIAnimation(0.45f, 0.08f);
 
             var content = host.Child("Content").Sized(Sizing.Grow(), Sizing.Grow()).Column();
             DemoKit.Fill(content, s_background);
             content.IgnoresSafeArea.Value = Edges.All;
+            content.MatchName.Value = "Chat";
             content.Add<Draggable>().Axis = ScrollAxis.Horizontal;
+            content.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Right);
 
             var header = content.Child("Header").Row(10f).Pad(new Insets(10f, 16f, 10f, 10f)).Align(AlignX.Left, AlignY.Center);
             header.Width.Value = Sizing.Grow();
@@ -313,7 +377,9 @@ namespace TimboJimboEditor.UINext.Demos
             back.Child("Title").Label("‹ Chats", 17f, Accent);
             var backPressable = back.Pressable();
             var avatar = DemoKit.Avatar(header, 36f, Color.gray, "");
+            avatar.MatchName.Value = "Avatar";
             var name = DemoKit.Text(header, "Name", "", 17f, s_text, bold: true);
+            name.Node.MatchName.Value = "Name";
 
             var thread = content.Child("Thread").Sized(Sizing.Grow(), Sizing.Grow()).Column(8f).Pad(16f);
             var threadScroll = thread.Scroll();
@@ -374,13 +440,19 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var host = app.Child("Log Out Dialog").Center();
             var presentation = host.Add<Presentation>();
-            presentation.Transition = PresentationTransition.Pop;
-            presentation.Animation = new UIAnimation(0.35f, 0.15f);
+            // It grows out of the Log out button by name: the match is its transition.
+            presentation.Transition = PresentationTransition.None;
+            presentation.Animation = new UIAnimation(0.4f, 0.1f);
             var alert = host.Child("Alert").Column(14f).Pad(22f).Align(AlignX.Center, AlignY.Top);
             alert.Width.Value = Sizing.Fixed(290f);
+            // It takes over from the Log out button, which hides as it comes and shows again as it goes (CircleApp).
+            alert.MatchName.Value = "Log out";
+            alert.ClipRadii.Value = 20f;
             DemoKit.Shadow(DemoKit.Fill(alert, s_card, 20f), 0.2f, 30f, 10f);
             var title = DemoKit.Text(alert, "Title", "Log out of Circle?", 18f, s_text, bold: true);
             title.Alignment.Value = TextAnchor.UpperCenter;
+            // It flies out of the Log out button's label, named alike.
+            title.Node.MatchName.Value = "Log out title";
             var body = DemoKit.Text(alert, "Body", "You can log back in at any time.", 14f, s_secondary);
             body.Alignment.Value = TextAnchor.UpperCenter;
             var row = alert.Child("Buttons").Row(10f);
@@ -395,6 +467,9 @@ namespace TimboJimboEditor.UINext.Demos
                 else DemoKit.Text(button, "Title", label, 16f, s_text, bold: true);
                 buttons.Add(button.Pressable());
             }
+            // Thrown away by a drag anywhere in it, on the alert or the dim around it, following the finger.
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            host.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Any, panel: alert);
             return presentation;
         }
     }

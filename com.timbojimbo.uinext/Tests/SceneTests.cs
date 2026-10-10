@@ -178,6 +178,50 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void APresentationMakesItsChangesInsideItsOwnChangeAndCodeJoinsIt()
+        {
+            var host = Root.Node.Child("Sheet");
+            host.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f)).Box(Color.white);
+            var presentation = host.Add<Presentation>();
+            var below = Root.Node.Child("Below").Sized(Sizing.Fixed(50f), Sizing.Fixed(50f));
+            below.Box(Color.white);
+            Frame();
+
+            UITransaction presenting = null;
+            bool shown = false;
+            presentation.Presenting += () =>
+            {
+                presenting = UITransaction.Current;
+                shown = host.Display.Peek == DisplayMode.Visible && host.PresentationLevel.Peek > 0;
+                below.Opacity.Value = 0.2f;
+            };
+            var change = presentation.Present();
+            Assert.IsNotNull(presenting);
+            Assert.AreSame(change, presenting, "raised inside the presentation's own change");
+            Assert.IsTrue(shown, "after its own state has changed");
+            Frame(1f / 60f);
+            Frame(0.1f);
+            Assert.Less(below.Opacity.Presented, 1f, "what is changed there moves with it");
+            Assert.Greater(below.Opacity.Presented, 0.2f);
+            Run(2f);
+            Assert.IsTrue(change.Completed, "nothing it moved was cut short");
+
+            UITransaction dismissing = null;
+            int level = 0;
+            presentation.Dismissing += () =>
+            {
+                dismissing = UITransaction.Current;
+                level = host.PresentationLevel.Peek;
+            };
+            var dismissal = presentation.Dismiss();
+            Assert.AreSame(dismissal, dismissing);
+            Assert.Less(level, 0, "on its way out, taking no pointers, inside the change");
+            Run(2f);
+            Assert.IsTrue(dismissal.Completed);
+            Assert.AreEqual(DisplayMode.None, host.Display.Peek);
+        }
+
+        [Test]
         public void APresentedNodeIsLaidOutOverTheWholeRoot()
         {
             Root.Node.Pad(30f);
