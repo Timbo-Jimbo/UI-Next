@@ -81,6 +81,46 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void ASetMadeDirectlyLandsStillCuttingShortItsSpring()
+        {
+            var node = Root.Node.Child("Node").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));
+            node.Box(Color.white);
+            Frame();
+            var change = UI.Animate(new UIAnimation(0.6f), () => node.Offset.Value = new Vector2(100f, 0f));
+            Frame(1f / 60f);
+            Run(0.1f);
+            Assert.Greater(node.Offset.Velocity.x, 0f);
+            node.Offset.Value = new Vector2(40f, 0f);
+            Assert.AreEqual(new Vector2(40f, 0f), node.Offset.Presented, "it lands where it is set");
+            Assert.AreEqual(Vector4.zero, node.Offset.Velocity, "still");
+            Run(1f);
+            Assert.IsTrue(change.IsFinished);
+            Assert.IsFalse(change.Completed, "the change it cut short does not complete");
+        }
+
+        [Test]
+        public void EveryValueThatInterpolatesKeepsItsSpeed()
+        {
+            var label = Root.Node.Child("Label").Label("Speed", 20f);
+            var node = label.Node;
+            var box = node.Box(Color.white);
+            Frame();
+            UI.Animate(new UIAnimation(0.6f), () =>
+            {
+                box.Fill.Value = Color.black;
+                box.CornerRadii.Value = 5f;
+                node.Padding.Value = Insets.All(10f);
+            });
+            Frame(1f / 60f);
+            Run(0.1f);
+            Assert.Less(box.Fill.Velocity.x, 0f, "a colour darkening: its lightness falling");
+            Assert.Greater(box.CornerRadii.Velocity.x, 0f, "corner radii");
+            Assert.Greater(node.Padding.Velocity.x, 0f, "insets (the label draws inside them)");
+            Assert.Greater(node.Frame.Velocity.z, 0f, "and a rect, growing as its padding does");
+            Assert.AreEqual(Vector4.zero, node.Display.Velocity, "a value that does not interpolate has no speed");
+        }
+
+        [Test]
         public void ANodeHiddenInsideAnimateStaysDrawnWhileItGoes()
         {
             var column = Root.Node.Column();

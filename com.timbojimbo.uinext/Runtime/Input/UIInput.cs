@@ -40,7 +40,7 @@ namespace TimboJimbo.UINext
             public readonly VelocityTracker Velocity = new();
 
             public PointerEvent Event(Vector2 point, double time) =>
-                new(PointerId, Kind, Root, point, Start, time, Velocity.Velocity, Node);
+                new(PointerId, Kind, Root, point, Start, time, (Vector2)Velocity.Velocity, Node);
         }
 
         private static readonly Dictionary<int, Track> s_tracks = new();

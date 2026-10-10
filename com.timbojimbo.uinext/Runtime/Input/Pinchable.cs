@@ -38,13 +38,19 @@ namespace TimboJimbo.UINext
     /// A two-finger pinch on a node, as UIKit's UIPinchGestureRecognizer and UIRotationGestureRecognizer together: once a
     /// second pointer goes down on the node (or inside it) while a first is down there, it takes both (cancelling presses
     /// and drags under them) and reports how far they have spread, turned and moved, for zooming a photo or a map. A first
-    /// pointer something else has taken already (a drag under way) is not pinched.
+    /// pointer something else has taken already (a drag under way) is not pinched. What its change callbacks set directly
+    /// is sampled, so the change made as it lets go starts at the speed it moved it (<see cref="TracksVelocity"/>).
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(UINode))]
     [AddComponentMenu("Timbo Jimbo/UI Next/Pinchable")]
     public sealed class Pinchable : MonoBehaviour, IPointerHandler
     {
+        [Tooltip("Hands the speed it moves things at on to the change made as it lets go, as SwiftUI's tracksVelocity.")]
+        [SerializeField] private bool _tracksVelocity = true;
+
+        private readonly GestureVelocity _tracking = new();
+
         // The two pointers, where they went down and where they are, in their root's points.
         private readonly int[] _ids = { -1, -1 };
         private readonly Vector2[] _at = new Vector2[2];
@@ -71,13 +77,26 @@ namespace TimboJimbo.UINext
 
         public UINode Node => _node != null ? _node : _node = GetComponent<UINode>();
 
+        /// <summary>
+        /// Whether it hands its speed on, as SwiftUI's tracksVelocity, on by default: while <see cref="Began"/> and
+        /// <see cref="Changed"/> run, the values they set directly are sampled, and the animated change made as it lets go
+        /// starts each at the speed it moved it; once it is over, what it moved that nothing took over lands still.
+        /// </summary>
+        public bool TracksVelocity
+        {
+            get => _tracksVelocity;
+            set => _tracksVelocity = value;
+        }
+
         /// <summary>Whether a pinch is under way.</summary>
         public bool IsPinching => _pinching;
 
         private void OnDisable()
         {
-            if (_pinching) Cancelled?.Invoke();
+            bool pinching = _pinching;
             Reset();
+            if (pinching) Cancel(null);
+            else _tracking.Forget();
         }
 
         void IPointerHandler.OnPointerDown(in PointerEvent e)
@@ -102,7 +121,7 @@ namespace TimboJimbo.UINext
             _lastScale = 1f;
             _lastTime = e.Time;
             _velocity = 0f;
-            Began?.Invoke(Event());
+            Raise(Began, Event(), e.Time);
         }
 
         void IPointerHandler.OnPointerMove(in PointerEvent e)
@@ -120,7 +139,7 @@ namespace TimboJimbo.UINext
                 _lastScale = pinch.Scale;
                 _lastTime = e.Time;
             }
-            Changed?.Invoke(Event());
+            Raise(Changed, Event(), e.Time);
         }
 
         void IPointerHandler.OnPointerUp(in PointerEvent e)
@@ -132,7 +151,16 @@ namespace TimboJimbo.UINext
             {
                 var pinch = Event();
                 Reset();
-                Ended?.Invoke(pinch);
+                if (_tracksVelocity)
+                    _tracking.LetGo(e.Time);
+                try
+                {
+                    Ended?.Invoke(pinch);
+                }
+                finally
+                {
+                    _tracking.Forget();
+                }
                 return;
             }
             Forget(slot);
@@ -145,10 +173,33 @@ namespace TimboJimbo.UINext
             if (_pinching)
             {
                 Reset();
-                Cancelled?.Invoke();
+                Cancel(e.Time);
                 return;
             }
             Forget(slot);
+        }
+
+        // Raises a change callback; what it sets directly is sampled, unless it hands no speed on.
+        private void Raise(Action<PinchEvent> callback, PinchEvent pinch, double time)
+        {
+            if (_tracksVelocity) _tracking.Run(callback, pinch, time);
+            else callback?.Invoke(pinch);
+        }
+
+        // It is cut short (at `time`, if a pointer said when): the change made as it goes starts at its speed, and then what
+        // it moved that nothing took over lands still.
+        private void Cancel(double? time)
+        {
+            if (_tracksVelocity && time.HasValue)
+                _tracking.LetGo(time.Value);
+            try
+            {
+                Cancelled?.Invoke();
+            }
+            finally
+            {
+                _tracking.Forget();
+            }
         }
 
         private PinchEvent Event()

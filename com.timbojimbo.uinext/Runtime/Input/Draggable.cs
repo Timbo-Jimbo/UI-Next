@@ -27,7 +27,8 @@ namespace TimboJimbo.UINext
     /// A pan gesture on a node, as UIKit's UIPanGestureRecognizer: once a pointer down on the node (or inside it) has
     /// moved far enough the way it allows, it takes the pointer (cancelling presses under it) and reports the drag as it
     /// goes and the speed it ends with, for whatever it moves: a sheet, a card swiped away, a slider's thumb. A scroll
-    /// view inside it that scrolls the way the drag goes takes the drag first.
+    /// view inside it that scrolls the way the drag goes takes the drag first. What its change callbacks set directly is
+    /// sampled, so the change made as it lets go starts at the speed it moved it (<see cref="TracksVelocity"/>).
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(UINode))]
@@ -40,9 +41,13 @@ namespace TimboJimbo.UINext
         [Tooltip("How far, in points, the pointer moves before the drag begins.")]
         [SerializeField, Min(0f)] private float _threshold = 8f;
 
+        [Tooltip("Hands the speed it moves things at on to the change made as it lets go, as SwiftUI's tracksVelocity. Off for precise controls (a stepped slider) whose snap must not overshoot what the finger chose.")]
+        [SerializeField] private bool _tracksVelocity = true;
+
         private int _pointer = -1;
         private bool _dragging;
         private Vector2 _origin;
+        private readonly GestureVelocity _velocity = new();
         private UINode _node;
 
         /// <summary>Raised when the drag begins (the pointer has moved far enough).</summary>
@@ -65,14 +70,29 @@ namespace TimboJimbo.UINext
             set => _axis = value;
         }
 
+        /// <summary>
+        /// Whether it hands its speed on, as SwiftUI's tracksVelocity, on by default: while <see cref="Began"/> and
+        /// <see cref="Changed"/> run, the values they set directly are sampled, and the animated change made as it lets go
+        /// (in <see cref="Ended"/> or <see cref="Cancelled"/>) starts each at the speed it moved it; once it is over, what
+        /// it moved that nothing took over lands still. Off, what it moves lands still as it lets go: for precise controls,
+        /// a stepped slider whose snap must not overshoot the step the finger chose.
+        /// </summary>
+        public bool TracksVelocity
+        {
+            get => _tracksVelocity;
+            set => _tracksVelocity = value;
+        }
+
         /// <summary>Whether a drag is under way.</summary>
         public bool IsDragging => _dragging;
 
         private void OnDisable()
         {
-            if (_dragging) Cancelled?.Invoke();
+            bool dragging = _dragging;
             _pointer = -1;
             _dragging = false;
+            if (dragging) Cancel();
+            else _velocity.Forget();
         }
 
         void IPointerHandler.OnPointerDown(in PointerEvent e)
@@ -92,10 +112,10 @@ namespace TimboJimbo.UINext
                 _dragging = true;
                 // The drag starts from here, so what it moves does not jump by the threshold.
                 _origin = translation.normalized * _threshold;
-                Began?.Invoke(new DragEvent(translation - _origin, ParentVector(e.Velocity), in e));
+                Raise(Began, new DragEvent(translation - _origin, ParentVector(e.Velocity), in e), e.Time);
                 return;
             }
-            Changed?.Invoke(new DragEvent(translation - _origin, ParentVector(e.Velocity), in e));
+            Raise(Changed, new DragEvent(translation - _origin, ParentVector(e.Velocity), in e), e.Time);
         }
 
         void IPointerHandler.OnPointerUp(in PointerEvent e)
@@ -104,7 +124,17 @@ namespace TimboJimbo.UINext
             _pointer = -1;
             if (!_dragging) return;
             _dragging = false;
-            Ended?.Invoke(new DragEvent(ParentVector(e.Translation) - _origin, ParentVector(e.Velocity), in e));
+            var drag = new DragEvent(ParentVector(e.Translation) - _origin, ParentVector(e.Velocity), in e);
+            if (_tracksVelocity)
+                _velocity.LetGo(e.Time);
+            try
+            {
+                Ended?.Invoke(drag);
+            }
+            finally
+            {
+                _velocity.Forget();
+            }
         }
 
         void IPointerHandler.OnPointerCancel(in PointerEvent e)
@@ -113,7 +143,28 @@ namespace TimboJimbo.UINext
             _pointer = -1;
             if (!_dragging) return;
             _dragging = false;
-            Cancelled?.Invoke();
+            if (_tracksVelocity)
+                _velocity.LetGo(e.Time);
+            Cancel();
+        }
+
+        private void Cancel()
+        {
+            try
+            {
+                Cancelled?.Invoke();
+            }
+            finally
+            {
+                _velocity.Forget();
+            }
+        }
+
+        // Raises a change callback; what it sets directly is sampled, unless it hands no speed on.
+        private void Raise(Action<DragEvent> callback, DragEvent drag, double time)
+        {
+            if (_tracksVelocity) _velocity.Run(callback, drag, time);
+            else callback?.Invoke(drag);
         }
 
         // Whether a pointer moved this far starts a drag: far enough, and more the way it drags than the other.

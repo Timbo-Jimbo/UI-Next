@@ -225,7 +225,8 @@ namespace TimboJimbo.UINext
                 BeginDrag(translation);
             }
             var target = _dragFrom - (translation - _dragOrigin);
-            Offset.SetModel(Stretch(target), null);
+            // It moves against the finger, at its speed.
+            Offset.MoveAt(Stretch(target), -Mask(UIInput.ToNodeVector(Node, e.Velocity)));
             Scrolled?.Invoke(Offset.Peek);
         }
 
@@ -334,6 +335,8 @@ namespace TimboJimbo.UINext
             }
             if (velocity.magnitude < RestSpeed)
             {
+                // Let go of still: it lands where it is.
+                Offset.MoveAt(offset, Vector4.zero);
                 HideIndicators();
                 return;
             }
@@ -390,12 +393,13 @@ namespace TimboJimbo.UINext
             var clamped = Clamp(offset);
             if (clamped != offset)
             {
+                var velocity = _velocity;
                 StopGlide();
                 if (_bounces.Peek)
                 {
                     // It runs on past the end with the speed it had, and springs back.
                     Offset.SetModel(offset, null);
-                    Offset.SpringTo(clamped, _velocity, BounceBack);
+                    Offset.SpringTo(clamped, velocity, BounceBack);
                 }
                 else
                 {
@@ -405,9 +409,10 @@ namespace TimboJimbo.UINext
                 Scrolled?.Invoke(Offset.Peek);
                 return;
             }
-            Offset.SetModel(offset, null);
+            bool resting = _velocity.magnitude < RestSpeed;
+            Offset.MoveAt(offset, resting ? Vector2.zero : _velocity);
             Scrolled?.Invoke(offset);
-            if (_velocity.magnitude < RestSpeed)
+            if (resting)
             {
                 StopGlide();
                 HideIndicators();

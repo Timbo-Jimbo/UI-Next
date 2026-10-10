@@ -73,6 +73,71 @@ namespace TimboJimboTests.UINext
             Assert.AreEqual(0, taps);
         }
 
+        // A card dragged down at 1250 points a second, which springs home as it lets go: the speed of its offset as it
+        // sets off home.
+        private Vector4 Throw(bool tracksVelocity, bool springsHome = true)
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(200f), Sizing.Fixed(200f));
+            card.Box(Color.white);
+            var drag = card.Add<Draggable>();
+            drag.TracksVelocity = tracksVelocity;
+            drag.Changed += e => card.Offset.Value = e.Translation;
+            var handedOn = new Vector4(float.NaN, float.NaN, 0f, 0f);
+            drag.Ended += e =>
+            {
+                if (springsHome)
+                    UI.Animate(new UIAnimation(0.5f), () => card.Offset.Value = Vector2.zero);
+                handedOn = card.Offset.Velocity;
+            };
+            Frame();
+            var c = Center(card);
+            Down(c);
+            for (int i = 1; i <= 6; i++)
+                Move(c + new Vector2(0f, 20f * i), 0.016 * i);
+            Up(c + new Vector2(0f, 120f), 0.1);
+            return handedOn;
+        }
+
+        [Test]
+        public void ADragHandsTheSpeedItMovedAValueOnToTheChangeMadeAsItLetsGo()
+        {
+            var velocity = Throw(tracksVelocity: true);
+            Assert.Greater(velocity.y, 800f, "the spring home sets off at the finger's speed");
+        }
+
+        [Test]
+        public void ADragThatTracksNoVelocityLetsGoStill()
+        {
+            var velocity = Throw(tracksVelocity: false);
+            Assert.AreEqual(0f, velocity.y, 1e-4f, "a precise control's snap starts still");
+        }
+
+        [Test]
+        public void OnceADragIsOverWhatItMovedThatNothingTookOverLandsStill()
+        {
+            Throw(tracksVelocity: true, springsHome: false);
+            var card = Root.Node.transform.Find("Card").GetComponent<UINode>();
+            Assert.AreEqual(Vector4.zero, card.Offset.Velocity);
+        }
+
+        [Test]
+        public void AScrollViewsOffsetMovesAtTheSpeedItGlides()
+        {
+            var list = Root.Node.Child("List").Sized(Sizing.Fixed(300f), Sizing.Fixed(300f)).Column();
+            var scroll = list.Scroll();
+            for (int i = 0; i < 30; i++)
+                list.Child("Row").Sized(Sizing.Fixed(300f), Sizing.Fixed(60f)).Box(Color.white);
+            Frame();
+            var c = Center(list);
+            Down(c);
+            Move(c + new Vector2(0f, -40f), 0.02);
+            Move(c + new Vector2(0f, -120f), 0.04);
+            Up(c + new Vector2(0f, -120f), 0.05);
+            Run(0.05f);
+            Assert.IsTrue(scroll.IsDecelerating);
+            Assert.Greater(scroll.Offset.Velocity.y, 100f, "gliding on, its offset has the glide's speed");
+        }
+
         [Test]
         public void TwoFingersSpreadingAndTurningPinch()
         {
