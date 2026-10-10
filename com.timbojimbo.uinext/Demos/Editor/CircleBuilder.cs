@@ -239,7 +239,8 @@ namespace TimboJimboEditor.UINext.Demos
             var buttonBox = DemoKit.Fill(button, s_card, 14f);
             buttonBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.25f));
             DemoKit.FocusRing(buttonBox, new Color(Red.r, Red.g, Red.b, 0.5f));
-            button.Child("Title").Label("Log out", 17f, Red, bold: true);
+            // Its label turns into the dialog's title as the dialog grows out of it: named alike.
+            button.Child("Title").Label("Log out", 17f, Red, bold: true).Node.MatchName.Value = "Log out title";
             logOut = button.Pressable();
             return scroll;
         }
@@ -450,6 +451,8 @@ namespace TimboJimboEditor.UINext.Demos
             DemoKit.Shadow(DemoKit.Fill(alert, s_card, 20f), 0.2f, 30f, 10f);
             var title = DemoKit.Text(alert, "Title", "Log out of Circle?", 18f, s_text, bold: true);
             title.Alignment.Value = TextAnchor.UpperCenter;
+            // It flies out of the Log out button's label, named alike.
+            title.Node.MatchName.Value = "Log out title";
             var body = DemoKit.Text(alert, "Body", "You can log back in at any time.", 14f, s_secondary);
             body.Alignment.Value = TextAnchor.UpperCenter;
             var row = alert.Child("Buttons").Row(10f);
