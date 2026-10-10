@@ -37,6 +37,14 @@ namespace TimboJimbo.UINext
         public float[] Opacities = new float[32];
         public float[] GroupOpacities = new float[32];
 
+        // How opaque each node is on its own (its opacity and its transition's), for drawing it apart from what is above
+        // it (in a matched flight).
+        public float[] LocalOpacities = new float[32];
+
+        // The compositing pass that last ran, numbered across every tree: the nodes it drew carry its number.
+        public int CompositePass { get; private set; } = -1;
+        private static int s_compositePasses;
+
         // How far each node drawn as a group is blurred, in points (0 for none, and for nodes not drawn as groups).
         public float[] Blurs = new float[32];
         public readonly List<ClipShape> ClipShapes = new();
@@ -411,6 +419,7 @@ namespace TimboJimbo.UINext
             EnsureCapacity(nodeCount);
             ClipShapes.Clear();
             var rootSize = Root.SizeObservable.Value;
+            int pass = CompositePass = ++s_compositePasses;
 
             for (int i = 0; i < nodeCount; i++)
             {
@@ -488,9 +497,44 @@ namespace TimboJimbo.UINext
                         1f / Mathf.Max(1e-4f, Root.PixelsPerPoint * world.ScaleFactor)),
                     Clips = chain,
                 };
+                LocalOpacities[i] = opacity;
+                node.DrawnSlot = Slots[i];
+                node.DrawnOpacity = opacity;
+                node.DrawnShown = shown;
+                node.DrawnPass = pass;
             }
             Compositor.MarkSlotsDirty();
             Compositor.MarkOrderDirty();
+        }
+
+        /// <summary>
+        /// Where <paramref name="node"/> is drawn <paramref name="ahead"/> seconds from now if everything that moves it keeps
+        /// the speed it has (its frame, offset, scale, turn and transition, and those of everything above it, and the scroll
+        /// views it is in), worked out as compositing works it out: its transform from its own space to its root's, and
+        /// its size. At no time ahead, where it is drawn now.
+        /// </summary>
+        internal Affine2 WorldAhead(UINode node, float ahead, out Vector2 size)
+        {
+            // A presented node hangs off the root, whatever its place in the hierarchy.
+            var parent = node == RootNode || node.ParentNode == null ? null
+                : node.PresentationLevel.Peek != 0 ? RootNode : node.ParentNode;
+            var frame = parent == null ? new Rect(Vector2.zero, Root.Size) : node.Frame.DrawnAhead(ahead);
+            var offset = node.Offset.DrawnAhead(ahead);
+            float scale = node.Scale.DrawnAhead(ahead);
+            float rotation = node.Rotation.DrawnAhead(ahead);
+            var transition = node.Transition;
+            if (transition != null)
+            {
+                offset += transition.Offset.DrawnAhead(ahead);
+                scale *= transition.Scale.DrawnAhead(ahead);
+            }
+            size = frame.size;
+            var local = Affine2.Translate(frame.position + offset) * Affine2.AroundPivot(frame.size * 0.5f, scale, rotation);
+            if (parent == null) return local;
+            var parentWorld = WorldAhead(parent, ahead, out _);
+            if (parent.Scroller != null && parent.Scroller.isActiveAndEnabled)
+                parentWorld = parentWorld * Affine2.Translate(-parent.Scroller.Offset.DrawnAhead(ahead));
+            return parentWorld * local;
         }
 
         // The clip a node gives what is inside it: its own rect and clip radii, in its own space.
@@ -534,6 +578,7 @@ namespace TimboJimbo.UINext
             Array.Resize(ref Shown, size);
             Array.Resize(ref Opacities, size);
             Array.Resize(ref GroupOpacities, size);
+            Array.Resize(ref LocalOpacities, size);
             Array.Resize(ref Blurs, size);
             Array.Resize(ref _clipChains, size);
         }

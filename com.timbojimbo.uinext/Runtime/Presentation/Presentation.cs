@@ -44,7 +44,8 @@ namespace TimboJimbo.UINext
     /// <para>
     /// Presenting and dismissing each make all their state changes inside one animated change of their own, and raise
     /// <see cref="Presenting"/> or <see cref="Dismissing"/> inside it, so code joins the change: what it shows, hides or
-    /// sets there moves with the presentation, as one change.
+    /// sets there moves with the presentation, as one change. A node hidden there whose namesake the presentation shows
+    /// flies into it, and back out as it is dismissed (see <see cref="UINode.MatchName"/>).
     /// </para>
     /// </summary>
     [DisallowMultipleComponent]
