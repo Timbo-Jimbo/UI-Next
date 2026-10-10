@@ -833,15 +833,16 @@ namespace TimboJimboEditor.UINext.Demos
             story.Transition = PresentationTransition.None;
             story.Dim.Value = Color.clear;
             story.Animation = new UIAnimation(0.5f, 0.12f);
+            // It clips what is in it to its corners, which round as it shrinks.
             var content = host.Child("Content").Sized(Sizing.Grow(), Sizing.Grow()).Column();
             content.IgnoresSafeArea.Value = Edges.All;
             content.MatchName.Value = "Today";
             content.Clips.Value = true;
-            content.Box(Background);
             content.Add<Draggable>().Axis = ScrollAxis.Vertical;
             var swipe = content.Add<SwipeToDismiss>();
             swipe.Setup(story, SwipeDirections.Down, shrinks: true);
             var scroll = content.Child("Scroll").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            scroll.Box(Background);
             var storyScroll = scroll.Scroll();
             storyScroll.ShowsIndicators.Value = false;
             var hero = scroll.Child("Art").Column(6f).Pad(new Insets(22f, 22f, 72f, 22f));
