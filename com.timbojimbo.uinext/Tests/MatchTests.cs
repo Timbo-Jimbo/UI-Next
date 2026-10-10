@@ -84,6 +84,31 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void AFlightIsKeptUntilTheChangeItSetOffInFinishes()
+        {
+            var (small, big) = Pair();
+            var far = Root.Node.Child("Far").Sized(Sizing.Fixed(10f), Sizing.Fixed(10f));
+            far.Box(Color.white);
+            Frame();
+            var change = UI.Animate(new UIAnimation(0.5f), () =>
+            {
+                small.Display.Value = DisplayMode.None;
+                big.Display.Value = DisplayMode.Visible;
+                // Something going much further, so the change outlasts the flight.
+                far.Offset.Value = new Vector2(0f, 100000f);
+            });
+            var flight = big.FlightIn;
+            Assert.IsNotNull(flight);
+            for (int i = 0; i < 600 && (flight.Offset.IsAnimating || flight.Corners.IsAnimating || flight.Fade.IsAnimating); i++)
+                Frame(1f / 60f);
+            Assert.IsFalse(change.IsFinished, "the far node is still on its way");
+            Assert.AreSame(flight, small.FlightOut, "the node taken over stays undrawn while the change that hid it goes on");
+            Run(5f);
+            Assert.IsTrue(change.IsFinished);
+            Assert.IsNull(small.FlightOut, "let go once the change has finished");
+        }
+
+        [Test]
         public void AFlightWhoseDestinationIsHiddenOutsideAChangeIsLetGo()
         {
             var (small, big) = Pair();

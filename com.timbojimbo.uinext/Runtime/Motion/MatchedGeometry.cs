@@ -214,6 +214,7 @@ namespace TimboJimbo.UINext
             {
                 From = candidate.Rect,
                 FromRadii = candidate.Radii,
+                Transaction = transaction,
             };
             // Turned round, it fades on from where it had faded, the other way.
             float fade = 0f, fadeSpeed = 0f;
@@ -285,7 +286,11 @@ namespace TimboJimbo.UINext
                 var flight = Flights[i];
                 var destination = flight.Destination;
                 bool gone = destination == null || !destination.isActiveAndEnabled || destination.Tree == null || destination.Index < 0;
-                bool landed = !flight.Offset.IsAnimating && !flight.Corners.IsAnimating && !flight.Fade.IsAnimating;
+                // Landed once its springs are at rest and the change it set off in has finished: until then a node it took
+                // over stays undrawn, however long the rest of that change takes (a presentation hides its page only as
+                // the change finishes, so letting go sooner drew the page again for a frame or two).
+                bool landed = !flight.Offset.IsAnimating && !flight.Corners.IsAnimating && !flight.Fade.IsAnimating
+                              && (flight.Transaction == null || flight.Transaction.IsFinished);
                 // Hidden outside a change, its destination lands no more.
                 bool hidden = !gone && !IsShown(destination);
                 if (gone || hidden || landed)
@@ -444,6 +449,9 @@ namespace TimboJimbo.UINext
         public readonly bool TakesOver;
         public readonly UINode SourceLevel;
         public readonly Picture Picture;
+
+        // The change it set off in, which it lands with.
+        public UITransaction Transaction;
 
         // Whether its ends are text, fitted to the flight's height rather than its width.
         public readonly bool Text;
