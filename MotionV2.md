@@ -64,30 +64,12 @@ As fundamental as position.
   `tracksVelocity`, to stop it handing its speed on, for precise controls such as a stepped slider whose snap must not
   overshoot the step the user chose.
 
-### Scrolling and dragging
+### Handing a drag on
 
 - A scroll view at an end either bounces, or passes the rest of the same drag to what is around it: an outer scroll
   view that can scroll that way, or a draggable that takes it. The draggable hands the drag back as soon as it would
   not take the way the finger moves. A draggable says which drags it takes, at a drag's start as well as when one is
   passed on.
-- A scroll view keeps clear of what floats over its edges by reference, as SwiftUI's `safeAreaInset`: it lists the
-  nodes over each edge, top, bottom, left and right, plus a margin. The insets are read from where those nodes are
-  drawn whenever they are needed. They act as padding that layout never sees: the range grows by them, scrolling into
-  view lands clear of them, and paging and indicators respect them.
-
-### Compositing
-
-- One switch, `CompositeGroup`, as SwiftUI's `compositingGroup`, in place of the existing group opacity flag, keeping
-  saved values: it draws a node and its contents as one image, so its opacity, blur and mask apply to the whole.
-- Blur and masks apply only to a composite group: disabled in the inspector without one, and warned about at runtime.
-  Saturation and brightness need no image and work either way. A node a transition fades is still drawn whole by the
-  engine.
-
-### Editor
-
-- Inspectors in sections; small enum choices as rows of lit buttons with Unity's own icons; and a link control on any
-  value that can take a token, to link one and unlink it.
-- The Scene view keeps the game's safe area in play mode, and inspector edits reach whatever reads them at once.
 
 ### Demos
 
@@ -96,9 +78,6 @@ Rebuildable from code through the existing `Tools/UI Next/Demos` builders.
 - **Showcase, Store:** a grid of items, each growing into a dialog and flying home.
 - **Showcase, App Store:** Today cards opening into full-screen stories. A pull down past a story's top shrinks it in
   place, and letting go closes it back into the list, which scrolls the card into view.
-- **Showcase, Focus:** a playground for keyboard and gamepad focus, with a grid, uneven sizes, a disabled and a hidden
-  button with switches to bring them back, a row wider than the page, a dialog and a text field, and a live readout of
-  where focus is, whether it shows, what is typed into, and where it has been.
 - **Circle:** the photo viewer flies out of the feed and home again, thrown away in any direction or pinched. A chat
   row grows open into its full-screen conversation, its avatar and name becoming the header and its preview fading,
   and collapses back into the row. Stories grow out of their rings and shrink back into them. Log out grows its dialog
