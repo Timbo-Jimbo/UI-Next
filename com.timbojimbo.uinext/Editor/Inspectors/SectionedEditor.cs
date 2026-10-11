@@ -79,8 +79,8 @@ namespace TimboJimboEditor.UINext
         {
             ("Fill", new[] { "_fill", "_cornerRadii" }),
             ("Gradient", new[] { "_gradient", "_gradientTo", "_gradientAngle" }),
-            ("Border", new[] { "_borderWidth", "_borderColor", "_borderGradient", "_borderColorTo" }),
-            ("Shadow", new[] { "_shadowColor", "_shadowBlur", "_shadowOffset", "_shadowSpread", "_shadowGradient", "_shadowColorTo" }),
+            ("Border", new[] { "_borderWidth", "_borderColor", "_borderGradient", "_borderColorTo", "_borderGradientAngle" }),
+            ("Shadow", new[] { "_shadowColor", "_shadowBlur", "_shadowOffset", "_shadowSpread", "_shadowGradient", "_shadowColorTo", "_shadowGradientAngle" }),
         };
     }
 
