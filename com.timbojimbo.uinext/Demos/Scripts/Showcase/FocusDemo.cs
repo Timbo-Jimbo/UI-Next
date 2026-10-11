@@ -6,8 +6,8 @@ namespace TimboJimbo.UINext.Demos.Showcase
     /// <summary>
     /// The Focus page: a readout, under the page, of where keyboard and gamepad focus is and whether it shows, as
     /// <see cref="UIFocus"/> reports it; the switch that has rows read right to left (<see cref="UI.ReadingDirection"/>,
-    /// put back as the page goes); and buttons that go when pressed, so focus goes from them to the nearest, until they
-    /// are brought back.
+    /// switched off and the way rows read put back as the page is dismissed); and buttons that go when pressed, so focus
+    /// goes from them to the nearest, until they are brought back.
     /// </summary>
     public sealed class FocusDemo : MonoBehaviour
     {
@@ -19,6 +19,7 @@ namespace TimboJimbo.UINext.Demos.Showcase
         [SerializeField] private Pressable _bringBack;
 
         private ReadingDirection _direction;
+        private Presentation _page;
         private UINode _lastFocused;
         private bool _lastVisible;
         private UINode _lastResponder;
@@ -36,6 +37,9 @@ namespace TimboJimbo.UINext.Demos.Showcase
         private void OnEnable()
         {
             _direction = UI.ReadingDirection;
+            _page = GetComponent<Presentation>();
+            if (_page != null)
+                _page.Dismissing += PutBack;
             _rightToLeft.Toggled += OnRightToLeft;
             foreach (var goer in _goers)
             {
@@ -48,6 +52,8 @@ namespace TimboJimbo.UINext.Demos.Showcase
 
         private void OnDisable()
         {
+            if (_page != null)
+                _page.Dismissing -= PutBack;
             _rightToLeft.Toggled -= OnRightToLeft;
             _bringBack.Tapped -= BringBack;
             UI.ReadingDirection = _direction;
@@ -55,6 +61,13 @@ namespace TimboJimbo.UINext.Demos.Showcase
 
         private void OnRightToLeft(bool on) =>
             UI.ReadingDirection = on ? ReadingDirection.RightToLeft : ReadingDirection.LeftToRight;
+
+        // The rest of the showcase reads the way it did.
+        private void PutBack()
+        {
+            _rightToLeft.IsSelected = false;
+            UI.ReadingDirection = _direction;
+        }
 
         private void BringBack() => UI.Animate(() =>
         {

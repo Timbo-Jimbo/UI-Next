@@ -452,27 +452,39 @@ namespace TimboJimbo.UINext
             return false;
         }
 
-        /// <summary>The interaction states active here: those of the nearest node at or above it that provides them.</summary>
+        /// <summary>
+        /// The interaction states active here: those of the nearest node at or above it that provides them (a button), but
+        /// for whether focus is on it or within it, which the nearest focus scope says when there is one nearer
+        /// (<see cref="FocusScope"/>): content in a section inside a disabled card is still Disabled.
+        /// </summary>
         public InteractionStates ActiveInteraction()
         {
+            const InteractionStates focus = InteractionStates.Focused | InteractionStates.FocusWithin;
+            var scoped = InteractionStates.None;
+            bool inScope = false;
             for (var node = this; node != null; node = node.LayoutParentOrTransform())
             {
                 // Read on every node passed, so a provider added or a parent changed on the way is noticed.
                 _ = node._stateRevision.Value;
-                if (node._interactionProviders > 0 || node.IsFocusScope)
-                    return node._interaction.Value;
+                if (node._interactionProviders > 0)
+                    return inScope ? (node._interaction.Value & ~focus) | scoped : node._interaction.Value;
+                if (!inScope && node.IsFocusScope)
+                {
+                    inScope = true;
+                    scoped = node._interaction.Value & focus;
+                }
             }
-            return InteractionStates.None;
+            return scoped;
         }
 
         /// <summary>The interaction states this node provides itself.</summary>
         public InteractionStates Interaction => _interaction.Peek;
 
-        // Whether it provides interaction states to itself and what is inside it (a button does, and a focus scope).
-        internal bool ProvidesInteraction => _interactionProviders > 0 || _focusScope.Peek != TimboJimbo.UINext.FocusScope.None;
+        // Whether it provides interaction states to itself and what is inside it (a button does).
+        internal bool ProvidesInteraction => _interactionProviders > 0;
 
-        // A focus scope provides interaction states (FocusWithin) as a button does. Tracked, so what reads states through a
-        // node made a scope, or no longer one, reads them again.
+        // A focus scope says whether focus is within it, to itself and what is inside it. Tracked, so what reads states
+        // through a node made a scope, or no longer one, reads them again.
         private bool IsFocusScope => _focusScope.Value != TimboJimbo.UINext.FocusScope.None;
 
         internal void AddInteractionProvider()

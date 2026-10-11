@@ -75,6 +75,11 @@ namespace TimboJimbo.UINext
         private static int s_levelNumber = -1;
         private static readonly List<UINode> s_entered = new();
 
+        // Whether focus is held in its level with nothing there that can take it (a presentation with nothing to focus,
+        // or everything that could gone): it comes back out with the presentation, showing as it did, and goes to what
+        // can take it in a presentation as soon as there is something.
+        private static bool s_parked;
+
         // Where what has focus was last drawn, and its parent, for where focus goes once it is lost.
         private static Rect s_lastRect;
         private static UINode s_lastParent;
@@ -161,6 +166,7 @@ namespace TimboJimbo.UINext
             s_level = null;
             s_levelNumber = -1;
             s_entered.Clear();
+            s_parked = false;
             s_lastParent = null;
             s_within.Clear();
             s_stops.Clear();
@@ -195,7 +201,7 @@ namespace TimboJimbo.UINext
         public static bool Move(Vector2 direction)
         {
             if (direction == Vector2.zero) return false;
-            var container = Collect();
+            var container = Collect(FocusTree());
             if (container == null || s_stops.Count == 0) return false;
             direction = Mathf.Abs(direction.x) >= Mathf.Abs(direction.y)
                 ? new Vector2(Mathf.Sign(direction.x), 0f)
@@ -236,7 +242,7 @@ namespace TimboJimbo.UINext
         /// </summary>
         public static bool Next(bool backwards = false)
         {
-            var container = Collect();
+            var container = Collect(FocusTree());
             if (container == null || s_stops.Count == 0) return false;
             var order = TabOrder(container);
             int at = order.IndexOf(CurrentStop());
@@ -250,6 +256,7 @@ namespace TimboJimbo.UINext
         // Moves focus to `node` (null to let go of it), showing it or not, and scrolling it into view if told to.
         private static void SetFocus(UINode node, bool visible, bool scroll)
         {
+            s_parked = false;
             // Let go of, a node destroyed while it had focus is forgotten too.
             bool moved = node != Focused || (node == null && !ReferenceEquals(s_focused, null));
             if (moved)
@@ -291,6 +298,16 @@ namespace TimboJimbo.UINext
             UpdateWithin();
             if (moved)
                 Changed?.Invoke(node);
+        }
+
+        // Holds focus in the level it is in, with nothing there that can take it: what had it lets go, and whether focus
+        // shows is kept for when it comes back.
+        private static void Park()
+        {
+            bool visible = s_visible;
+            SetFocus(null, false, false);
+            s_visible = visible;
+            s_parked = true;
         }
 
         // Where a move coming to `unit` lands: the stop itself; for a section, where focus last was inside it if it
@@ -471,21 +488,23 @@ namespace TimboJimbo.UINext
                 SetFocus(s_stops[entry], true, true);
         }
 
-        // Scrolls every scroll view the node is inside, innermost first, until it is in view: in the innermost, with room
-        // round it for its focus ring.
+        // Scrolls every scroll view the node is in, up to its presentation, until it is in view: the innermost to show it,
+        // with room round it for its focus ring, and each one further out to show the one inside it.
         private static void ScrollIntoView(UINode node)
         {
+            if (node.PresentationLevel.Peek != 0) return;
             var root = node.Root;
             float margin = root != null && node.FocusRing.Peek ? Mathf.Max(0f, root.FocusRingOffset.Peek + root.FocusRingWidth.Peek) : 0f;
-            UINode child = node;
+            var target = node;
             for (var parent = node.ParentNode; parent != null; parent = parent.ParentNode)
             {
                 if (parent.Scroller != null && parent.Scroller.isActiveAndEnabled)
                 {
-                    parent.Scroller.ScrollIntoView(child, margin: margin);
+                    parent.Scroller.ScrollIntoView(target, margin: margin);
                     margin = 0f;
+                    target = parent;
                 }
-                child = parent;
+                if (parent.PresentationLevel.Peek != 0) break;
             }
         }
 
@@ -662,17 +681,18 @@ namespace TimboJimbo.UINext
 
         private static bool IsGroup(UINode node) => node.FocusScope.Peek == FocusScope.Group;
 
-        private static bool IsSection(UINode node) => node.FocusScope.Peek == FocusScope.Section;
+        // A section, unless it is a button too: a button is one stop, whatever is inside it.
+        private static bool IsSection(UINode node) => node.FocusScope.Peek == FocusScope.Section && !IsItem(node);
 
-        // Whether a node is where focus can reach it: shown (however faded: a dialog fading in takes focus, as an element
-        // CSS makes transparent can), not on its way out (nor anything it is in), at the topmost level of its tree that
-        // takes pointers; taking the pointer too, when `hit` says so (a button).
+        // Whether a node is where focus can reach it: shown and drawn (one faded to nothing is neither drawn nor hit, so it
+        // takes no focus either), not on its way out (nor anything it is in), at the topmost level of its tree that takes
+        // pointers; taking the pointer too, when `hit` says so (a button).
         private static bool InReach(UINode node, bool hit)
         {
             var tree = node.Tree;
             int i = node.Index;
             if (tree == null || i < 0 || i >= tree.Nodes.Count || tree.Nodes[i] != node) return false;
-            if (!tree.Shown[i] || (hit && !node.HitTestable.Peek)) return false;
+            if (!tree.Shown[i] || tree.Opacities[i] <= 0f || (hit && !node.HitTestable.Peek)) return false;
             var top = TopLevel(tree);
             for (var n = node; n != null; n = n.ParentNode)
             {
@@ -753,6 +773,14 @@ namespace TimboJimbo.UINext
             return -1;
         }
 
+        // The tree focus moves in: the one it is in, while it can be there; with nothing focused, none, for the topmost
+        // that has anything.
+        private static UITree FocusTree()
+        {
+            var focused = Focused;
+            return focused != null && IsStop(focused) ? focused.Tree : null;
+        }
+
         // The tree focus goes to with nothing focused: the topmost presenting something, else the topmost.
         private static UITree TopTree()
         {
@@ -776,7 +804,7 @@ namespace TimboJimbo.UINext
         private static void Maintain()
         {
             var focused = Focused;
-            bool held = !ReferenceEquals(s_focused, null);
+            bool held = !ReferenceEquals(s_focused, null) || s_parked;
             var tree = focused != null && focused.Tree != null ? focused.Tree
                 : held && s_tree != null && s_tree.Root != null && s_tree.Root.isActiveAndEnabled ? s_tree
                 : TopTree();
@@ -823,7 +851,8 @@ namespace TimboJimbo.UINext
                 }
                 var container = Collect(tree);
                 int entry = container != null ? Entry(container, false) : -1;
-                SetFocus(entry >= 0 ? s_stops[entry] : null, s_visible, s_visible);
+                if (entry >= 0) SetFocus(s_stops[entry], s_visible, s_visible);
+                else Park();
                 return;
             }
             if (!held) return;
@@ -832,6 +861,16 @@ namespace TimboJimbo.UINext
             if (focused != null && IsStop(focused))
             {
                 s_lastRect = focused.DrawnRect;
+                return;
+            }
+            if (focused == null && s_parked)
+            {
+                // Held in a presentation with nothing to take it: focus goes to the first thing there that can, once there
+                // is one. (In a root's level, the next key finds it.)
+                if (top == tree.RootNode) return;
+                var container = Collect(tree);
+                int entry = container != null && s_stops.Count > 0 ? Entry(container, false) : -1;
+                if (entry >= 0) SetFocus(s_stops[entry], s_visible, s_visible);
                 return;
             }
             // Lost: hidden, disabled, gone, or in a group no longer entered. It goes to what is nearest where it was, in
@@ -843,7 +882,8 @@ namespace TimboJimbo.UINext
                 Collect(tree);
             }
             int nearest = Recover(focused);
-            SetFocus(nearest >= 0 ? s_stops[nearest] : null, s_visible, s_visible);
+            if (nearest >= 0) SetFocus(s_stops[nearest], s_visible, s_visible);
+            else Park();
         }
 
         // Lets go of groups entered that no longer can be: gone, no longer groups, not drawn, or not in the level focus is
@@ -1010,14 +1050,19 @@ namespace TimboJimbo.UINext
             {
                 s_submitting = true;
                 var focused = Focused;
-                if (focused != null && IsGroup(focused) && IsStop(focused))
+                if (!IsVisible)
+                {
+                    // The first press only shows focus, as the first arrow does: what a pointer last pressed is not pressed
+                    // again unseen (Space jumping in a game).
+                    Reveal();
+                }
+                else if (focused != null && IsGroup(focused) && IsStop(focused))
                 {
                     // Submit on a group enters it.
                     Enter(focused);
                 }
                 else if (focused != null && focused.TryGetComponent(out Pressable pressable) && pressable.Interactable.Peek)
                 {
-                    SetFocus(focused, true, true);
                     s_submitted = focused;
                     focused.SetInteraction(InteractionStates.Pressed, true);
                 }

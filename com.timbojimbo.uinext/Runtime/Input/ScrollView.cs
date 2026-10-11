@@ -184,6 +184,8 @@ namespace TimboJimbo.UINext
                 if (min < offset[axis]) offset[axis] = min;
                 else if (max > offset[axis] + view) offset[axis] = Mathf.Min(min, max - view);
             }
+            // In view already: nothing moves, no glide is cut short and no indicator flashes.
+            if (Clamp(offset) == ContentOffset) return;
             ScrollTo(offset, animated);
         }
 
