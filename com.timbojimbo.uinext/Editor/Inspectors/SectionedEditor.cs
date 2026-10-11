@@ -67,7 +67,8 @@ namespace TimboJimboEditor.UINext
             ("Effects", new[] { "_groupOpacity", "_blur", "_saturation", "_brightness", "_mask" }),
             ("Clipping", new[] { "_clips", "_clipRadii", "_topLayer" }),
             ("Input", new[] { "_hitTestable", "_avoidsKeyboard" }),
-            ("Matching", new[] { "_matchName" }),
+            ("Focus", new[] { "_focusable", "_focusScope", "_focusEntry", "_prefersFocus", "_focusRing" }),
+            ("Matching", new[] { "_matchName", "_matchId", "_matchAnchor" }),
         };
     }
 
@@ -78,8 +79,8 @@ namespace TimboJimboEditor.UINext
         {
             ("Fill", new[] { "_fill", "_cornerRadii" }),
             ("Gradient", new[] { "_gradient", "_gradientTo", "_gradientAngle" }),
-            ("Border", new[] { "_borderWidth", "_borderColor" }),
-            ("Shadow", new[] { "_shadowColor", "_shadowBlur", "_shadowOffset", "_shadowSpread" }),
+            ("Border", new[] { "_borderWidth", "_borderColor", "_borderGradient", "_borderColorTo" }),
+            ("Shadow", new[] { "_shadowColor", "_shadowBlur", "_shadowOffset", "_shadowSpread", "_shadowGradient", "_shadowColorTo" }),
         };
     }
 
@@ -90,6 +91,7 @@ namespace TimboJimboEditor.UINext
         {
             ("Text", new[] { "_text", "_font", "_fontSize", "_color", "_bold", "_italic" }),
             ("Lines", new[] { "_alignment", "_wrap", "_maxLines", "_overflow", "_characterSpacing" }),
+            ("Outline and shadow", new[] { "_outlineWidth", "_outlineColor", "_shadowColor", "_shadowOffset" }),
             ("Markup", new[] { "_markdown" }),
         };
     }
@@ -111,6 +113,7 @@ namespace TimboJimboEditor.UINext
             ("Scrolling", new[] { "_axis", "_bounces", "_atEnd", "_snap" }),
             ("Indicators", new[] { "_showsIndicators", "_indicatorColor" }),
             ("Clear of", new[] { "_clearOfTop", "_clearOfBottom", "_clearOfLeft", "_clearOfRight", "_clearMargin" }),
+            ("Into view", new[] { "_scrollPadding" }),
         };
     }
 }
