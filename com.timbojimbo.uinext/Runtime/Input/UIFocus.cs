@@ -28,6 +28,33 @@ namespace TimboJimbo.UINext
         Group,
     }
 
+    /// <summary>Whether a node takes keyboard and gamepad focus (<see cref="UINode.Focusable"/>).</summary>
+    public enum Focusability
+    {
+        /// <summary>If it is a button that takes presses (a <see cref="Pressable"/>).</summary>
+        Auto,
+
+        /// <summary>Button or not, as SwiftUI's focusable(): a slider, a stepper's row, what takes keys of its own.</summary>
+        Always,
+
+        /// <summary>Not even as a button: a tap area a key need not stop at (a story's sides, a backdrop).</summary>
+        Never,
+    }
+
+    /// <summary>
+    /// Takes keyboard and gamepad moves while its node has focus, as SwiftUI's onMoveCommand: a slider stepping along its
+    /// track, a stepper's row stepping its value, a story stepping on and back. Asked before focus moves, held keys
+    /// repeating; a move it takes moves nothing else.
+    /// </summary>
+    public interface IFocusMoveHandler
+    {
+        /// <summary>
+        /// A move <paramref name="direction"/> (a step along one axis, x right, y down) while focus shows on its node:
+        /// true if it took it, so focus stays where it is; false to let focus move on.
+        /// </summary>
+        bool OnFocusMove(Vector2 direction);
+    }
+
     /// <summary>Where a move into a section from outside it lands (<see cref="UINode.FocusEntry"/>).</summary>
     public enum FocusEntry
     {
@@ -45,8 +72,9 @@ namespace TimboJimbo.UINext
     /// Keyboard and gamepad focus, as UIKit's focus engine and the web's: arrows, the d-pad or the left stick move it to the
     /// nearest that way, as drawn; Tab and Shift Tab go through in reading order (along rows the way
     /// <see cref="UI.ReadingDirection"/> reads); Enter, Space or a gamepad's South button (A) press what has it. Buttons
-    /// take it (<see cref="Pressable"/>), and so do groups until they are entered; sections and groups
-    /// (<see cref="UINode.FocusScope"/>) shape how it moves. Only the topmost presentation takes it: one coming up takes
+    /// take it (<see cref="Pressable"/>), and anything a node's <see cref="UINode.Focusable"/> says, and groups until
+    /// they are entered; sections and groups (<see cref="UINode.FocusScope"/>) shape how it moves, and what has it can
+    /// take the arrows itself (<see cref="IFocusMoveHandler"/>: a slider). Only the topmost presentation takes it: one coming up takes
     /// focus, at what prefers it, and one going gives it back to what had it in the level it uncovers (the button that
     /// opened it). Lost (hidden, disabled, gone), it goes to what is nearest where it was. A tap on a button moves it there,
     /// unseen, as a click focuses a button on the web.
@@ -94,6 +122,9 @@ namespace TimboJimbo.UINext
         private static readonly List<Rect> s_rects = new();
         private static readonly HashSet<UINode> s_stopSet = new();
         private static UINode s_container;
+
+        // What has focus that takes moves of its own, asked as a key moves.
+        private static readonly List<IFocusMoveHandler> s_moveHandlers = new();
 
         // What a move can go to (stops, and sections focus is not in, as one), and the list a tie is ranked in.
         private static readonly List<UINode> s_units = new();
@@ -671,9 +702,14 @@ namespace TimboJimbo.UINext
             return false;
         }
 
-        // Whether a node takes focus of itself: a button that takes presses.
-        private static bool IsItem(UINode node) =>
-            node.TryGetComponent(out Pressable pressable) && pressable.isActiveAndEnabled && pressable.Interactable.Peek;
+        // Whether a node takes focus of itself: a button that takes presses, unless it says never; anything that says
+        // always.
+        private static bool IsItem(UINode node)
+        {
+            var focusable = node.Focusable.Peek;
+            if (focusable != Focusability.Auto) return focusable == Focusability.Always;
+            return node.TryGetComponent(out Pressable pressable) && pressable.isActiveAndEnabled && pressable.Interactable.Peek;
+        }
 
         private static bool IsGroup(UINode node) => node.FocusScope.Peek == FocusScope.Group;
 
@@ -1026,7 +1062,7 @@ namespace TimboJimbo.UINext
                 {
                     if (IsVisible)
                     {
-                        Move(direction);
+                        Step(direction);
                     }
                     else
                     {
@@ -1039,7 +1075,7 @@ namespace TimboJimbo.UINext
             else if (direction != Vector2.zero && now >= s_nextRepeat)
             {
                 s_nextRepeat = now + RepeatInterval;
-                Move(direction);
+                Step(direction);
             }
 
             if (submit && !s_submitting)
@@ -1068,6 +1104,27 @@ namespace TimboJimbo.UINext
                 s_submitting = false;
                 Release(tap: true);
             }
+        }
+
+        // A move by keys: what has focus takes it, if it takes moves of its own (a slider stepping); else focus moves.
+        private static void Step(Vector2 direction)
+        {
+            var focused = Focused;
+            if (focused != null)
+            {
+                focused.GetComponents(s_moveHandlers);
+                bool taken = false;
+                foreach (var handler in s_moveHandlers)
+                {
+                    if (handler is Behaviour behaviour && !behaviour.isActiveAndEnabled) continue;
+                    if (!handler.OnFocusMove(direction)) continue;
+                    taken = true;
+                    break;
+                }
+                s_moveHandlers.Clear();
+                if (taken) return;
+            }
+            Move(direction);
         }
 
         // Lets go of what a submit key pressed: tapped, if it still has focus and the key was let go of (rather than taken

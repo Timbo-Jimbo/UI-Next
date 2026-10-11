@@ -94,6 +94,9 @@ namespace TimboJimbo.UINext
         [Tooltip("Focus starts here, or inside it, when it comes to what this is in: a presentation coming up, a group entered, a section with nothing remembered.")]
         [SerializeField] private UIValue<bool> _prefersFocus = false;
 
+        [Tooltip("Whether it takes keyboard and gamepad focus. Auto: if it is a button. Always: button or not (a slider, a stepper's row). Never: not even as a button (a tap area a key need not stop at).")]
+        [SerializeField] private UIValue<Focusability> _focusable = Focusability.Auto;
+
         [Tooltip("Draws the focus ring round it while it has keyboard or gamepad focus and focus shows. Off for a node that shows focus its own way (a row's highlight).")]
         [SerializeField] private UIValue<bool> _focusRing = true;
 
@@ -257,6 +260,14 @@ namespace TimboJimbo.UINext
         /// it wins.
         /// </summary>
         public UIValue<bool> PrefersFocus => _prefersFocus;
+
+        /// <summary>
+        /// Whether it takes keyboard and gamepad focus, as SwiftUI's focusable(): a button does unless told
+        /// <see cref="Focusability.Never"/> (a story's tap areas, a backdrop's tap); anything else only when told
+        /// <see cref="Focusability.Always"/> (a slider, a stepper's row), which takes the arrows of its own as it wants
+        /// (<see cref="IFocusMoveHandler"/>).
+        /// </summary>
+        public UIValue<Focusability> Focusable => _focusable;
 
         /// <summary>
         /// Whether the focus ring is drawn round it while it has focus and focus shows (a key or a gamepad moved it), as
@@ -685,7 +696,7 @@ namespace TimboJimbo.UINext
             action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity); action(_blur);
             action(_saturation); action(_brightness); action(_mask); action(_avoidsKeyboard);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable); action(_matchName); action(_matchId); action(_matchAnchor);
-            action(_focusScope); action(_focusEntry); action(_prefersFocus); action(_focusRing);
+            action(_focusScope); action(_focusEntry); action(_prefersFocus); action(_focusable); action(_focusRing);
         }
     }
 }
