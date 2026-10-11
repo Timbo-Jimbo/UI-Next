@@ -242,9 +242,10 @@ namespace TimboJimbo.UINext
         public static void Clear() => SetFocus(null, false, false);
 
         /// <summary>
-        /// Moves focus to the nearest stop in <paramref name="direction"/> (x right, y down, along its stronger axis) from
-        /// what has it, as drawn, a section focus is not in counting as one; with nothing focused, to where the container's
-        /// focus starts. Shows focus. False if there is nowhere to go.
+        /// Moves focus <paramref name="direction"/> (x right, y down, along its stronger axis) from what has it, as drawn:
+        /// to the next row that way (column, going left or right), and the nearest in it, a section focus is not in counting
+        /// as one; inside the scroll view focus is in first, then each one around it. With nothing focused, to where the
+        /// container's focus starts. Shows focus. False if there is nowhere to go.
         /// </summary>
         public static bool Move(Vector2 direction)
         {
@@ -263,22 +264,30 @@ namespace TimboJimbo.UINext
                 return true;
             }
 
-            // What it can go to: every other stop, or the outermost section it is in that focus is not, as one.
+            // What it can go to: every other stop in reach, or the outermost section it is in that focus is not, as one. What
+            // the scroll view focus is in holds comes first, out of sight or under what floats over it (scrolled into view
+            // as focus lands), then what the one around that holds, and so on out: focus leaves a list for the tab bar
+            // over it only at the list's end.
             var at = s_stops[current];
-            s_units.Clear();
-            s_unitRects.Clear();
-            for (int i = 0; i < s_stops.Count; i++)
+            int picked = -1;
+            for (var scope = ScrollViewAround(at); ; scope = ScrollViewAround(scope))
             {
-                if (i == current) continue;
-                var section = SectionOutside(container, s_stops[i], at);
-                var unit = section != null ? section : s_stops[i];
-                if (s_units.Contains(unit)) continue;
-                s_units.Add(unit);
-                s_unitRects.Add(section != null ? section.DrawnRect : s_rects[i]);
+                s_units.Clear();
+                s_unitRects.Clear();
+                for (int i = 0; i < s_stops.Count; i++)
+                {
+                    if (i == current || (scope != null && !IsInside(s_stops[i], scope)) || !InSight(s_stops[i], at, direction)) continue;
+                    var section = SectionOutside(container, s_stops[i], at);
+                    var unit = section != null ? section : s_stops[i];
+                    if (s_units.Contains(unit)) continue;
+                    s_units.Add(unit);
+                    s_unitRects.Add(section != null ? section.DrawnRect : s_rects[i]);
+                }
+                s_ranking = s_units;
+                picked = FocusNavigation.Pick(s_rects[current], direction, s_unitRects, s_rank, RightToLeft);
+                if (picked >= 0 || scope == null) break;
             }
-            s_ranking = s_units;
-            int picked = FocusNavigation.Pick(s_rects[current], direction, s_unitRects, s_rank, RightToLeft);
-            var target = picked >= 0 ? Land(s_units[picked], s_rects[current], direction) : null;
+            var target = picked >= 0 ? Land(s_units[picked], s_rects[current], direction, at) : null;
             // Nowhere to go: it shows where it is.
             SetFocus(target != null ? target : at, true, true);
             return target != null;
@@ -360,8 +369,8 @@ namespace TimboJimbo.UINext
 
         // Where a move coming to `unit` lands: the stop itself; for a section, where focus last was inside it if it
         // remembers, else what is nearest the way the move goes inside it, its own sections as one again (or the nearest
-        // at all, with none that way).
-        private static UINode Land(UINode unit, Rect from, Vector2 direction)
+        // at all, with none that way). Only what is in reach from `at` counts (see InSight).
+        private static UINode Land(UINode unit, Rect from, Vector2 direction, UINode at)
         {
             if (!IsSection(unit)) return unit;
             if (unit.FocusEntry.Peek == FocusEntry.Remembered)
@@ -373,7 +382,7 @@ namespace TimboJimbo.UINext
             var rects = new List<Rect>();
             for (int i = 0; i < s_stops.Count; i++)
             {
-                if (!IsInside(s_stops[i], unit)) continue;
+                if (!IsInside(s_stops[i], unit) || !InSight(s_stops[i], at, direction)) continue;
                 var section = SectionBelow(unit, s_stops[i]);
                 var inner = section != null ? section : s_stops[i];
                 if (units.Contains(inner)) continue;
@@ -384,7 +393,7 @@ namespace TimboJimbo.UINext
             s_ranking = units;
             int picked = FocusNavigation.Pick(from, direction, rects, s_rank, RightToLeft);
             if (picked < 0) picked = FocusNavigation.Nearest(from, rects);
-            return Land(units[picked], from, direction);
+            return Land(units[picked], from, direction, at);
         }
 
         // The stop focus takes inside `scope` as it comes to it (a presentation coming up, a group entered, a section a
@@ -762,6 +771,35 @@ namespace TimboJimbo.UINext
                 if (IsGroup(n))
                     stop = n;
             return stop;
+        }
+
+        // The scroll view `node` is in (its node), up to its presentation, or null.
+        private static UINode ScrollViewAround(UINode node)
+        {
+            for (var n = node.ParentNode; n != null; n = n.ParentNode)
+            {
+                if (n.Scroller != null && n.Scroller.isActiveAndEnabled) return n;
+                if (n.PresentationLevel.Peek != 0) break;
+            }
+            return null;
+        }
+
+        // Whether a move from `at` going `direction` can reach `node`: it is in sight in every scroll view it is in (drawn
+        // over some of it), but for one `at` is in too that scrolls the way the move goes, which scrolls it into view as
+        // focus lands. What is clipped out of sight elsewhere (another page of a pager, the hidden end of a row of stories
+        // focus is not in) is out of reach.
+        private static bool InSight(UINode node, UINode at, Vector2 direction)
+        {
+            var rect = node.DrawnRect;
+            for (var n = node.ParentNode; n != null; n = n.ParentNode)
+            {
+                var scroll = n.Scroller;
+                if (scroll != null && scroll.isActiveAndEnabled && !rect.Overlaps(n.DrawnRect)
+                    && !(IsInside(at, n) && scroll.Along(direction) != Vector2.zero))
+                    return false;
+                if (n.PresentationLevel.Peek != 0) break;
+            }
+            return true;
         }
 
         // The outermost section between `container` and `stop` (both left out) that `at` is not in, or null.

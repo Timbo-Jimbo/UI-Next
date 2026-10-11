@@ -212,6 +212,8 @@ namespace TimboJimboEditor.UINext.Demos
             body = content.Child("Body").Sized(Sizing.Grow(), Sizing.Grow()).Column(18f).Pad(new Insets(16f, 16f, 8f, 40f));
             scroll = body.Scroll();
             scroll.ScrollPadding.Value = ScrollRoom;
+            // Focus starts on what the page holds, not on Back, which is a move up away.
+            body.PrefersFocus.Value = true;
             return page;
         }
 

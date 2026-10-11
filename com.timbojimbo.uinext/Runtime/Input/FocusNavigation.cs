@@ -5,15 +5,12 @@ using UnityEngine;
 namespace TimboJimbo.UINext
 {
     /// <summary>
-    /// Where focus goes, worked out on rects in a root's points (x right, y down): the one a direction leads to, as the
-    /// W3C's spatial navigation and tvOS's focus engine pick it, and reading order, for Tab.
+    /// Where focus goes, worked out on rects in a root's points (x right, y down): the one a direction leads to (the next
+    /// row that way, then the nearest in it), and reading order, for Tab.
     /// </summary>
     internal static class FocusNavigation
     {
-        // How much a step across counts against a candidate, next to a step the way it goes.
-        private const float AcrossWeight = 2f;
-
-        // How close two candidates' scores are to count as equally near: closer than anyone could see.
+        // How close two candidates are across to count as equally near: closer than anyone could see.
         private const float TieTolerance = 1f;
 
         private static readonly List<int> s_tied = new();
@@ -21,38 +18,40 @@ namespace TimboJimbo.UINext
         /// <summary>
         /// The index in <paramref name="rects"/> of the one to move to from <paramref name="from"/> going
         /// <paramref name="direction"/> (a step along one axis, y down), or -1 for none. A candidate lies that way: its
-        /// centre past this one's, and its far edge past this one's far edge. Those overlapping this one across the way it
-        /// goes (in its beam) come first; among them, or among all when none do, the nearest wins, by the gap the way it
-        /// goes plus twice the gap across. Several equally near (to within a point: a row of tabs above a wide row) are told
-        /// apart by <paramref name="rank"/>, lowest first, then by reading order, the first of them winning.
+        /// centre past this one's, and its far edge past this one's far edge. Going up or down, the next row that way is
+        /// found first, then the nearest in it across (going left or right, the next column, then the nearest in it up or
+        /// down), so a move never skips a row for something better in line further on. The next row is the candidate whose
+        /// near edge comes first that way, with every one starting before it ends (a taller neighbour, a staggered card).
+        /// Several equally near across (to within a point: a row of chips under a wide photo) are told apart by
+        /// <paramref name="rank"/>, lowest first, then by reading order, the first of them winning.
         /// </summary>
         public static int Pick(Rect from, Vector2 direction, IReadOnlyList<Rect> rects, Func<int, int> rank, bool rightToLeft)
         {
-            // How near the nearest is, those in the beam first.
-            bool found = false, inBeam = false;
+            // The next row that way: where the first starts, and where it ends.
+            float rowStart = float.PositiveInfinity, rowEnd = float.PositiveInfinity;
+            for (int i = 0; i < rects.Count; i++)
+            {
+                if (!Ahead(from, rects[i], direction)) continue;
+                Span(rects[i], direction, out float start, out float end);
+                if (start < rowStart || (start == rowStart && end < rowEnd))
+                {
+                    rowStart = start;
+                    rowEnd = end;
+                }
+            }
+            if (float.IsPositiveInfinity(rowStart)) return -1;
+
+            // In it, the nearest across, and every one as near as that.
             float best = float.PositiveInfinity;
             for (int i = 0; i < rects.Count; i++)
             {
-                if (!Score(from, rects[i], direction, out bool beam, out float score)) continue;
-                if (beam && !inBeam)
-                {
-                    inBeam = true;
-                    best = score;
-                }
-                else if (beam == inBeam)
-                {
-                    best = Mathf.Min(best, score);
-                }
-                found = true;
+                if (InRow(from, rects[i], direction, rowEnd))
+                    best = Mathf.Min(best, Across(from, rects[i], direction));
             }
-            if (!found) return -1;
-
-            // Every one as near as that.
             s_tied.Clear();
             for (int i = 0; i < rects.Count; i++)
             {
-                if (!Score(from, rects[i], direction, out bool beam, out float score)) continue;
-                if (beam == inBeam && score <= best + TieTolerance)
+                if (InRow(from, rects[i], direction, rowEnd) && Across(from, rects[i], direction) <= best + TieTolerance)
                     s_tied.Add(i);
             }
             if (s_tied.Count > 1 && rank != null)
@@ -107,53 +106,36 @@ namespace TimboJimbo.UINext
             return first;
         }
 
-        // Whether `to` lies `direction` of `from`, and if so whether it is in the beam (overlapping `from` across the way
-        // it goes) and how near it is: the gap the way it goes plus AcrossWeight times the gap across.
-        private static bool Score(Rect from, Rect to, Vector2 direction, out bool inBeam, out float score)
+        // Whether `to` lies `direction` of `from`: its centre past `from`'s, and its far edge past `from`'s far edge.
+        private static bool Ahead(Rect from, Rect to, Vector2 direction)
         {
-            inBeam = false;
-            score = 0f;
-            if (!Ahead(from, to, direction, out float gap, out float across)) return false;
-            inBeam = across <= 0f;
-            score = gap + AcrossWeight * across;
-            return true;
+            if (direction == Vector2.zero) return false;
+            Span(from, direction, out float fromStart, out float fromEnd);
+            Span(to, direction, out float toStart, out float toEnd);
+            return toStart + toEnd > fromStart + fromEnd && toEnd > fromEnd;
         }
 
-        // Whether `to` lies `direction` of `from`, and if so the gap between them that way, and the gap across it (0 when
-        // they overlap across it).
-        private static bool Ahead(Rect from, Rect to, Vector2 direction, out float gap, out float across)
+        // Whether `to` lies `direction` of `from` in the row that ends at `rowEnd`: it starts before that.
+        private static bool InRow(Rect from, Rect to, Vector2 direction, float rowEnd)
         {
-            gap = across = 0f;
-            if (direction.x > 0f)
-            {
-                if (to.center.x <= from.center.x || to.xMax <= from.xMax) return false;
-                gap = Mathf.Max(0f, to.xMin - from.xMax);
-                across = Mathf.Max(0f, Mathf.Max(to.yMin - from.yMax, from.yMin - to.yMax));
-                return true;
-            }
-            if (direction.x < 0f)
-            {
-                if (to.center.x >= from.center.x || to.xMin >= from.xMin) return false;
-                gap = Mathf.Max(0f, from.xMin - to.xMax);
-                across = Mathf.Max(0f, Mathf.Max(to.yMin - from.yMax, from.yMin - to.yMax));
-                return true;
-            }
-            if (direction.y > 0f)
-            {
-                if (to.center.y <= from.center.y || to.yMax <= from.yMax) return false;
-                gap = Mathf.Max(0f, to.yMin - from.yMax);
-                across = Mathf.Max(0f, Mathf.Max(to.xMin - from.xMax, from.xMin - to.xMax));
-                return true;
-            }
-            if (direction.y < 0f)
-            {
-                if (to.center.y >= from.center.y || to.yMin >= from.yMin) return false;
-                gap = Mathf.Max(0f, from.yMin - to.yMax);
-                across = Mathf.Max(0f, Mathf.Max(to.xMin - from.xMax, from.xMin - to.xMax));
-                return true;
-            }
-            return false;
+            if (!Ahead(from, to, direction)) return false;
+            Span(to, direction, out float start, out _);
+            return start < rowEnd;
         }
+
+        // Where `rect` starts and ends going `direction`, measured that way: its near edge and its far edge.
+        private static void Span(Rect rect, Vector2 direction, out float start, out float end)
+        {
+            if (direction.x > 0f) { start = rect.xMin; end = rect.xMax; }
+            else if (direction.x < 0f) { start = -rect.xMax; end = -rect.xMin; }
+            else if (direction.y > 0f) { start = rect.yMin; end = rect.yMax; }
+            else { start = -rect.yMax; end = -rect.yMin; }
+        }
+
+        // The gap between `from` and `to` across the way a move goes (0 where they overlap across it).
+        private static float Across(Rect from, Rect to, Vector2 direction) => direction.x != 0f
+            ? Mathf.Max(0f, Mathf.Max(to.yMin - from.yMax, from.yMin - to.yMax))
+            : Mathf.Max(0f, Mathf.Max(to.xMin - from.xMax, from.xMin - to.xMax));
 
         // ReadingOrder's working lists and the rects it is sorting, kept so that it makes nothing.
         private static readonly List<int> s_byTop = new();
