@@ -66,7 +66,10 @@ namespace TimboJimboEditor.UINext.Demos
             var glow = slot.Child("Glow").Float(AttachPoint.CenterCenter, AttachPoint.CenterTop, new Vector2(0f, 32f));
             glow.Sized(Sizing.Fixed(70f), Sizing.Fixed(58f));
             var glowBox = glow.Box(new Color(1f, 0.93f, 0.4f, 0.75f), 29f);
-            glowBox.ShadowColor.Value = new Color(1f, 0.85f, 0.2f, 0.9f);
+            // A glow from a warm white above to orange below.
+            glowBox.ShadowColor.Value = new Color(1f, 0.97f, 0.6f, 0.95f);
+            glowBox.ShadowGradient.Value = true;
+            glowBox.ShadowColorTo.Value = new Color(1f, 0.55f, 0.1f, 0.85f);
             glowBox.ShadowBlur.Value = 14f;
             glowBox.ShadowOffset.Value = Vector2.zero;
             glow.Opacity.Value = 0f;

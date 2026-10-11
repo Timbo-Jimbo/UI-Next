@@ -67,17 +67,41 @@ namespace TimboJimbo.UINext
             }, null);
         }
 
-        /// <summary>A soft shadow of the node's rounded rect, moved by <paramref name="offset"/> and grown by <paramref name="spread"/>.</summary>
-        public void ShadowNode(Color color, CornerRadii radii, float blur, Vector2 offset, float spread = 0f)
+        /// <summary>
+        /// A soft shadow of the node's rounded rect, moved by <paramref name="offset"/> and grown by <paramref name="spread"/>:
+        /// in <paramref name="color"/>, or with <paramref name="to"/>, a gradient from it to that at <paramref name="angle"/>
+        /// degrees.
+        /// </summary>
+        public void ShadowNode(Color color, CornerRadii radii, float blur, Vector2 offset, float spread = 0f, Color? to = null,
+            float angle = 90f)
         {
             Add(new PrimitiveInstance
             {
                 Rect = new Vector4(offset.x - spread, offset.y - spread, -offset.x - spread, -offset.y - spread),
                 Radii = radii.ToVector() + Vector4.one * spread,
                 Color = color,
-                Params = new Vector4(0f, Mathf.Max(0f, blur), 0f, 0f),
+                Color2 = to ?? color,
+                Params = new Vector4(0f, Mathf.Max(0f, blur), angle, 0f),
                 Type = (uint)PrimitiveType.Shadow,
-                Flags = (uint)PrimitiveFlags.RelativeToNode,
+                Flags = (uint)(PrimitiveFlags.RelativeToNode | (to.HasValue ? PrimitiveFlags.Gradient : PrimitiveFlags.None)),
+            }, null);
+        }
+
+        /// <summary>
+        /// The node's rounded rect's border alone, <paramref name="width"/> wide inside its edge: in <paramref name="from"/>,
+        /// or with <paramref name="to"/>, a gradient from it to that at <paramref name="angle"/> degrees.
+        /// </summary>
+        public void BorderNode(Color from, float width, CornerRadii radii, Color? to = null, float angle = 90f, Insets inset = default)
+        {
+            Add(new PrimitiveInstance
+            {
+                Rect = new Vector4(inset.Left, inset.Top, inset.Right, inset.Bottom),
+                Radii = radii.ToVector(),
+                Color = from,
+                Color2 = to ?? from,
+                Params = new Vector4(Mathf.Max(0f, width), 0f, angle, 0f),
+                Type = (uint)PrimitiveType.Shape,
+                Flags = (uint)(PrimitiveFlags.RelativeToNode | PrimitiveFlags.Ring | (to.HasValue ? PrimitiveFlags.Gradient : PrimitiveFlags.None)),
             }, null);
         }
 

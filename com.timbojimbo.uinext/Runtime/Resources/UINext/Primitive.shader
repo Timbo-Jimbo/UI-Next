@@ -98,6 +98,15 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
 
             // Signed distance to a rounded rect centred on the origin (y down), each corner its own radius: top-left,
             // top-right, bottom-right, bottom-left.
+            // How far along a gradient at `degrees` (0 left to right, 90 top to bottom) a point in a rect is, 0 to 1.
+            float GradientT(float2 local, float2 halfSize, float degrees)
+            {
+                float angle = radians(degrees);
+                float2 direction = float2(cos(angle), sin(angle));
+                float extent = abs(direction.x) * halfSize.x + abs(direction.y) * halfSize.y;
+                return saturate(dot(local, direction) / max(2 * extent, 1e-5) + 0.5);
+            }
+
             float SdRoundRect(float2 p, float2 halfSize, float4 radii)
             {
                 float r = p.x < 0 ? (p.y < 0 ? radii.x : radii.w) : (p.y < 0 ? radii.y : radii.z);
@@ -181,14 +190,13 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                     float d = SdRoundRect(i.local, i.halfSize, inst.radii);
                     coverage = saturate(0.5 - d / aa);
                     if ((inst.flags & 2u) != 0u)
+                        color = lerp(inst.color, inst.color2, GradientT(i.local, i.halfSize, inst.params.z));
+                    if ((inst.flags & 4u) != 0u)
                     {
-                        float angle = radians(inst.params.z);
-                        float2 direction = float2(cos(angle), sin(angle));
-                        float extent = abs(direction.x) * i.halfSize.x + abs(direction.y) * i.halfSize.y;
-                        float t = saturate(dot(i.local, direction) / max(2 * extent, 1e-5) + 0.5);
-                        color = lerp(inst.color, inst.color2, t);
+                        // A ring: only its border, params.x wide inside its edge, in its colour or gradient.
+                        coverage *= 1 - saturate(0.5 - (d + inst.params.x) / aa);
                     }
-                    else if (inst.params.x > 0)
+                    else if ((inst.flags & 2u) == 0u && inst.params.x > 0)
                     {
                         float inner = saturate(0.5 - (d + inst.params.x) / aa);
                         color = lerp(inst.color2, inst.color, inner);
@@ -199,6 +207,8 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                     float d = SdRoundRect(i.local, i.halfSize, inst.radii);
                     float blur = max(inst.params.y, aa);
                     coverage = 1 - smoothstep(-blur, blur, d);
+                    if ((inst.flags & 2u) != 0u)
+                        color = lerp(inst.color, inst.color2, GradientT(i.local, i.halfSize, inst.params.z));
                 }
                 else if (inst.type == 2u)
                 {

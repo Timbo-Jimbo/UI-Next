@@ -40,8 +40,11 @@ namespace TimboJimbo.UINext
         /// <summary>Its rect is insets from its node's edges (left, top, right, bottom), so it follows the node's drawn size without being drawn again.</summary>
         RelativeToNode = 1,
 
-        /// <summary>Its fill is a gradient from its colour to its second colour, at the angle in Params.z (degrees).</summary>
+        /// <summary>Its fill (or a shadow's colour) is a gradient from its colour to its second colour, at the angle in Params.z (degrees).</summary>
         Gradient = 2,
+
+        /// <summary>A shape drawn as its border alone, Params.x wide inside its edge, in its colour (or its gradient).</summary>
+        Ring = 4,
     }
 
     /// <summary>

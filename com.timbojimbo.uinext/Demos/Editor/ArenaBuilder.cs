@@ -109,7 +109,8 @@ namespace TimboJimboEditor.UINext.Demos
             return label;
         }
 
-        // A box with a vertical gradient, a dark edge, and a hard shadow under it, as a game's panels and buttons stand up.
+        // A box with a vertical gradient, an edge bevelled from light above to dark below, and a hard shadow under it, as
+        // a game's panels and buttons stand up.
         private static Box Raised(UINode node, Color top, Color bottom, Color edge, CornerRadii radii, float depth = 4f)
         {
             var box = node.Box(top, radii);
@@ -117,7 +118,9 @@ namespace TimboJimboEditor.UINext.Demos
             box.GradientTo.Value = bottom;
             box.GradientAngle.Value = 90f;
             box.BorderWidth.Value = 2.5f;
-            box.BorderColor.Value = edge;
+            box.BorderGradient.Value = true;
+            box.BorderColor.Value = Color.Lerp(top, Color.white, 0.45f);
+            box.BorderColorTo.Value = edge;
             box.ShadowColor.Value = Color.Lerp(edge, Color.black, 0.3f);
             box.ShadowBlur.Value = 0.5f;
             box.ShadowOffset.Value = new Vector2(0f, depth);

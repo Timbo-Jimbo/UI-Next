@@ -3,7 +3,7 @@ using UnityEngine;
 namespace TimboJimbo.UINext
 {
     /// <summary>
-    /// A rounded rect filling its node: a fill (a colour or a gradient), a border inside its edge, and a soft shadow.
+    /// A rounded rect filling its node: a fill, a border inside its edge, and a soft shadow, each a colour or a gradient.
     /// Drawn as signed distance fields, so its edges and corners stay crisp at any size and scale, and it follows its
     /// node's drawn size as it springs without drawing again.
     /// </summary>
@@ -22,10 +22,18 @@ namespace TimboJimbo.UINext
         [SerializeField] private UIValue<float> _borderWidth = 0f;
         [SerializeField] private UIValue<Color> _borderColor = Color.black;
 
+        [Tooltip("The border is a gradient from Border Color to Border Color To, at the gradient's angle: a bevel, light above and dark below.")]
+        [SerializeField] private UIValue<bool> _borderGradient = false;
+        [SerializeField] private UIValue<Color> _borderColorTo = Color.black;
+
         [SerializeField] private UIValue<Color> _shadowColor = new Color(0f, 0f, 0f, 0f);
         [SerializeField] private UIValue<float> _shadowBlur = 8f;
         [SerializeField] private UIValue<Vector2> _shadowOffset = new Vector2(0f, 2f);
         [SerializeField] private UIValue<float> _shadowSpread = 0f;
+
+        [Tooltip("The shadow is a gradient from Shadow Color to Shadow Color To, at the gradient's angle: a glow that fades or shifts in colour.")]
+        [SerializeField] private UIValue<bool> _shadowGradient = false;
+        [SerializeField] private UIValue<Color> _shadowColorTo = new Color(0f, 0f, 0f, 0f);
 
         public UIValue<Color> Fill => _fill;
         public UIValue<CornerRadii> CornerRadii => _cornerRadii;
@@ -34,23 +42,47 @@ namespace TimboJimbo.UINext
         public UIValue<float> GradientAngle => _gradientAngle;
         public UIValue<float> BorderWidth => _borderWidth;
         public UIValue<Color> BorderColor => _borderColor;
+
+        /// <summary>
+        /// Whether the border is a gradient from <see cref="BorderColor"/> to <see cref="BorderColorTo"/>, at
+        /// <see cref="GradientAngle"/> (with the fill a gradient or not): a game button's bevel, light above, dark below.
+        /// </summary>
+        public UIValue<bool> BorderGradient => _borderGradient;
+
+        public UIValue<Color> BorderColorTo => _borderColorTo;
         public UIValue<Color> ShadowColor => _shadowColor;
         public UIValue<float> ShadowBlur => _shadowBlur;
         public UIValue<Vector2> ShadowOffset => _shadowOffset;
         public UIValue<float> ShadowSpread => _shadowSpread;
 
+        /// <summary>
+        /// Whether the shadow is a gradient from <see cref="ShadowColor"/> to <see cref="ShadowColorTo"/>, across the
+        /// shadow at <see cref="GradientAngle"/>: a glow fading out, or shifting colour.
+        /// </summary>
+        public UIValue<bool> ShadowGradient => _shadowGradient;
+
+        public UIValue<Color> ShadowColorTo => _shadowColorTo;
+
         protected internal override void Draw(Painter painter)
         {
             var radii = _cornerRadii.Value;
+            float angle = _gradientAngle.Value;
             var shadow = _shadowColor.Value;
-            if (shadow.a > 0f)
-                painter.ShadowNode(shadow, radii, _shadowBlur.Value, _shadowOffset.Value, _shadowSpread.Value);
-            if (_gradient.Value)
-                painter.GradientNode(_fill.Value, _gradientTo.Value, _gradientAngle.Value, radii);
+            bool shadowGradient = _shadowGradient.Value;
+            var shadowTo = shadowGradient ? _shadowColorTo.Value : shadow;
+            if (shadow.a > 0f || shadowTo.a > 0f)
+                painter.ShadowNode(shadow, radii, _shadowBlur.Value, _shadowOffset.Value, _shadowSpread.Value,
+                    shadowGradient ? shadowTo : null, angle);
+            // A solid fill takes a solid border with it; a gradient fill or border has the border drawn over it on its own.
+            bool gradient = _gradient.Value, borderGradient = _borderGradient.Value;
+            float border = _borderWidth.Value;
+            bool separate = gradient || borderGradient;
+            if (gradient)
+                painter.GradientNode(_fill.Value, _gradientTo.Value, angle, radii);
             else
-                painter.FillNode(_fill.Value, radii, default, _borderWidth.Value, _borderColor.Value);
-            if (_gradient.Value && _borderWidth.Value > 0f)
-                painter.FillNode(Color.clear, radii, default, _borderWidth.Value, _borderColor.Value);
+                painter.FillNode(_fill.Value, radii, default, separate ? 0f : border, _borderColor.Value);
+            if (separate && border > 0f)
+                painter.BorderNode(_borderColor.Value, border, radii, borderGradient ? _borderColorTo.Value : null, angle);
         }
     }
 }
