@@ -74,6 +74,7 @@ namespace TimboJimboEditor.UINext.Demos
             Add("🔗", "Bindings", BindingsPage);
             Add("🛍️", "Store", StorePage);
             Add("📰", "App Store", AppStorePage);
+            Add("🎯", "Focus", FocusPage);
             showcase.Setup(entries, pages, backs);
         }
 
@@ -762,6 +763,133 @@ namespace TimboJimboEditor.UINext.Demos
             plus.Node.Width.Value = Sizing.Fixed(80f);
 
             page.Add<BindingsDemo>().Setup(minus, plus, count, level, bar, badgeBox);
+        }
+
+        // Focus: keyboard and gamepad focus to try (the arrows, Tab, Enter, Escape; a gamepad's stick, A and B), an idea a
+        // case, with a readout under the page of where it is (FocusDemo).
+        private static void FocusPage(UINode page, UINode body)
+        {
+            // The tree is not built yet while building: the app is the page's transform parent.
+            var app = page.transform.parent.GetComponent<UINode>();
+
+            // A grid: the arrows go to the nearest that way; Tab goes in reading order, along rows the way the switch says.
+            var arrows = Case(body, "Arrows and Tab").Column(12f);
+            var grid = Panel(arrows.Child("Grid").Column(10f), 14f);
+            grid.Width.Value = Sizing.Grow();
+            for (int row = 0; row < 3; row++)
+            {
+                var line = grid.Child("Row " + (row + 1)).Row(10f);
+                line.Width.Value = Sizing.Grow();
+                for (int column = 0; column < 3; column++)
+                    Button(line, (row * 3 + column + 1).ToString(), Accent, Color.white).Node.Width.Value = Sizing.Grow();
+            }
+            var rightToLeft = Switch(arrows, "Rows read right to left");
+
+            // Two sections side by side, each lit while focus is in it: a move across goes into the other as one, back to
+            // where focus last was in it.
+            var sections = Case(body, "Sections: back where you left").Row(12f).Align(AlignX.Left, AlignY.Top);
+            var mailboxes = FocusSection(sections, "Mailboxes").Column(8f);
+            foreach (var title in new[] { "Inbox", "Sent", "Drafts", "Archive" })
+                Button(mailboxes, title, new Color(0.47f, 0.47f, 0.5f, 0.12f), Text).Node.Width.Value = Sizing.Grow();
+            var mail = FocusSection(sections, "Mail").Column(10f);
+            mail.Width.Value = Sizing.Grow();
+            var actions = new[] { "Reply", "Forward", "Flag", "Delete" };
+            for (int row = 0; row < 2; row++)
+            {
+                var line = mail.Child("Row " + (row + 1)).Row(10f);
+                line.Width.Value = Sizing.Grow();
+                for (int column = 0; column < 2; column++)
+                    Button(line, actions[row * 2 + column], Palette[row * 2 + column], Color.white).Node.Width.Value = Sizing.Grow();
+            }
+
+            // A group: one stop, ringed as one, until Enter goes in; inside, focus stays until Escape comes out.
+            var toolbar = Panel(Case(body, "A group: Enter goes in, Escape comes out").Row(10f), 10f);
+            toolbar.FocusScope.Value = FocusScope.Group;
+            toolbar.ClipRadii.Value = 14f;
+            toolbar.GetComponent<Box>().Fill.When(InteractionStates.FocusWithin, Lit);
+            foreach (var title in new[] { "Bold", "Italic", "Underline" })
+            {
+                var tool = Button(toolbar, title, new Color(0.47f, 0.47f, 0.5f, 0.12f), Text);
+                tool.Node.Width.Value = Sizing.Grow();
+                tool.Toggles = true;
+                tool.GetComponent<Box>().Fill.When(InteractionStates.Selected, new Color(Accent.r, Accent.g, Accent.b, 0.25f));
+            }
+
+            // Pressed, a button goes, and focus goes from it to the nearest, until they are brought back.
+            var lost = Case(body, "Press one: it goes, and focus goes to the nearest").Column(12f);
+            var goersRow = Panel(lost.Child("Buttons").Row(10f), 14f);
+            goersRow.Width.Value = Sizing.Grow();
+            var goers = new List<Pressable>();
+            for (int i = 0; i < 4; i++)
+            {
+                var goer = Button(goersRow, ((char)('A' + i)).ToString(), Palette[i], Color.white);
+                goer.Node.Width.Value = Sizing.Grow();
+                goers.Add(goer);
+            }
+            var bringBack = Button(lost, "Bring them back", new Color(0.47f, 0.47f, 0.5f, 0.15f), Text);
+            bringBack.Node.Width.Value = Sizing.Grow();
+
+            // A row wider than the page: focus going along it scrolls it, with room for the ring (and room above and
+            // below it, which the row's clip would cut).
+            var strip = Case(body, "A row wider than the page").Row(10f).Pad(6f);
+            strip.Scroll(ScrollAxis.Horizontal).ShowsIndicators.Value = false;
+            for (int i = 0; i < 12; i++)
+                Button(strip, ((char)('A' + i)).ToString(), Palette[i % Palette.Length], Color.white);
+
+            // A dialog: focus goes into it as it comes up, to what prefers it, stays inside, and comes back to Open as it goes.
+            var dialogCase = Panel(Case(body, "A dialog: focus starts on OK, and comes back").Column(10f), 14f);
+            var open = Button(dialogCase, "Open a dialog", Accent, Color.white);
+            open.Node.Width.Value = Sizing.Grow();
+            var dialogHost = app.Child("Focus Dialog").Center();
+            var dialog = dialogHost.Add<Presentation>();
+            dialog.Transition = PresentationTransition.Pop;
+            dialog.Animation = new UIAnimation(0.35f, 0.15f);
+            var card = dialogHost.Child("Card").Column(14f).Pad(22f).Align(AlignX.Center, AlignY.Top);
+            card.Width.Value = Sizing.Fixed(290f);
+            DemoKit.Shadow(card.Box(Card, 20f), 0.2f, 30f, 10f);
+            card.Child("Title").Label("A dialog", 18f, Text, bold: true);
+            var dialogBody = card.Child("Body").Label("Focus stays in here while it is up.", 14f, Secondary);
+            dialogBody.Alignment.Value = TextAnchor.UpperCenter;
+            var choices = card.Child("Choices").Row(10f);
+            choices.Width.Value = Sizing.Grow();
+            var cancel = Button(choices, "Cancel", new Color(0.47f, 0.47f, 0.5f, 0.15f), Text);
+            cancel.Node.Width.Value = Sizing.Grow();
+            var ok = Button(choices, "OK", Accent, Color.white);
+            ok.Node.Width.Value = Sizing.Grow();
+            ok.Node.PrefersFocus.Value = true;
+            page.Add<PresentDemo>().Setup(new List<Pressable> { open }, new List<Presentation> { dialog },
+                new List<Pressable> { cancel, ok }, new List<Presentation> { dialog, dialog });
+
+#if UINEXT_TEXTINPUT
+            // A field: while it is typed into, the arrows and Enter are its own; Tab moves on.
+            var typing = Panel(Case(body, "Typing: Tab moves on").Column(10f), 14f);
+            Field(typing, "Field", "Type here, then Tab on");
+#endif
+
+            // Under the page, out of its scroll: where focus is, and whether it shows.
+            var content = body.transform.parent.GetComponent<UINode>();
+            var readout = content.Child("Readout").Column(4f).Pad(new Insets(16f, 16f, 12f, 30f));
+            readout.Width.Value = Sizing.Grow();
+            readout.Box(Card);
+            var focused = readout.Child("Focused").Label("Focus: none", 16f, Text, bold: true);
+            var state = readout.Child("State").Label("Nothing has focus", 13f, Secondary);
+            focused.Node.Width.Value = Sizing.Grow();
+            state.Node.Width.Value = Sizing.Grow();
+            page.Add<FocusDemo>().Setup(body, focused, state, rightToLeft, goers, bringBack);
+        }
+
+        // A light tint for what focus is within.
+        private static readonly Color Lit = new Color32(0xE6, 0xEF, 0xFE, 0xFF);
+
+        // A panel that is a section to focus: focus moves in and out of it, coming back to where it last was, and it is lit
+        // while focus is in it.
+        private static UINode FocusSection(UINode parent, string name)
+        {
+            var section = Panel(parent.Child(name), 10f);
+            section.FocusScope.Value = FocusScope.Section;
+            section.FocusEntry.Value = FocusEntry.Remembered;
+            section.GetComponent<Box>().Fill.When(InteractionStates.FocusWithin, Lit);
+            return section;
         }
 
         private static void StorePage(UINode page, UINode body)

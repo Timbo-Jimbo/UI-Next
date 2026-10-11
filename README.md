@@ -48,7 +48,7 @@ button.Pressable(() =>
 
 ## Demos
 
-`Demos/Scenes/Circle.unity` is a small social app (feed, stories, a photo viewer, chats with a composer, settings with a dark mode): photos fly out of the feed and home again, thrown away in any direction or pinched; a chat row grows into its conversation and collapses back; stories grow out of their rings; Log out grows its dialog out of its button. `Demos/Scenes/Showcase.unity` shows the engine's features one idea a case, with a Store (items growing into a dialog) and an App Store (Today cards opening into stories that a pull down shrinks and closes). Every swipe to dismiss in them is one demo component, `SwipeToDismiss`. `Tools/UI Next/Demos/Build Circle` and `Build Showcase` rebuild them from code.
+`Demos/Scenes/Circle.unity` is a small social app (feed, stories, a photo viewer, chats with a composer, settings with a dark mode): photos fly out of the feed and home again, thrown away in any direction or pinched; a chat row grows into its conversation and collapses back; stories grow out of their rings; Log out grows its dialog out of its button. `Demos/Scenes/Showcase.unity` shows the engine's features one idea a case, with a Store (items growing into a dialog), an App Store (Today cards opening into stories that a pull down shrinks and closes) and a Focus page to try keyboard and gamepad focus on, with a readout of where it is. Every swipe to dismiss in them is one demo component, `SwipeToDismiss`. `Tools/UI Next/Demos/Build Circle` and `Build Showcase` rebuild them from code.
 
 ## Known limits
 
