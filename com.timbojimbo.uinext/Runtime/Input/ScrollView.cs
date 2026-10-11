@@ -29,7 +29,7 @@ namespace TimboJimbo.UINext
     /// it moves. Nodes floating over its edges (a tab bar, a header), listed for the edge they lie along
     /// (<see cref="ClearOfBottom"/> and the rest), are kept clear of, with <see cref="ClearMargin"/> on top, as SwiftUI's
     /// safeAreaInset insets a scroll view: what it holds scrolls out from under them, and <see cref="ScrollIntoView"/>
-    /// lands clear of them.
+    /// lands clear of them, with <see cref="ScrollPadding"/> round what it brings into view, whatever brings it.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/UI Next/Scroll View")]
@@ -63,6 +63,9 @@ namespace TimboJimbo.UINext
 
         [Tooltip("Room kept clear at each edge on top of what the nodes listed for it cover.")]
         [SerializeField] private UIValue<Insets> _clearMargin = new Insets();
+
+        [Tooltip("Room kept round anything it scrolls into view, whatever brings it (focus, code), as CSS's scroll-padding. It moves nothing at rest.")]
+        [SerializeField] private UIValue<Insets> _scrollPadding = new Insets();
 
         // How far a pointer moves before a drag begins, in points.
         private const float Slop = 8f;
@@ -130,6 +133,14 @@ namespace TimboJimbo.UINext
 
         /// <summary>Room kept clear at each edge on top of what the nodes listed for it cover.</summary>
         public UIValue<Insets> ClearMargin => _clearMargin;
+
+        /// <summary>
+        /// Room kept round anything it scrolls into view (<see cref="ScrollIntoView"/>), on each side, inside what its
+        /// <see cref="ClearInsets"/> leave, as CSS's scroll-padding: whatever brings a node into view (focus moving to it,
+        /// code), it lands the same. It moves nothing at rest and does not change its range, so at its ends a node lands
+        /// only as far in as its range lets it.
+        /// </summary>
+        public UIValue<Insets> ScrollPadding => _scrollPadding;
 
         /// <summary>
         /// How far each of its edges is covered, in its own points: how far in from that edge the nodes listed for it
@@ -289,8 +300,8 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Scrolls the least it takes to show <paramref name="node"/>, a node inside it, whole (or its start, if it is
-        /// bigger), clear of what covers its edges (<see cref="ClearInsets"/>), with <paramref name="margin"/> points of
-        /// room round it (for a focus ring, or a photo landing short of a bar).
+        /// bigger), clear of what covers its edges (<see cref="ClearInsets"/>), with its <see cref="ScrollPadding"/> round
+        /// it, or <paramref name="margin"/> points where that is more (room for a focus ring).
         /// </summary>
         public void ScrollIntoView(UINode node, bool animated = true, float margin = 0f)
         {
@@ -301,10 +312,13 @@ namespace TimboJimbo.UINext
                 rect.position += parent.LaidOutRect.position;
             var offset = ContentOffset;
             var clear = ClearInsets;
+            var room = _scrollPadding.Peek;
             for (int axis = 0; axis < 2; axis++)
             {
                 if (!Scrolls(axis)) continue;
-                float min = rect.position[axis] - margin, max = rect.position[axis] + rect.size[axis] + margin;
+                float before = Mathf.Max(margin, axis == 0 ? room.Left : room.Top);
+                float after = Mathf.Max(margin, axis == 0 ? room.Right : room.Bottom);
+                float min = rect.position[axis] - before, max = rect.position[axis] + rect.size[axis] + after;
                 // Clear of its insets, it shows what it holds from its offset on, as far as the part of it they leave.
                 float view = Viewport[axis] - (axis == 0 ? clear.Horizontal : clear.Vertical);
                 if (min < offset[axis]) offset[axis] = min;

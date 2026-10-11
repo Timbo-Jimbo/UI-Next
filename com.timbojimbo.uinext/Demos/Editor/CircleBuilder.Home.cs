@@ -46,6 +46,7 @@ namespace TimboJimboEditor.UINext.Demos
             tray.FocusEntry.Value = FocusEntry.Remembered;
             parts.Tray = tray.Scroll(ScrollAxis.Horizontal);
             parts.Tray.ShowsIndicators.Value = false;
+            parts.Tray.ScrollPadding.Value = ScrollRoom;
             for (int i = 0; i < CircleData.Stories.Length; i++)
             {
                 var (name, initials, colour, _, _) = CircleData.People[CircleData.Stories[i].Person];
@@ -266,6 +267,7 @@ namespace TimboJimboEditor.UINext.Demos
             var scroll = list.Scroll();
             // At its top, the rest of a pull down goes to the sheet, which follows the finger.
             scroll.AtEnd.Value = ScrollEnd.PassOn;
+            scroll.ScrollPadding.Value = ScrollRoom;
             foreach (var (who, text) in CircleData.Comments)
             {
                 var (name, initials, colour, _, _) = CircleData.People[who];

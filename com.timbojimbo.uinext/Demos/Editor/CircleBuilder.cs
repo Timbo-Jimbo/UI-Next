@@ -26,6 +26,10 @@ namespace TimboJimboEditor.UINext.Demos
         // A press, over something clear or faint.
         private static readonly Color Pressed = new(0.5f, 0.5f, 0.55f, 0.2f);
 
+        // The room the scroll views keep round what they bring into view (focus moving to it, a photo coming home), so it
+        // lands the same whatever brings it.
+        private static readonly Insets ScrollRoom = Insets.All(12f);
+
         // The tokens, made by Tokens().
         private static UIState s_dark;
         private static ColorToken s_background, s_card, s_text, s_secondary, s_subtle, s_bubble, s_bar;
@@ -104,11 +108,12 @@ namespace TimboJimboEditor.UINext.Demos
             var meScroll = Me(pages, parts);
             var tabs = TabBar(app, out var pill, out var bar);
             // The pages scroll clear of the tab bar, by reference, with a little room above it: what they bring into view
-            // (a focused row, a photo coming home) lands clear of it.
+            // (a focused row, a photo coming home) lands clear of it, with room round it.
             foreach (var page in new[] { homeScroll, chatsScroll, meScroll })
             {
                 page.ClearOfBottom.Add(bar);
                 page.ClearMargin.Value = new Insets(0f, 0f, 0f, 12f);
+                page.ScrollPadding.Value = ScrollRoom;
             }
 
             // What opens from what the pages hold, each drawn at its own level as it is presented.
@@ -206,6 +211,7 @@ namespace TimboJimboEditor.UINext.Demos
             back = backNode.Pressable();
             body = content.Child("Body").Sized(Sizing.Grow(), Sizing.Grow()).Column(18f).Pad(new Insets(16f, 16f, 8f, 40f));
             scroll = body.Scroll();
+            scroll.ScrollPadding.Value = ScrollRoom;
             return page;
         }
 

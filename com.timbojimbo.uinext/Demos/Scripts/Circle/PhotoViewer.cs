@@ -21,9 +21,6 @@ namespace TimboJimbo.UINext.Demos.Circle
         // Pinched smaller than this, it closes as the fingers let go.
         private const float PinchedAway = 0.8f;
 
-        // The room kept round the feed's photo as the feed brings it into view to land in, in points.
-        private const float LandingRoom = 12f;
-
         private Presentation _presentation;
         private ScenePhoto _source;
         private Pinchable _pinch;
@@ -97,8 +94,9 @@ namespace TimboJimbo.UINext.Demos.Circle
         }
 
         // Inside the presentation's changes: the feed's photo is hidden as this one flies out of it, and shown again as
-        // this one flies home into it, the feed scrolling it into view clear of what covers its edges (the tab bar) as
-        // part of the same change, so it never lands under the bar or cut off at the top.
+        // this one flies home into it, the feed scrolling it into view as part of the same change, clear of what covers
+        // its edges (the tab bar) and with the room it keeps round what it brings into view, so it never lands under the
+        // bar or cut off at the top.
         private void HideSource()
         {
             if (_source != null)
@@ -111,7 +109,7 @@ namespace TimboJimbo.UINext.Demos.Circle
             _source.Node.Display.Value = DisplayMode.Visible;
             var feed = _source.GetComponentInParent<ScrollView>();
             if (feed != null)
-                feed.ScrollIntoView(_source.Node, margin: LandingRoom);
+                feed.ScrollIntoView(_source.Node);
         }
 
         // What fades as the photo is thrown away.
