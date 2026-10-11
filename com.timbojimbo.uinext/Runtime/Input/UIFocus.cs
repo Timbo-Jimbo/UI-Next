@@ -1072,8 +1072,9 @@ namespace TimboJimbo.UINext
                     }
                 }
             }
-            else if (direction != Vector2.zero && now >= s_nextRepeat)
+            else if (direction != Vector2.zero && now >= s_nextRepeat && IsVisible)
             {
+                // Held, it repeats while focus shows: a pointer used meanwhile stops it, until a key is pressed again.
                 s_nextRepeat = now + RepeatInterval;
                 Step(direction);
             }

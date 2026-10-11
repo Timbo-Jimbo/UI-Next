@@ -126,9 +126,8 @@ namespace TimboJimbo.UINext.Demos.Circle
 
         public void Close()
         {
-            if (!_presentation.IsPresented) return;
-            MarkSeen(_open);
-            _presentation.Dismiss();
+            if (_presentation.IsPresented)
+                _presentation.Dismiss();
         }
 
         private void StepBack() => Step(-1);
@@ -167,8 +166,10 @@ namespace TimboJimbo.UINext.Demos.Circle
                 _ringAvatars[_open].Display.Value = DisplayMode.Hidden;
         }
 
+        // However it closes (its close button, a swipe, back), the story it was on is seen.
         private void ShowRingAvatar()
         {
+            MarkSeen(_open);
             if (_open >= 0 && _open < _ringAvatars.Count)
                 _ringAvatars[_open].Display.Value = DisplayMode.Visible;
         }

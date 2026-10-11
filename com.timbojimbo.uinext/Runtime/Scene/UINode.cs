@@ -464,8 +464,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// The interaction states active here: those of the nearest node at or above it that provides them (a button), but
-        /// for whether focus is on it or within it, which the nearest focus scope says when there is one nearer
-        /// (<see cref="FocusScope"/>): content in a section inside a disabled card is still Disabled.
+        /// for whether focus is on it or within it, which the nearest focus scope (<see cref="FocusScope"/>), or node that
+        /// takes focus itself (<see cref="Focusable"/> Always), says when there is one nearer: content in a section inside a
+        /// disabled card is still Disabled.
         /// </summary>
         public InteractionStates ActiveInteraction()
         {
@@ -478,7 +479,7 @@ namespace TimboJimbo.UINext
                 _ = node._stateRevision.Value;
                 if (node._interactionProviders > 0)
                     return inScope ? (node._interaction.Value & ~focus) | scoped : node._interaction.Value;
-                if (!inScope && node.IsFocusScope)
+                if (!inScope && node.SaysFocus)
                 {
                     inScope = true;
                     scoped = node._interaction.Value & focus;
@@ -493,9 +494,9 @@ namespace TimboJimbo.UINext
         // Whether it provides interaction states to itself and what is inside it (a button does).
         internal bool ProvidesInteraction => _interactionProviders > 0;
 
-        // A focus scope says whether focus is within it, to itself and what is inside it. Tracked, so what reads states
-        // through a node made a scope, or no longer one, reads them again.
-        private bool IsFocusScope => _focusScope.Value != TimboJimbo.UINext.FocusScope.None;
+        // A focus scope, and a node that takes focus itself, say whether focus is on or within them, to themselves and what
+        // is inside them. Tracked, so what reads states through a node made one, or no longer one, reads them again.
+        private bool SaysFocus => _focusScope.Value != TimboJimbo.UINext.FocusScope.None || _focusable.Value == Focusability.Always;
 
         internal void AddInteractionProvider()
         {

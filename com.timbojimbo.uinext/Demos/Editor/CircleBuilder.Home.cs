@@ -206,7 +206,7 @@ namespace TimboJimboEditor.UINext.Demos
 
             var host = presentation.Node;
             host.Add<PresentFrom>().Setup(parts.Compose, new List<Pressable> { close });
-            host.Add<ComposeCard>().Setup(post, parts.YourPost, parts.Feed);
+            host.Add<ComposeCard>().Setup(post, draft.Node, parts.YourPost, parts.Feed);
         }
 
         // ── Reactions ────────────────────────────────────────────────────────────
@@ -376,13 +376,14 @@ namespace TimboJimboEditor.UINext.Demos
 
             // The middle: a tap on its left side steps back a story and on its right on (clear buttons over it, which take
             // no focus); with keys it is one stop, which left and right step.
-            var middle = story.Child("Middle").Sized(Sizing.Grow(), Sizing.Grow()).Pad(20f, 0f).Center();
+            // Unpadded, so its sides, floating against it, meet in its middle.
+            var middle = story.Child("Middle").Sized(Sizing.Grow(), Sizing.Grow()).Center();
             middle.Focusable.Value = Focusability.Always;
             middle.PrefersFocus.Value = true;
             var steps = middle.Add<StorySteps>();
             var backSide = StorySide(middle, "Back", 0.35f, AttachPoint.LeftTop);
             var onSide = StorySide(middle, "On", 0.65f, AttachPoint.RightTop);
-            var text = middle.Child("Text").Label("", 30f, Color.white, bold: true);
+            var text = middle.Child("Text").Pad(20f, 0f).Label("", 30f, Color.white, bold: true);
             text.Alignment.Value = TextAnchor.UpperCenter;
             text.Node.Width.Value = Sizing.Grow();
             text.Node.HitTestable.Value = false;

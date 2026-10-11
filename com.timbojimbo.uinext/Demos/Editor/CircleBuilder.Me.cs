@@ -316,7 +316,8 @@ namespace TimboJimboEditor.UINext.Demos
             var track = parent.Child("Slider").Row().Pad(13f, 0f).Align(AlignX.Left, AlignY.Center);
             track.Sized(Sizing.Grow(), Sizing.Fixed(32f));
             track.Focusable.Value = Focusability.Always;
-            var rail = track.Child("Rail").Float(AttachPoint.LeftCenter, AttachPoint.LeftCenter);
+            // Centred, so it lies under the fill: a floating child is as wide as its parent inside its padding.
+            var rail = track.Child("Rail").Float(AttachPoint.CenterCenter, AttachPoint.CenterCenter);
             rail.Sized(Sizing.Percent(1f), Sizing.Fixed(4f));
             rail.Box(new Color(0.47f, 0.47f, 0.5f, 0.25f), 2f);
             var fill = track.Child("Fill").Sized(Sizing.Percent(value), Sizing.Fixed(4f));
