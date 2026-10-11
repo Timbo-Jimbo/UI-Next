@@ -748,7 +748,7 @@ namespace TimboJimboEditor.UINext.Demos
         private static void StorePage(UINode page, UINode body)
         {
             // A grid of items; each grows into a dialog and flies home. An item and the dialog's card are matched by name
-            // and the item's index, and so are their icons, names and prices, which fly inside them.
+            // and the item's index, and so are their icons, names and prices, which fly on their own.
             var grid = Case(body, "Tap an item (drag it away to close)").Row(12f);
             grid.Wrap.Value = Wrap.Grid(2);
             var items = new List<Pressable>();
@@ -869,7 +869,7 @@ namespace TimboJimboEditor.UINext.Demos
                      {
                          "Every story here grows out of its card, and closes back into it.",
                          "Pull it down from the top and it shrinks where it is, its corners rounding. Let go to close it, or turn back up and it scrolls on.",
-                         "Its title flies on its own, inside the card's shape, from the card's place to the story's.",
+                         "Its title flies on its own, from the card's place to the story's.",
                          "Closing, the list scrolls the card into view as the story lands in it.",
                      })
                 text.Child("Paragraph").Label(paragraph, 17f, Text).Node.Width.Value = Sizing.Grow();

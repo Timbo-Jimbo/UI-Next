@@ -5,9 +5,9 @@ namespace TimboJimbo.UINext.Demos.Showcase
 {
     /// <summary>
     /// Store: a grid of items, each growing into a dialog and flying home. An item and the dialog's card share a match
-    /// name, the card taking the item's id as it opens, and so do their icons, names and prices, which fly inside the
-    /// pair; the item is hidden (keeping its place) as the dialog is presented, and shown as it is dismissed. Dragged away
-    /// from anywhere in the dialog, the card flies home from where it is let go.
+    /// name, the card taking the item's id as it opens, and so do their icons, names and prices, which fly on their own;
+    /// the item is hidden (keeping its place) as the dialog is presented, and shown as it is dismissed. Dragged away from
+    /// anywhere in the dialog, the card flies home from where it is let go.
     /// </summary>
     public sealed class StoreDemo : MonoBehaviour
     {

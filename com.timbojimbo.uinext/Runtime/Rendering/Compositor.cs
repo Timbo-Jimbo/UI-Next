@@ -9,7 +9,8 @@ namespace TimboJimbo.UINext
     /// (where each node is drawn), one of clip shapes, and the batches to draw them in (split where the texture changes or
     /// a new root starts). Rebuilt only when something changed: a node drew something new, or something moved. A matched
     /// flight is drawn above everything at its level as a pair: its picture and its destination each drawn to an image of
-    /// their own, and one quad summing them, cut to the flight's rounded shape.
+    /// their own (their own drawing laid out at the flight's rect, what is inside them fitted and cut to its window), and
+    /// one quad summing them.
     /// </summary>
     internal static class Compositor
     {
@@ -684,6 +685,7 @@ namespace TimboJimbo.UINext
                     int p = parent != null ? parent.Index : -1;
                     opacity = p >= d && p < end ? s_slots[flight.LiveSlots + p - d].SizeOpacity.z * tree.LocalOpacities[i] : 0f;
                 }
+                // A node already under four clips inside the end gives up the outermost of them to the window.
                 var clips = Append(FlightClips(tree.ClipShapes, slot.Clips, outside, fromFlight), flight.Window);
                 s_slots[flight.LiveSlots + i - d] = new NodeSlot
                 {
@@ -830,7 +832,8 @@ namespace TimboJimbo.UINext
             var picture = GroupTarget(Groups.Count, xMax - x, yMax - y);
             var region = new Rect(x / scale, y / scale, picture.width / scale, picture.height / scale);
             Groups.Add(new Group { Tree = tree, Target = picture, Region = region, Flight = flight, End = 0 });
-            var live = GroupTarget(Groups.Count, xMax - x, yMax - y);
+            // At least as big as the picture's image, so both cover the region as sharply.
+            var live = GroupTarget(Groups.Count, picture.width, picture.height);
             Groups.Add(new Group { Tree = tree, Target = live, Region = region, Flight = flight, End = 1 });
 
             EnsureInstances(s_instanceCount + 1);
@@ -875,7 +878,7 @@ namespace TimboJimbo.UINext
             for (int k = 0; k < picture.Slots.Count; k++)
             {
                 var drawn = picture.Slots[k];
-                s_skip.Add((drawn.Parent >= 0 && s_skip[drawn.Parent]) || (k > 0 && FliesOnItsOwn(drawn.Node)));
+                s_skip.Add((drawn.Parent >= 0 && s_skip[drawn.Parent]) || (k > 0 && (FliesOnItsOwn(drawn.Node) || SetsOff(drawn.Node))));
             }
             EnsureInstances(s_instanceCount + picture.Instances.Count);
             for (int i = 0; i < picture.Instances.Count; i++)
@@ -895,6 +898,15 @@ namespace TimboJimbo.UINext
 
         // Whether a node inside a flight's end flies on its own: a named part, taken over or flying in.
         private static bool FliesOnItsOwn(UINode node) => node != null && (node.FlightIn != null || node.FlightOut != null);
+
+        // Whether a flight sets off from a node: one that stays, a copy flying out of it, as well as one taken over.
+        private static bool SetsOff(UINode node)
+        {
+            foreach (var flight in MatchedGeometry.Flights)
+                if (flight.Source == node)
+                    return true;
+            return false;
+        }
 
         // A flight's destination and what is inside it, as the walk draws them, in the flight's slots: its own drawing laid
         // out at the flight's rect, the rest fitted; what flies on its own (a named part) and what is presented above it

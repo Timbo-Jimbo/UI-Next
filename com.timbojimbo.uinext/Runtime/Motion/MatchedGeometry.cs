@@ -217,7 +217,7 @@ namespace TimboJimbo.UINext
             {
                 From = candidate.Rect,
                 FromRadii = candidate.Radii,
-                SourceAnchor = source.MatchAnchor.Peek,
+                SourceAnchor = source.MatchAnchor.Drawn,
                 Transaction = transaction,
             };
             // Turned round, it fades on from where it had faded, the other way.
@@ -314,7 +314,7 @@ namespace TimboJimbo.UINext
             flight.Progress = Mathf.Clamp01(flight.Fade.Drawn);
             // What is inside each end is scaled evenly to the flight along that axis and lined up with it along the other as
             // its node's anchor says; each end's own drawing is laid out at the flight's rect (the compositor's).
-            flight.FitMap = Fit(rect, size, flight.ByHeight, destination.MatchAnchor.Peek) * world.Inverse;
+            flight.FitMap = Fit(rect, size, flight.ByHeight, destination.MatchAnchor.Drawn) * world.Inverse;
             flight.PictureMap = Fit(rect, flight.Picture.Size, flight.ByHeight, flight.SourceAnchor);
         }
 
