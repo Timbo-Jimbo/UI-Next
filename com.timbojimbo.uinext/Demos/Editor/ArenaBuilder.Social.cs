@@ -16,7 +16,7 @@ namespace TimboJimboEditor.UINext.Demos
             var head = page.Child("Header").Row(12f).Pad(new Insets(12f, 12f, 10f, 10f)).Align(AlignX.Left, AlignY.Center);
             head.Width.Value = Sizing.Grow();
             var badge = head.Child("Badge").Sized(Sizing.Fixed(54f), Sizing.Fixed(60f)).Center();
-            Raised(badge, new Color32(0xFF, 0xA9, 0x4D, 0xFF), new Color32(0xE0, 0x55, 0x10, 0xFF), Ink, new CornerRadii(14f, 14f, 27f, 27f), 3f);
+            Surface(badge, new Color32(0xFF, 0xA9, 0x4D, 0xFF), new Color32(0xE0, 0x55, 0x10, 0xFF), Ink, new CornerRadii(14f, 14f, 27f, 27f));
             badge.Child("Icon").Label("🐺", 28f);
             var about = head.Child("About").Column(3f);
             about.Width.Value = Sizing.Grow();
@@ -97,7 +97,7 @@ namespace TimboJimboEditor.UINext.Demos
             {
                 var card = body.Child(title).Column(8f).Pad(16f);
                 card.Width.Value = Sizing.Grow();
-                Raised(card, from, to, Ink, 18f, 4f);
+                Surface(card, from, to, Ink, 18f);
                 var art = card.Child("Art").Float(AttachPoint.RightCenter, AttachPoint.RightCenter, new Vector2(-10f, -10f));
                 art.Label(emoji, 64f);
                 art.HitTestable.Value = false;

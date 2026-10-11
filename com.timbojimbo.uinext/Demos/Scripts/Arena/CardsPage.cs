@@ -150,8 +150,7 @@ namespace TimboJimbo.UINext.Demos.Arena
             var (top, bottom) = ArenaData.RarityColours(rarity);
             int level = _cards.Level(card);
             var (hitpoints, damage) = ArenaData.Stats(card, level);
-            _popup.FrameBox.Fill.Value = top;
-            _popup.FrameBox.GradientTo.Value = bottom;
+            _popup.FrameBox.Fill.Value = Color.Lerp(top, bottom, 0.5f);
             _popup.Icon.Text.Value = emoji;
             _popup.Elixir.Text.Value = elixir.ToString();
             _popup.Name.Text.Value = name;

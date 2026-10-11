@@ -67,7 +67,7 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var tile = grid.Child(name).Column(6f).Pad(new Insets(6f, 6f, 10f, 8f)).Align(AlignX.Center, AlignY.Top);
             tile.Width.Value = Sizing.Grow();
-            Raised(tile, new Color32(0x5B, 0x92, 0xEC, 0xFF), new Color32(0x2D, 0x5C, 0xBE, 0xFF), PanelEdge, 12f, 3f);
+            Surface(tile, new Color32(0x5B, 0x92, 0xEC, 0xFF), new Color32(0x2D, 0x5C, 0xBE, 0xFF), PanelEdge, 12f);
             tile.Scale.When(InteractionStates.Pressed, 0.94f);
             var offer = new OfferParts { Kind = kind, Index = index, Tile = tile, Button = tile.Pressable() };
             parts.Offers.Add(offer);
@@ -79,7 +79,7 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var tag = tile.Child("Price").Center();
             tag.Sized(Sizing.Grow(), Sizing.Fixed(30f));
-            Raised(tag, colours.Top, colours.Bottom, colours.Edge, 9f, 2f);
+            Surface(tag, colours.Top, colours.Bottom, colours.Edge, 9f);
             tag.HitTestable.Value = false;
             return Text(tag, "Text", price, 14f);
         }

@@ -60,7 +60,7 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var slot = slots.Child("Slot " + (index + 1)).Column(1f).Pad(new Insets(4f, 4f, 6f, 4f)).Align(AlignX.Center, AlignY.Top);
             slot.Sized(Sizing.Grow(), Sizing.Grow());
-            Raised(slot, new Color32(0x30, 0x60, 0xC0, 0xFF), new Color32(0x1A, 0x3B, 0x86, 0xFF), PanelEdge, 12f, 3f);
+            Surface(slot, new Color32(0x30, 0x60, 0xC0, 0xFF), new Color32(0x1A, 0x3B, 0x86, 0xFF), PanelEdge, 12f);
             slot.Scale.When(InteractionStates.Pressed, 0.94f);
 
             var glow = slot.Child("Glow").Float(AttachPoint.CenterCenter, AttachPoint.CenterTop, new Vector2(0f, 32f));

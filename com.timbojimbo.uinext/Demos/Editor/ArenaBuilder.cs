@@ -98,40 +98,34 @@ namespace TimboJimboEditor.UINext.Demos
 
         // ── The look ─────────────────────────────────────────────────────────────
 
-        // White text outlined dark with a hard shadow under it, as the game writes everything.
+        // White text outlined dark, as the game writes everything, with a light shadow under the larger sizes.
         private static Label Text(UINode parent, string name, string text, float size, Color? colour = null)
         {
             var label = parent.Child(name).Label(text, size, colour ?? Color.white, bold: true);
-            label.OutlineWidth.Value = Mathf.Max(1.2f, size * 0.09f);
+            label.OutlineWidth.Value = Mathf.Max(1f, size * 0.06f);
             label.OutlineColor.Value = Ink;
-            label.ShadowColor.Value = new Color(0f, 0f, 0f, 0.55f);
-            label.ShadowOffset.Value = new Vector2(0f, Mathf.Max(1f, size * 0.08f));
+            if (size >= 15f)
+            {
+                label.ShadowColor.Value = new Color(0f, 0f, 0f, 0.3f);
+                label.ShadowOffset.Value = new Vector2(0f, Mathf.Max(1f, size * 0.05f));
+            }
             return label;
         }
 
-        // A box with a vertical gradient, an edge bevelled from light above to dark below, and a hard shadow under it, as
-        // a game's panels and buttons stand up.
-        private static Box Raised(UINode node, Color top, Color bottom, Color edge, CornerRadii radii, float depth = 4f)
+        // A surface: one flat colour (between `top` and `bottom`) with a thin edge, kept quiet so the buttons stand out.
+        private static Box Surface(UINode node, Color top, Color bottom, Color edge, CornerRadii radii)
         {
-            var box = node.Box(top, radii);
-            box.Gradient.Value = true;
-            box.GradientTo.Value = bottom;
-            box.GradientAngle.Value = 90f;
-            box.BorderWidth.Value = 2.5f;
-            box.BorderGradient.Value = true;
-            box.BorderColor.Value = Color.Lerp(top, Color.white, 0.45f);
-            box.BorderColorTo.Value = edge;
-            box.ShadowColor.Value = Color.Lerp(edge, Color.black, 0.3f);
-            box.ShadowBlur.Value = 0.5f;
-            box.ShadowOffset.Value = new Vector2(0f, depth);
+            var box = node.Box(Color.Lerp(top, bottom, 0.5f), radii);
+            box.BorderWidth.Value = 1.5f;
+            box.BorderColor.Value = edge;
             return box;
         }
 
-        // A panel: the blue a step lighter than the background, raised.
-        private static Box Panel(UINode node, float radius = 14f) => Raised(node, PanelTop, PanelBottom, PanelEdge, radius, 3f);
+        // A panel: the blue a step lighter than the background.
+        private static Box Panel(UINode node, float radius = 14f) => Surface(node, PanelTop, PanelBottom, PanelEdge, radius);
 
-        // A chunky button: a raised gradient, a shine across its top half, its title outlined, squashing as it is pressed
-        // and greying while it cannot be.
+        // A chunky button: a gentle gradient standing on a short hard shadow, its title outlined, squashing as it is
+        // pressed and greying while it cannot be.
         private static Pressable Button(UINode parent, string name, string title, (Color Top, Color Bottom, Color Edge) colours,
             Sizing width, float height, float textSize, out Label label)
         {
@@ -139,11 +133,14 @@ namespace TimboJimboEditor.UINext.Demos
             node.Sized(width, Sizing.Fixed(height));
             node.Pad(10f, 0f);
             float radius = Mathf.Min(14f, height * 0.3f);
-            Raised(node, colours.Top, colours.Bottom, colours.Edge, radius);
-            var shine = node.Child("Shine").Float(AttachPoint.CenterTop, AttachPoint.CenterTop, new Vector2(0f, 3f));
-            shine.Sized(Sizing.Percent(0.92f), Sizing.Percent(0.42f));
-            shine.Box(new Color(1f, 1f, 1f, 0.22f), radius * 0.8f);
-            shine.HitTestable.Value = false;
+            var box = node.Box(Color.Lerp(colours.Top, colours.Bottom, 0.4f), radius);
+            box.Gradient.Value = true;
+            box.GradientTo.Value = colours.Bottom;
+            box.BorderWidth.Value = 1.5f;
+            box.BorderColor.Value = colours.Edge;
+            box.ShadowColor.Value = colours.Edge;
+            box.ShadowBlur.Value = 0.5f;
+            box.ShadowOffset.Value = new Vector2(0f, 3f);
             label = Text(node, "Title", title, textSize);
             node.Scale.When(InteractionStates.Pressed, 0.93f);
             node.Saturation.When(InteractionStates.Disabled, 0.15f);
@@ -219,11 +216,11 @@ namespace TimboJimboEditor.UINext.Demos
             frame.MatchName.Value = "Card";
             frame.MatchId.Value = card.ToString();
             frame.ClipRadii.Value = 10f;
-            box = Raised(frame, top, bottom, Ink, 10f, 3f);
+            box = Surface(frame, top, bottom, Ink, 10f);
             icon = frame.Child("Icon").Float(AttachPoint.CenterCenter, AttachPoint.CenterCenter).Label(emoji, width > 0f ? width * 0.42f : 34f);
             var drop = frame.Child("Elixir").Sized(Sizing.Fixed(26f), Sizing.Fixed(26f)).Center();
             drop.Float(AttachPoint.CenterCenter, AttachPoint.LeftTop, new Vector2(4f, 4f));
-            Raised(drop, new Color32(0xF5, 0x7C, 0xF0, 0xFF), new Color32(0xB8, 0x2E, 0xC4, 0xFF), Ink, 13f, 2f);
+            Surface(drop, new Color32(0xF5, 0x7C, 0xF0, 0xFF), new Color32(0xB8, 0x2E, 0xC4, 0xFF), Ink, 13f);
             elixir = Text(drop, "Cost", cost.ToString(), 14f);
             return frame;
         }
@@ -236,7 +233,7 @@ namespace TimboJimboEditor.UINext.Demos
             var top = app.Child("Top Bar").Row(8f).Pad(new Insets(10f, 10f, 6f, 6f)).Align(AlignX.Left, AlignY.Center);
             top.Width.Value = Sizing.Grow();
             var shield = top.Child("Level").Sized(Sizing.Fixed(42f), Sizing.Fixed(46f)).Center();
-            Raised(shield, Blue.Top, Blue.Bottom, Ink, new CornerRadii(12f, 12f, 21f, 21f), 2f);
+            Surface(shield, Blue.Top, Blue.Bottom, Ink, new CornerRadii(12f, 12f, 21f, 21f));
             Text(shield, "Number", ArenaData.PlayerLevel.ToString(), 19f);
 
             var who = top.Child("Who").Column(3f);
@@ -290,7 +287,7 @@ namespace TimboJimboEditor.UINext.Demos
                 tab.Width.When(InteractionStates.Selected, Sizing.Percent(0.28f));
                 var lit = tab.Child("Lit").Float(AttachPoint.LeftTop, AttachPoint.LeftTop);
                 lit.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
-                Raised(lit, Blue.Top, Blue.Bottom, Ink, 14f, 2f);
+                Surface(lit, Blue.Top, Blue.Bottom, Ink, 14f);
                 lit.Opacity.Value = 0f;
                 lit.Opacity.When(InteractionStates.Selected, 1f);
                 lit.HitTestable.Value = false;
@@ -323,7 +320,7 @@ namespace TimboJimboEditor.UINext.Demos
             presentation.Animation = new UIAnimation(0.45f, 0.15f);
             card = host.Child("Card").Column(12f).Pad(20f).Align(AlignX.Center, AlignY.Top);
             card.Width.Value = Sizing.Fixed(width);
-            Raised(card, PanelTop, PanelBottom, PanelEdge, 22f, 5f);
+            DemoKit.Shadow(Surface(card, PanelTop, PanelBottom, PanelEdge, 22f), 0.35f, 24f, 8f);
             return presentation;
         }
 
