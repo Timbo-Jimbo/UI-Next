@@ -120,15 +120,6 @@ namespace TimboJimboEditor.UINext.Demos
             return avatar;
         }
 
-        /// <summary>A ring round a box while it has keyboard or gamepad focus: a crisp shadow spread out past its edge.</summary>
-        public static void FocusRing(Box box, Color colour)
-        {
-            box.ShadowColor.When(InteractionStates.Focused, colour);
-            box.ShadowSpread.When(InteractionStates.Focused, 3f);
-            box.ShadowBlur.When(InteractionStates.Focused, 0.5f);
-            box.ShadowOffset.When(InteractionStates.Focused, Vector2.zero);
-        }
-
         /// <summary>A soft shadow under a box.</summary>
         public static void Shadow(Box box, float alpha = 0.08f, float blur = 16f, float y = 4f)
         {

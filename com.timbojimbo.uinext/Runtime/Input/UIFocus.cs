@@ -136,7 +136,7 @@ namespace TimboJimbo.UINext
                 if (previous != null)
                 {
                     s_resignedFrame = Time.frameCount;
-                    SetFocusedState(previous, previous == Focused && s_visible);
+                    SetFocusedState(previous, previous == Focused && s_visible, false);
                 }
                 if (value != null)
                     SetFocus(value, s_visible, scroll: true);
@@ -260,7 +260,7 @@ namespace TimboJimbo.UINext
                 {
                     s_firstResponder = null;
                     s_resignedFrame = Time.frameCount;
-                    SetFocusedState(responder, false);
+                    SetFocusedState(responder, false, false);
                 }
                 SetShown(false);
                 s_focused = node;
@@ -471,14 +471,20 @@ namespace TimboJimbo.UINext
                 SetFocus(s_stops[entry], true, true);
         }
 
-        // Scrolls every scroll view the node is inside, innermost first, until it is in view.
+        // Scrolls every scroll view the node is inside, innermost first, until it is in view: in the innermost, with room
+        // round it for its focus ring.
         private static void ScrollIntoView(UINode node)
         {
+            var root = node.Root;
+            float margin = root != null && node.FocusRing.Peek ? Mathf.Max(0f, root.FocusRingOffset.Peek + root.FocusRingWidth.Peek) : 0f;
             UINode child = node;
             for (var parent = node.ParentNode; parent != null; parent = parent.ParentNode)
             {
                 if (parent.Scroller != null && parent.Scroller.isActiveAndEnabled)
-                    parent.Scroller.ScrollIntoView(child);
+                {
+                    parent.Scroller.ScrollIntoView(child, margin: margin);
+                    margin = 0f;
+                }
                 child = parent;
             }
         }
@@ -490,10 +496,47 @@ namespace TimboJimbo.UINext
         {
             var focused = Focused;
             if (focused != null)
-                SetFocusedState(focused, shown || focused == FirstResponder);
+                SetFocusedState(focused, shown, focused == FirstResponder);
         }
 
-        private static void SetFocusedState(UINode node, bool on) => node.SetInteraction(InteractionStates.Focused, on);
+        // A node is Focused while focus shows on it or it is typed into; its focus ring is drawn only while focus shows, as
+        // a key or a gamepad moved it (a field tapped into shows its focus its own way).
+        private static void SetFocusedState(UINode node, bool shown, bool typedInto)
+        {
+            node.SetInteraction(InteractionStates.Focused, shown || typedInto);
+            node.FocusVisible.Value = shown;
+        }
+
+        /// <summary>
+        /// Draws the focus ring round <paramref name="node"/>, on which focus shows, as iPadOS's focus halo and a browser's
+        /// focus outline: a band as thick as its root's <see cref="UIRoot.FocusRingWidth"/>, out past its edge by
+        /// <see cref="UIRoot.FocusRingOffset"/>, its corners going round the node's (<see cref="UINode.ClipRadii"/>), over
+        /// what is inside it, so it follows the node as it moves, springs and is clipped.
+        /// </summary>
+        internal static void DrawRing(UINode node, Painter painter)
+        {
+            var root = node.Root;
+            if (root == null) return;
+            var color = root.FocusRingColor.Value;
+            float width = root.FocusRingWidth.Value;
+            if (width <= 0f || color.a <= 0f) return;
+            float reach = root.FocusRingOffset.Value + width;
+            // A rounded corner is rounded the ring's distance further out; a square one stays square.
+            var radii = node.ClipRadii.Value.ToVector();
+            for (int c = 0; c < 4; c++)
+                if (radii[c] > 0f)
+                    radii[c] = Mathf.Max(0f, radii[c] + reach);
+            painter.Add(new PrimitiveInstance
+            {
+                Rect = new Vector4(-reach, -reach, -reach, -reach),
+                Radii = radii,
+                Color = Color.clear,
+                Color2 = color,
+                Params = new Vector4(width, 0f, 0f, 0f),
+                Type = (uint)PrimitiveType.Shape,
+                Flags = (uint)PrimitiveFlags.RelativeToNode,
+            }, null);
+        }
 
         // FocusWithin on what has focus and on every node it is in, up to its level, while it shows (or is typed into); off
         // everywhere else it was.

@@ -165,8 +165,11 @@ namespace TimboJimbo.UINext
             _pageFrom += delta;
         }
 
-        /// <summary>Scrolls the least it takes to show <paramref name="node"/>, a node inside it, whole (or its start, if it is bigger).</summary>
-        public void ScrollIntoView(UINode node, bool animated = true)
+        /// <summary>
+        /// Scrolls the least it takes to show <paramref name="node"/>, a node inside it, whole (or its start, if it is
+        /// bigger), with <paramref name="margin"/> points of room round it (for a focus ring).
+        /// </summary>
+        public void ScrollIntoView(UINode node, bool animated = true, float margin = 0f)
         {
             if (node == null) return;
             // Where the node is laid out in what this scrolls: its rect, moved by every node between it and this.
@@ -177,7 +180,7 @@ namespace TimboJimbo.UINext
             for (int axis = 0; axis < 2; axis++)
             {
                 if (!Scrolls(axis)) continue;
-                float min = rect.position[axis], max = min + rect.size[axis], view = Viewport[axis];
+                float min = rect.position[axis] - margin, max = rect.position[axis] + rect.size[axis] + margin, view = Viewport[axis];
                 if (min < offset[axis]) offset[axis] = min;
                 else if (max > offset[axis] + view) offset[axis] = Mathf.Min(min, max - view);
             }

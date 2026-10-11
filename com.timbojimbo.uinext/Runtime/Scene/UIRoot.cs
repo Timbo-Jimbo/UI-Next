@@ -40,6 +40,15 @@ namespace TimboJimbo.UINext
         [Tooltip("The edges it keeps its content clear of the screen's notch, rounded corners and home bar on.")]
         [SerializeField] private Edges _safeArea = Edges.All;
 
+        [Tooltip("The colour of the ring drawn round what has keyboard or gamepad focus while it shows.")]
+        [SerializeField] private UIValue<Color> _focusRingColor = new Color(0f, 0.48f, 1f, 1f);
+
+        [Tooltip("How thick the focus ring is, in points.")]
+        [SerializeField] private UIValue<float> _focusRingWidth = 3f;
+
+        [Tooltip("How far out past its node's edge the focus ring is, in points.")]
+        [SerializeField] private UIValue<float> _focusRingOffset = 2f;
+
         internal UITree Tree;
         internal readonly Observable<Vector2> SizeObservable = new(new Vector2(390f, 844f));
         internal readonly Observable<Insets> SafeAreaObservable = new();
@@ -84,6 +93,18 @@ namespace TimboJimbo.UINext
         /// <summary>Its size in points.</summary>
         public Vector2 Size => SizeObservable.Peek;
 
+        /// <summary>
+        /// The colour of the focus ring, drawn round what has keyboard or gamepad focus in this root while it shows, as
+        /// iPadOS's focus halo takes the app's tint (see <see cref="UINode.FocusRing"/>). The system blue unless set.
+        /// </summary>
+        public UIValue<Color> FocusRingColor => _focusRingColor;
+
+        /// <summary>How thick the focus ring is, in points.</summary>
+        public UIValue<float> FocusRingWidth => _focusRingWidth;
+
+        /// <summary>How far out past its node's edge the focus ring is drawn, in points, as CSS's outline-offset.</summary>
+        public UIValue<float> FocusRingOffset => _focusRingOffset;
+
         /// <summary>How many screen pixels a point is.</summary>
         public float PixelsPerPoint { get; private set; } = 1f;
 
@@ -107,6 +128,9 @@ namespace TimboJimbo.UINext
 
         private void OnEnable()
         {
+            ((IUIValue)_focusRingColor).Attach(Node);
+            ((IUIValue)_focusRingWidth).Attach(Node);
+            ((IUIValue)_focusRingOffset).Attach(Node);
             _tracker.Add(this, Node.RectTransform, DrivenTransformProperties.Pivot | DrivenTransformProperties.SizeDelta);
             Tree = new UITree(this);
             UITree.Register(Tree);
@@ -116,6 +140,9 @@ namespace TimboJimbo.UINext
 
         private void OnDisable()
         {
+            ((IUIValue)_focusRingColor).Detach();
+            ((IUIValue)_focusRingWidth).Detach();
+            ((IUIValue)_focusRingOffset).Detach();
             _tracker.Clear();
             if (Tree != null)
             {
@@ -126,7 +153,16 @@ namespace TimboJimbo.UINext
             UI.RequestRepaint();
         }
 
-        private void OnValidate() => UI.RequestRepaint();
+        private void OnValidate()
+        {
+            if (isActiveAndEnabled)
+            {
+                ((IUIValue)_focusRingColor).Refresh();
+                ((IUIValue)_focusRingWidth).Refresh();
+                ((IUIValue)_focusRingOffset).Refresh();
+            }
+            UI.RequestRepaint();
+        }
 
         // Brings its size, scale and safe area up to date with the screen.
         internal void UpdateMetrics(Vector2 pixelSize, Rect safeAreaPixels)

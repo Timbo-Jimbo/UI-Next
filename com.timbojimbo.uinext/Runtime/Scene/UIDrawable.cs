@@ -123,6 +123,9 @@ namespace TimboJimbo.UINext
                     UINode.Fade(_node.Instances, first, t);
                     UINode.Fade(_node.OverlayInstances, firstOverlay, t);
                 }
+                // While focus shows on it, the focus ring, over the rest.
+                if (_node.FocusVisible.Value && _node.FocusRing.Value)
+                    UIFocus.DrawRing(_node, painter.Overlay);
             }
             Compositor.MarkInstancesDirty(_node.Tree);
         }
