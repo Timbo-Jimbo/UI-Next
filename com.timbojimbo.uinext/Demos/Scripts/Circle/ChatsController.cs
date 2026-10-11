@@ -153,7 +153,7 @@ namespace TimboJimbo.UINext.Demos.Circle
         {
             if (_conversation.IsPresented) return;
             var (person, _, _, thread) = CircleData.Chats[index];
-            var (name, initials, colour) = CircleData.People[person];
+            var (name, initials, colour, _, _) = CircleData.People[person];
             _avatar.Fill.Value = colour;
             _initials.Text.Value = initials;
             _name.Text.Value = name;

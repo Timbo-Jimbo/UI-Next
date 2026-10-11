@@ -7,8 +7,14 @@ using UnityEngine;
 
 namespace TimboJimboEditor.UINext.Demos
 {
-    /// <summary>Builds Circle, the demo app: its scene, and the colour tokens and Dark mode state it is styled with.</summary>
-    public static class CircleBuilder
+    /// <summary>
+    /// Builds Circle, the demo app, with the screens the UI package's mobile demo has: three tabs (Home, Chats, Me) side by
+    /// side under a floating tab bar, and what they open, each coming out of what was tapped and going back into it: the
+    /// photo viewer, the stories, a chat's conversation, a profile, the compose card, the reaction picker, the comments
+    /// sheet, the share card, the settings page with a control of each kind, and the log out dialog. Keyboards and gamepads
+    /// move focus through all of it. Its colours are tokens, with a Dark mode.
+    /// </summary>
+    public static partial class CircleBuilder
     {
         private const string Folder = DemoKit.DemosFolder + "/Circle";
         public const string ScenePath = DemoKit.DemosFolder + "/Scenes/Circle.unity";
@@ -17,9 +23,43 @@ namespace TimboJimboEditor.UINext.Demos
         private static readonly Color Red = new Color32(0xFF, 0x3B, 0x30, 0xFF);
         private static readonly Color Green = new Color32(0x34, 0xC7, 0x59, 0xFF);
 
+        // A press, over something clear or faint.
+        private static readonly Color Pressed = new(0.5f, 0.5f, 0.55f, 0.2f);
+
         // The tokens, made by Tokens().
         private static UIState s_dark;
         private static ColorToken s_background, s_card, s_text, s_secondary, s_subtle, s_bubble, s_bar;
+
+        // What the pieces of the app are wired to, gathered as they are made.
+        private sealed class Parts
+        {
+            public CircleApp App;
+            public PhotoViewer Viewer;
+            public ReactionPicker Picker;
+            public Presentation Comments;
+
+            // Home: the compose button, your post, the feed and its photos, the stories, each post's author, and the
+            // comments buttons.
+            public Pressable Compose;
+            public UINode YourPost;
+            public ScrollView Feed;
+            public ScrollView Tray;
+            public readonly List<ScenePhoto> Photos = new();
+            public readonly List<string> Captions = new();
+            public readonly List<Pressable> Stories = new();
+            public readonly List<UINode> RingAvatars = new();
+            public readonly List<Box> Rings = new();
+            public readonly List<Pressable> Authors = new();
+            public readonly List<UINode> AuthorAvatars = new();
+            public readonly List<UINode> AuthorNames = new();
+            public readonly List<Pressable> CommentButtons = new();
+
+            // Me: Share profile, the settings row and its title, and your photos.
+            public Pressable Share;
+            public Pressable SettingsRow;
+            public UINode SettingsTitle;
+            public readonly List<ScenePhoto> MyPhotos = new();
+        }
 
         [MenuItem("Tools/UI Next/Demos/Build Circle")]
         private static void BuildAndOpen() => Build(open: true);
@@ -47,224 +87,149 @@ namespace TimboJimboEditor.UINext.Demos
             var root = DemoKit.Root("Circle");
             var app = root.Node.Column();
             DemoKit.Fill(app, s_background);
-            var circle = app.Add<CircleApp>();
+            var parts = new Parts { App = app.Add<CircleApp>() };
 
             var pages = app.Child("Pages").Sized(Sizing.Grow(), Sizing.Grow()).Row();
             var pager = pages.Scroll(ScrollAxis.Horizontal);
             pager.Snap.Value = ScrollSnap.Pages;
             pager.ShowsIndicators.Value = false;
 
-            var photos = new List<ScenePhoto>();
-            var captions = new List<string>();
-            var stories = new List<Pressable>();
-            var ringAvatars = new List<UINode>();
-            var homeScroll = Home(pages, photos, captions, stories, ringAvatars);
+            // What the pages open into, made first, so the pages can be wired to them.
+            parts.Viewer = Viewer(app);
+            parts.Picker = Picker(app);
+            parts.Comments = CommentsSheet(app);
+
+            var homeScroll = Home(pages, parts);
             var chats = Chats(pages, out var chatsScroll, out var rows);
-            var meScroll = Me(pages, out var darkSwitch, out var logOut);
-
+            var meScroll = Me(pages, parts);
             var tabs = TabBar(app, out var pill);
-            var viewer = Viewer(app);
-            StoryScreen(app, stories, ringAvatars);
-            Conversation(app, rows, chats);
-            var dialog = LogOutDialog(app, out var dialogButtons);
 
-            circle.Setup(tabs, pill, pager, new List<ScrollView> { homeScroll, chatsScroll, meScroll }, photos, captions, viewer, s_dark,
-                darkSwitch, logOut, dialog, dialogButtons);
+            // What opens from what the pages hold, each drawn at its own level as it is presented.
+            StoryScreen(app, parts);
+            Conversation(app, rows, chats);
+            Profile(app, parts);
+            Compose(app, parts);
+            Share(app, parts);
+            Settings(app, parts, out var logOut);
+            LogOutDialog(app, logOut);
+
+            parts.App.Setup(tabs, pill, pager, new List<ScrollView> { homeScroll, chatsScroll, meScroll }, parts.Photos, parts.Captions,
+                parts.MyPhotos, parts.Viewer, parts.CommentButtons, parts.Comments, s_dark);
         }
 
         private static Color Darker(Color colour) => new(colour.r * 0.8f, colour.g * 0.8f, colour.b * 0.8f, colour.a);
 
-        // ── Home ─────────────────────────────────────────────────────────────────
+        // ── Pieces ───────────────────────────────────────────────────────────────
 
-        private static ScrollView Home(UINode pages, List<ScenePhoto> photos, List<string> captions, List<Pressable> storyButtons, List<UINode> ringAvatars)
+        // A tab's page in the pager: a focus section, which focus comes back into where it left.
+        private static UINode TabPage(UINode pages, string name)
         {
-            var home = pages.Child("Home").Sized(Sizing.Percent(1f), Sizing.Grow()).Column();
-            var header = home.Child("Header").Row().Pad(new Insets(20f, 20f, 12f, 8f)).Align(AlignX.Left, AlignY.Center);
+            var page = pages.Child(name).Sized(Sizing.Percent(1f), Sizing.Grow()).Column();
+            page.FocusScope.Value = FocusScope.Section;
+            page.FocusEntry.Value = FocusEntry.Remembered;
+            return page;
+        }
+
+        // A round button with a glyph on it.
+        private static Pressable IconButton(UINode parent, string name, string glyph, float size, Color fill, Color glyphColour)
+        {
+            var node = parent.Child(name).Sized(Sizing.Fixed(size), Sizing.Fixed(size)).Center();
+            node.Box(fill, size * 0.5f).Fill.When(InteractionStates.Pressed, Darker(fill));
+            node.Child("Glyph").Label(glyph, Mathf.Round(size * 0.5f), glyphColour, bold: true);
+            return node.Pressable();
+        }
+
+        // A round close button: a × on a faint disc.
+        private static Pressable CloseButton(UINode parent, float size = 32f)
+        {
+            var node = parent.Child("Close").Sized(Sizing.Fixed(size), Sizing.Fixed(size)).Center();
+            DemoKit.Fill(node, s_subtle, size * 0.5f).Fill.When(InteractionStates.Pressed, Pressed);
+            DemoKit.Text(node, "Glyph", "×", Mathf.Round(size * 0.6f), s_secondary, bold: true);
+            return node.Pressable();
+        }
+
+        // A button as wide as its parent, its title centred: the accent's, or a faint one.
+        private static Pressable WideButton(UINode parent, string title, bool quiet = false) => WideButton(parent, title, quiet, out _);
+
+        private static Pressable WideButton(UINode parent, string title, bool quiet, out Label label)
+        {
+            var node = parent.Child(title).Sized(Sizing.Grow(), Sizing.Fixed(46f)).Center();
+            node.ClipRadii.Value = 13f;
+            if (quiet)
+            {
+                DemoKit.Fill(node, s_subtle, 13f).Fill.When(InteractionStates.Pressed, Pressed);
+                label = DemoKit.Text(node, "Title", title, 16f, s_text, bold: true);
+            }
+            else
+            {
+                node.Box(Accent, 13f).Fill.When(InteractionStates.Pressed, Darker(Accent));
+                label = node.Child("Title").Label(title, 16f, Color.white, bold: true);
+            }
+            return node.Pressable();
+        }
+
+        // A small rounded chip, for a post's reactions and comments, fitting what is put in it.
+        private static UINode Chip(UINode parent, string name)
+        {
+            var chip = parent.Child(name).Row(5f).Pad(11f, 6f).Align(AlignX.Left, AlignY.Center);
+            DemoKit.Fill(chip, s_subtle, 15f).Fill.When(InteractionStates.Pressed, Pressed);
+            return chip;
+        }
+
+        // A page pushed over the tabs: a cover sliding in from the right over a faint dim, swiped back from anywhere on it,
+        // its header a back button and the rest of it scrolling. `content` is what is presented; `body` what it holds.
+        private static Presentation PushedPage(UINode app, string name, out UINode content, out Pressable back, out UINode body,
+            out ScrollView scroll)
+        {
+            var host = app.Child(name).Column();
+            var page = host.Add<Presentation>();
+            page.Style = PresentationStyle.Cover;
+            page.Transition = PresentationTransition.Push;
+            page.Dim.Value = new Color(0f, 0f, 0f, 0.15f);
+            page.Animation = new UIAnimation(0.4f);
+            content = host.Child("Content").Sized(Sizing.Grow(), Sizing.Grow()).Column();
+            content.IgnoresSafeArea.Value = Edges.All;
+            DemoKit.Fill(content, s_background);
+            content.Add<Draggable>().Axis = ScrollAxis.Horizontal;
+            content.Add<SwipeToDismiss>().Setup(page, SwipeDirections.Right);
+            var header = content.Child("Header").Row(8f).Pad(new Insets(8f, 16f, 8f, 4f)).Align(AlignX.Left, AlignY.Center);
             header.Width.Value = Sizing.Grow();
-            DemoKit.Text(header, "Title", "Circle", 30f, s_text, bold: true).Node.Width.Value = Sizing.Grow();
-            DemoKit.Avatar(header, 36f, CircleData.Me.Colour, CircleData.Me.Initials);
-
-            var feed = home.Child("Feed").Sized(Sizing.Grow(), Sizing.Grow()).Column(16f).Pad(new Insets(0f, 0f, 4f, 120f));
-            var scroll = feed.Scroll();
-
-            var stories = feed.Child("Stories").Row(14f).Pad(new Insets(20f, 20f, 4f, 4f));
-            stories.Width.Value = Sizing.Grow();
-            var storiesScroll = stories.Scroll(ScrollAxis.Horizontal);
-            storiesScroll.ShowsIndicators.Value = false;
-            for (int i = 0; i < CircleData.People.Length; i++)
-            {
-                var (name, initials, colour) = CircleData.People[i];
-                var story = stories.Child("Story").Column(6f).Align(AlignX.Center, AlignY.Top);
-                // The avatar in the ring and the story it opens are matched by name and by the person's index.
-                story.MatchId.Value = i.ToString();
-                var ring = story.Child("Ring").Sized(Sizing.Fixed(68f), Sizing.Fixed(68f)).Center();
-                var ringBox = ring.Box(new Color32(0xFF, 0x5E, 0x9A, 0xFF), 34f);
-                ringBox.Gradient.Value = true;
-                ringBox.GradientTo.Value = new Color32(0xFF, 0xB3, 0x47, 0xFF);
-                ringBox.GradientAngle.Value = 45f;
-                var gap = ring.Child("Gap").Sized(Sizing.Fixed(62f), Sizing.Fixed(62f)).Center();
-                DemoKit.Fill(gap, s_background, 31f);
-                var avatar = DemoKit.Avatar(gap, 56f, colour, initials);
-                avatar.MatchName.Value = "Story";
-                DemoKit.Text(story, "Name", name.Split(' ')[0], 12f, s_secondary);
-                storyButtons.Add(story.Pressable());
-                story.Scale.When(InteractionStates.Pressed, 0.92f);
-                ringAvatars.Add(avatar);
-            }
-
-            for (int p = 0; p < CircleData.Posts.Length; p++)
-            {
-                var (person, time, caption, scene, reactions) = CircleData.Posts[p];
-                var (name, initials, colour) = CircleData.People[person];
-                var row = feed.Child("Post").Pad(16f, 0f);
-                row.Width.Value = Sizing.Grow();
-                // What is matched inside a post is told apart by the post's index.
-                row.MatchId.Value = p.ToString();
-                var card = row.Child("Card").Column(12f).Pad(16f);
-                card.Width.Value = Sizing.Grow();
-                DemoKit.Shadow(DemoKit.Fill(card, s_card, 22f), 0.06f, 18f, 4f);
-
-                var head = card.Child("Header").Row(10f).Align(AlignX.Left, AlignY.Center);
-                DemoKit.Avatar(head, 40f, colour, initials);
-                var names = head.Child("Names").Column(2f);
-                DemoKit.Text(names, "Name", name, 16f, s_text, bold: true);
-                DemoKit.Text(names, "Time", time, 13f, s_secondary);
-
-                var photoNode = card.Child("Photo");
-                photoNode.Width.Value = Sizing.Grow();
-                photoNode.AspectRatio.Value = 4f / 3f;
-                photoNode.MatchName.Value = "Photo";
-                photoNode.ClipRadii.Value = 14f;
-                var photo = photoNode.Add<ScenePhoto>();
-                photo.Show(scene);
-                photoNode.Pressable();
-                photoNode.Scale.When(InteractionStates.Pressed, 0.97f);
-                photos.Add(photo);
-                captions.Add(caption);
-
-                var text = DemoKit.Text(card, "Caption", caption, 15f, s_text);
-                text.Node.Width.Value = Sizing.Grow();
-
-                var chips = card.Child("Reactions").Row(8f);
-                foreach (var (emoji, count) in reactions)
-                {
-                    var chip = chips.Child("Reaction").Row(5f).Pad(11f, 6f).Align(AlignX.Left, AlignY.Center);
-                    var chipBox = DemoKit.Fill(chip, s_subtle, 15f);
-                    chipBox.Fill.When(InteractionStates.Selected, new Color(Accent.r, Accent.g, Accent.b, 0.18f));
-                    chip.Child("Emoji").Label(emoji, 15f);
-                    var number = DemoKit.Text(chip, "Count", count.ToString(), 14f, s_secondary, bold: true);
-                    number.Color.When(InteractionStates.Selected, Accent);
-                    // The chip toggles itself, inside a change.
-                    chip.Pressable();
-                    chip.Add<ReactionChip>().Setup(number, count);
-                }
-            }
-            return scroll;
+            var backNode = header.Child("Back").Pad(8f, 4f);
+            backNode.Child("Title").Label("‹ Back", 17f, Accent);
+            back = backNode.Pressable();
+            body = content.Child("Body").Sized(Sizing.Grow(), Sizing.Grow()).Column(18f).Pad(new Insets(16f, 16f, 8f, 40f));
+            scroll = body.Scroll();
+            return page;
         }
 
-        // ── Chats ────────────────────────────────────────────────────────────────
-
-        private static ChatsController Chats(UINode pages, out ScrollView scroll, out List<Pressable> rows)
+        // A card over a dim in the middle of the screen, `width` wide, named as the button it grows out of, thrown away by a
+        // drag on it or on the dim around it, following the finger. `card` is what grows.
+        private static Presentation CardHost(UINode app, string name, string matchName, float width, out UINode card)
         {
-            var chats = pages.Child("Chats").Sized(Sizing.Percent(1f), Sizing.Grow()).Column();
-            var controller = chats.Add<ChatsController>();
-            var header = chats.Child("Header").Pad(new Insets(20f, 20f, 12f, 8f));
-            DemoKit.Text(header, "Title", "Chats", 30f, s_text, bold: true);
-
-            var list = chats.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column().Pad(new Insets(0f, 0f, 0f, 120f));
-            scroll = list.Scroll();
-            rows = new List<Pressable>();
-            for (int c = 0; c < CircleData.Chats.Length; c++)
-            {
-                var (person, time, preview, _) = CircleData.Chats[c];
-                var (name, initials, colour) = CircleData.People[person];
-                var row = list.Child("Chat").Row(14f).Pad(20f, 12f).Align(AlignX.Left, AlignY.Center);
-                row.Width.Value = Sizing.Grow();
-                // The row grows into its conversation: matched by name and the chat's index, its avatar and name flying
-                // into the conversation's header.
-                row.MatchName.Value = "Chat";
-                row.MatchId.Value = c.ToString();
-                // What is inside it hangs from its top as it grows, so it turns into the conversation's header.
-                row.MatchAnchor.Value = new Vector2(0.5f, 0f);
-                var rowBox = DemoKit.Fill(row, s_background);
-                rowBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.15f));
-                rowBox.Fill.When(InteractionStates.Focused, new Color(Accent.r, Accent.g, Accent.b, 0.12f));
-                // It shows focus by its highlight, as a list's row does, rather than by the ring.
-                row.FocusRing.Value = false;
-                DemoKit.Avatar(row, 50f, colour, initials).MatchName.Value = "Avatar";
-                var middle = row.Child("Middle").Column(3f);
-                middle.Width.Value = Sizing.Grow();
-                DemoKit.Text(middle, "Name", name, 16f, s_text, bold: true).Node.MatchName.Value = "Name";
-                var line = DemoKit.Text(middle, "Preview", preview, 14f, s_secondary);
-                line.MaxLines.Value = 1;
-                line.Node.Width.Value = Sizing.Grow();
-                DemoKit.Text(row, "Time", time, 13f, s_secondary);
-                rows.Add(row.Pressable());
-            }
-            return controller;
-        }
-
-        // ── Me ───────────────────────────────────────────────────────────────────
-
-        private static ScrollView Me(UINode pages, out ToggleSwitch darkSwitch, out Pressable logOut)
-        {
-            var me = pages.Child("Me").Sized(Sizing.Percent(1f), Sizing.Grow()).Column(16f).Pad(new Insets(16f, 16f, 16f, 120f));
-            var scroll = me.Scroll();
-
-            var profile = me.Child("Profile").Column(6f).Pad(24f).Align(AlignX.Center, AlignY.Top);
-            profile.Width.Value = Sizing.Grow();
-            DemoKit.Shadow(DemoKit.Fill(profile, s_card, 22f), 0.06f, 18f, 4f);
-            DemoKit.Avatar(profile, 88f, CircleData.Me.Colour, CircleData.Me.Initials);
-            DemoKit.Text(profile, "Name", CircleData.Me.Name, 22f, s_text, bold: true);
-            DemoKit.Text(profile, "Handle", CircleData.Me.Handle, 15f, s_secondary);
-            var bio = DemoKit.Text(profile, "Bio", CircleData.Me.Bio, 15f, s_text);
-            bio.Alignment.Value = TextAnchor.UpperCenter;
-
-            var settings = me.Child("Settings").Column().Pad(16f, 4f);
-            settings.Width.Value = Sizing.Grow();
-            DemoKit.Fill(settings, s_card, 18f);
-            darkSwitch = null;
-            foreach (var title in new[] { "Dark mode", "Notifications", "Private account" })
-            {
-                var row = settings.Child("Setting").Row(12f).Pad(0f, 12f).Align(AlignX.Left, AlignY.Center);
-                row.Width.Value = Sizing.Grow();
-                DemoKit.Text(row, "Title", title, 16f, s_text).Node.Width.Value = Sizing.Grow();
-                var toggle = Switch(row);
-                darkSwitch ??= toggle;
-            }
-
-            var button = me.Child("Log out").Center();
-            button.Sized(Sizing.Grow(), Sizing.Fixed(50f));
-            // Its dialog grows out of it: the two share a match name.
-            button.MatchName.Value = "Log out";
-            button.ClipRadii.Value = 14f;
-            var buttonBox = DemoKit.Fill(button, s_card, 14f);
-            buttonBox.Fill.When(InteractionStates.Pressed, new Color(0.5f, 0.5f, 0.55f, 0.25f));
-            // Its label turns into the dialog's title as the dialog grows out of it: named alike.
-            button.Child("Title").Label("Log out", 17f, Red, bold: true).Node.MatchName.Value = "Log out title";
-            logOut = button.Pressable();
-            return scroll;
-        }
-
-        private static ToggleSwitch Switch(UINode parent)
-        {
-            var track = parent.Child("Switch").Sized(Sizing.Fixed(51f), Sizing.Fixed(31f)).Pad(2f).Align(AlignX.Left, AlignY.Center);
-            var trackBox = track.Box(new Color(0.47f, 0.47f, 0.5f, 0.32f), 15.5f);
-            trackBox.Fill.When(InteractionStates.Selected, Green);
-            var knob = track.Child("Knob").Sized(Sizing.Fixed(27f), Sizing.Fixed(27f));
-            DemoKit.Shadow(knob.Box(Color.white, 13.5f), 0.2f, 4f, 2f);
-            knob.HitTestable.Value = false;
-            var pressable = track.Pressable();
-            pressable.Toggles = true;
-            return track.Add<ToggleSwitch>();
+            var host = app.Child(name).Center();
+            var presentation = host.Add<Presentation>();
+            presentation.Transition = PresentationTransition.None;
+            presentation.Animation = new UIAnimation(0.45f, 0.1f);
+            card = host.Child("Card").Column(14f).Pad(20f);
+            card.Width.Value = Sizing.Fixed(width);
+            card.MatchName.Value = matchName;
+            card.ClipRadii.Value = 24f;
+            DemoKit.Shadow(DemoKit.Fill(card, s_card, 24f), 0.2f, 30f, 10f);
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            host.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Any, panel: card);
+            return presentation;
         }
 
         // ── Tab bar ──────────────────────────────────────────────────────────────
 
+        // The tab bar: a capsule floating over the bottom of the pages, a focus section that comes back to the tab it left.
+        // The selection pill floats on the selected tab, behind its icon and title, and springs to the next (CircleApp).
         private static List<Pressable> TabBar(UINode app, out UINode pill)
         {
             var bar = app.Child("Tab Bar").Row(2f).Pad(6f).Float(AttachPoint.CenterBottom, AttachPoint.CenterBottom, new Vector2(0f, -28f));
             DemoKit.Shadow(DemoKit.Fill(bar, s_bar, 30f), 0.12f, 24f, 8f);
+            bar.FocusScope.Value = FocusScope.Section;
+            bar.FocusEntry.Value = FocusEntry.Remembered;
             pill = bar.Child("Pill");
             pill.Box(new Color(Accent.r, Accent.g, Accent.b, 0.14f), 24f);
             var tabs = new List<Pressable>();
@@ -286,6 +251,8 @@ namespace TimboJimboEditor.UINext.Demos
 
         // ── Photo viewer ─────────────────────────────────────────────────────────
 
+        // The photo viewer: the photo, named as the one it opens from, over a black backdrop (which takes no focus) with its
+        // caption, thrown away any way from the photo or the backdrop, or pinched. See PhotoViewer.
         private static PhotoViewer Viewer(UINode app)
         {
             var host = app.Child("Photo Viewer").Column(18f).Center();
@@ -296,8 +263,10 @@ namespace TimboJimboEditor.UINext.Demos
             // The backdrop and caption fade in as the photo flies out of the feed.
             var backdrop = host.Child("Backdrop").Float(AttachPoint.LeftTop, AttachPoint.LeftTop);
             backdrop.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
+            backdrop.IgnoresSafeArea.Value = Edges.All;
             backdrop.Box(Color.black);
             backdrop.Opacity.Value = 0f;
+            backdrop.Focusable.Value = Focusability.Never;
             backdrop.Pressable();
             var photoNode = host.Child("Photo");
             photoNode.Width.Value = Sizing.Grow();
@@ -306,8 +275,6 @@ namespace TimboJimboEditor.UINext.Demos
             var photo = photoNode.Add<ScenePhoto>();
             photo.CornerRadius.Value = 0f;
             photoNode.Pressable();
-            // Focus starts on the photo, rather than on the backdrop behind it.
-            photoNode.PrefersFocus.Value = true;
             photoNode.Add<Pinchable>();
             // Thrown away any way by a drag anywhere in the viewer, on the photo or the backdrop, following the finger.
             host.Add<Draggable>().Axis = ScrollAxis.Both;
@@ -319,163 +286,6 @@ namespace TimboJimboEditor.UINext.Demos
             var viewer = host.Add<PhotoViewer>();
             viewer.Setup(backdrop, photo, caption, swipe);
             return viewer;
-        }
-
-        // ── Story viewer ─────────────────────────────────────────────────────────
-
-        private static void StoryScreen(UINode app, List<Pressable> stories, List<UINode> ringAvatars)
-        {
-            var host = app.Child("Story Viewer").Column();
-            var presentation = host.Add<Presentation>();
-            presentation.Style = PresentationStyle.Cover;
-            presentation.Transition = PresentationTransition.None;
-            presentation.Dim.Value = Color.clear;
-            // The story and the avatar in its ring share a match name; a swipe down or a tap takes it back into the avatar.
-            var story = host.Child("Story").Sized(Sizing.Grow(), Sizing.Grow()).Column(14f).Pad(new Insets(16f, 16f, 60f, 40f));
-            story.IgnoresSafeArea.Value = Edges.All;
-            story.MatchName.Value = "Story";
-            story.Clips.Value = true;
-            var background = story.Box(Color.gray);
-            background.Gradient.Value = true;
-            background.GradientAngle.Value = 90f;
-            story.Pressable();
-            story.Add<Draggable>().Axis = ScrollAxis.Vertical;
-            story.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Down);
-
-            var progress = story.Child("Progress").Sized(Sizing.Grow(), Sizing.Fixed(3f));
-            progress.Box(new Color(1f, 1f, 1f, 0.9f), 1.5f);
-            var head = story.Child("Header").Row(10f).Align(AlignX.Left, AlignY.Center);
-            var avatar = DemoKit.Avatar(head, 36f, Color.gray, "");
-            var name = head.Child("Name").Label("", 16f, Color.white, bold: true);
-            head.Child("Time").Label("2h", 14f, new Color(1f, 1f, 1f, 0.7f));
-            var middle = story.Child("Middle").Sized(Sizing.Grow(), Sizing.Grow()).Center();
-            middle.Child("Moment").Label("🌅", 96f);
-
-            host.Add<StoryViewer>().Setup(stories, ringAvatars, story, background, avatar.GetComponent<Box>(),
-                avatar.transform.GetChild(0).GetComponent<Label>(), name);
-        }
-
-        // ── Conversation ─────────────────────────────────────────────────────────
-
-        private static Presentation Conversation(UINode app, List<Pressable> rows, ChatsController controller)
-        {
-            var host = app.Child("Conversation").Column();
-            var presentation = host.Add<Presentation>();
-            presentation.Style = PresentationStyle.Cover;
-            // It grows out of its row and collapses back into it (matched), rather than sliding.
-            presentation.Transition = PresentationTransition.None;
-            presentation.Dim.Value = new Color(0f, 0f, 0f, 0.2f);
-            presentation.Animation = new UIAnimation(0.45f, 0.08f);
-
-            var content = host.Child("Content").Sized(Sizing.Grow(), Sizing.Grow()).Column();
-            DemoKit.Fill(content, s_background);
-            content.IgnoresSafeArea.Value = Edges.All;
-            content.MatchName.Value = "Chat";
-            content.MatchAnchor.Value = new Vector2(0.5f, 0f);
-            content.Add<Draggable>().Axis = ScrollAxis.Horizontal;
-            content.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Right);
-
-            var header = content.Child("Header").Row(10f).Pad(new Insets(10f, 16f, 10f, 10f)).Align(AlignX.Left, AlignY.Center);
-            header.Width.Value = Sizing.Grow();
-            DemoKit.Fill(header, s_card);
-            var back = header.Child("Back").Pad(8f, 4f);
-            back.Child("Title").Label("‹ Chats", 17f, Accent);
-            var backPressable = back.Pressable();
-            var avatar = DemoKit.Avatar(header, 36f, Color.gray, "");
-            avatar.MatchName.Value = "Avatar";
-            var name = DemoKit.Text(header, "Name", "", 17f, s_text, bold: true);
-            name.Node.MatchName.Value = "Name";
-
-            var thread = content.Child("Thread").Sized(Sizing.Grow(), Sizing.Grow()).Column(8f).Pad(16f);
-            var threadScroll = thread.Scroll();
-
-#if UINEXT_TEXTINPUT
-            var replies = content.Child("Replies").Row(8f).Pad(new Insets(16f, 16f, 8f, 4f));
-#else
-            var replies = content.Child("Replies").Row(8f).Pad(new Insets(16f, 16f, 10f, 30f));
-#endif
-            replies.Width.Value = Sizing.Grow();
-            var replyButtons = new List<Pressable>();
-            foreach (var reply in CircleData.Replies)
-            {
-                var chip = replies.Child("Reply").Pad(14f, 8f);
-                var chipBox = chip.Box(new Color(Accent.r, Accent.g, Accent.b, 0.12f), 16f);
-                chipBox.Fill.When(InteractionStates.Pressed, new Color(Accent.r, Accent.g, Accent.b, 0.3f));
-                chip.Child("Text").Label(reply, 15f, Accent);
-                replyButtons.Add(chip.Pressable());
-            }
-
-            controller.Setup(rows, presentation, content, backPressable, avatar.GetComponent<Box>(),
-                avatar.transform.GetChild(0).GetComponent<Label>(), name, thread, threadScroll, replyButtons, s_bubble, s_text, Accent);
-
-#if UINEXT_TEXTINPUT
-            // The composer: a pill that grows with its lines, and a send button lit while there is something to send.
-            var composer = content.Child("Composer").Row(8f).Pad(new Insets(12f, 12f, 6f, 30f)).Align(AlignX.Left, AlignY.Bottom);
-            composer.Width.Value = Sizing.Grow();
-            // Room for the home indicator with the keyboard down; on the keyboard with it up.
-            composer.AvoidsKeyboard.Value = true;
-            var input = composer.Child("Input");
-            input.Width.Value = Sizing.Grow();
-            var field = input.TextField("Message", 16f, multiline: true, maxLines: 5, padding: Insets.Symmetric(14f, 9f));
-            input.ClipRadii.Value = 18f;
-            var inputBox = input.Box(Color.white, 18f);
-            inputBox.Fill.Token = s_card;
-            inputBox.BorderWidth.Value = 1f;
-            inputBox.BorderColor.Token = s_subtle;
-            field.Color.Token = s_text;
-            field.PlaceholderColor.Token = s_secondary;
-            field.CaretColor.Value = Accent;
-            field.SelectionColor.Value = new Color(Accent.r, Accent.g, Accent.b, 0.25f);
-            var config = field.Config;
-            config.ReturnKey = TimboJimbo.UI.TextInput.TextReturnKey.Send;
-            field.Config = config;
-            var send = composer.Child("Send").Sized(Sizing.Fixed(36f), Sizing.Fixed(36f)).Center();
-            var sendBox = send.Box(Accent, 18f);
-            sendBox.Fill.When(InteractionStates.Disabled, new Color(0.47f, 0.47f, 0.5f, 0.35f));
-            sendBox.Fill.When(InteractionStates.Pressed, Color.Lerp(Accent, Color.black, 0.25f));
-            send.Child("Arrow").Label("↑", 19f, Color.white, bold: true);
-            controller.SetupComposer(field, send.Pressable());
-#endif
-            return presentation;
-        }
-
-        // ── Log out dialog ───────────────────────────────────────────────────────
-
-        private static Presentation LogOutDialog(UINode app, out List<Pressable> buttons)
-        {
-            var host = app.Child("Log Out Dialog").Center();
-            var presentation = host.Add<Presentation>();
-            // It grows out of the Log out button by name: the match is its transition.
-            presentation.Transition = PresentationTransition.None;
-            presentation.Animation = new UIAnimation(0.4f, 0.1f);
-            var alert = host.Child("Alert").Column(14f).Pad(22f).Align(AlignX.Center, AlignY.Top);
-            alert.Width.Value = Sizing.Fixed(290f);
-            // It takes over from the Log out button, which hides as it comes and shows again as it goes (CircleApp).
-            alert.MatchName.Value = "Log out";
-            alert.ClipRadii.Value = 20f;
-            DemoKit.Shadow(DemoKit.Fill(alert, s_card, 20f), 0.2f, 30f, 10f);
-            var title = DemoKit.Text(alert, "Title", "Log out of Circle?", 18f, s_text, bold: true);
-            title.Alignment.Value = TextAnchor.UpperCenter;
-            // It flies out of the Log out button's label, named alike.
-            title.Node.MatchName.Value = "Log out title";
-            var body = DemoKit.Text(alert, "Body", "You can log back in at any time.", 14f, s_secondary);
-            body.Alignment.Value = TextAnchor.UpperCenter;
-            var row = alert.Child("Buttons").Row(10f);
-            row.Width.Value = Sizing.Grow();
-            buttons = new List<Pressable>();
-            foreach (var (label, colour, fill) in new[] { ("Cancel", (Color?)null, true), ("Log out", (Color?)Color.white, false) })
-            {
-                var button = row.Child(label).Center().Sized(Sizing.Grow(), Sizing.Fixed(46f));
-                var box = fill ? DemoKit.Fill(button, s_subtle, 12f) : button.Box(Red, 12f);
-                box.Fill.When(InteractionStates.Pressed, fill ? new Color(0.5f, 0.5f, 0.55f, 0.3f) : Darker(Red));
-                if (colour.HasValue) button.Child("Title").Label(label, 16f, colour.Value, bold: true);
-                else DemoKit.Text(button, "Title", label, 16f, s_text, bold: true);
-                buttons.Add(button.Pressable());
-            }
-            // Thrown away by a drag anywhere in it, on the alert or the dim around it, following the finger.
-            host.Add<Draggable>().Axis = ScrollAxis.Both;
-            host.Add<SwipeToDismiss>().Setup(presentation, SwipeDirections.Any, panel: alert);
-            return presentation;
         }
     }
 }

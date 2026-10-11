@@ -4,13 +4,12 @@ using UnityEngine;
 namespace TimboJimbo.UINext.Demos.Circle
 {
     /// <summary>
-    /// Circle, the demo app: three pages (Home, Chats, Me) side by side in a paging scroll view, under a floating tab
-    /// bar. Tapping a tab scrolls to its page and springs the selection pill (floating on the selected tab) across;
-    /// swiping between pages moves the pill when the page settles. Tapping the selected tab again scrolls its page to
-    /// the top. Feed photos open in the viewer, flying out of the feed; the Dark mode switch turns the Dark mode state on
-    /// at the root, and every colour from a token follows, animated. Log out grows its dialog out of its button: the two
-    /// share a match name, and the button hides as the dialog comes and shows again as it goes, so the dialog takes over
-    /// from it and shrinks back into it.
+    /// Circle, the demo app: three pages (Home, Chats, Me) side by side in a paging scroll view, under a floating tab bar.
+    /// Tapping a tab scrolls to its page and springs the selection pill (floating on the selected tab) across; swiping
+    /// between pages moves the pill when the page settles. Tapping the selected tab again scrolls its page to the top.
+    /// Photos in the feed and on Me open in the viewer, flying out of where they are; a post's comments open the comments
+    /// sheet; and Dark mode (<see cref="SetDark"/>, from the settings' theme) turns the Dark mode state on at the root,
+    /// every colour from a token following, animated.
     /// </summary>
     public sealed class CircleApp : MonoBehaviour
     {
@@ -20,18 +19,17 @@ namespace TimboJimbo.UINext.Demos.Circle
         [SerializeField] private List<ScrollView> _pageScrolls = new();
         [SerializeField] private List<ScenePhoto> _photos = new();
         [SerializeField] private List<string> _captions = new();
+        [SerializeField] private List<ScenePhoto> _myPhotos = new();
         [SerializeField] private PhotoViewer _viewer;
+        [SerializeField] private List<Pressable> _commentButtons = new();
+        [SerializeField] private Presentation _comments;
         [SerializeField] private UIState _dark;
-        [SerializeField] private ToggleSwitch _darkSwitch;
-        [SerializeField] private Pressable _logOut;
-        [SerializeField] private Presentation _logOutDialog;
-        [SerializeField] private List<Pressable> _logOutButtons = new();
 
         private int _current;
 
         public void Setup(List<Pressable> tabs, UINode pill, ScrollView pages, List<ScrollView> pageScrolls, List<ScenePhoto> photos,
-            List<string> captions, PhotoViewer viewer, UIState dark, ToggleSwitch darkSwitch, Pressable logOut, Presentation logOutDialog,
-            List<Pressable> logOutButtons)
+            List<string> captions, List<ScenePhoto> myPhotos, PhotoViewer viewer, List<Pressable> commentButtons, Presentation comments,
+            UIState dark)
         {
             _tabs = tabs;
             _pill = pill;
@@ -39,12 +37,11 @@ namespace TimboJimbo.UINext.Demos.Circle
             _pageScrolls = pageScrolls;
             _photos = photos;
             _captions = captions;
+            _myPhotos = myPhotos;
             _viewer = viewer;
+            _commentButtons = commentButtons;
+            _comments = comments;
             _dark = dark;
-            _darkSwitch = darkSwitch;
-            _logOut = logOut;
-            _logOutDialog = logOutDialog;
-            _logOutButtons = logOutButtons;
         }
 
         private void Awake()
@@ -61,43 +58,36 @@ namespace TimboJimbo.UINext.Demos.Circle
                 int index = i;
                 _tabs[i].Tapped += () => Select(index);
             }
+            // A post's photo is matched by the post's index, which its post gives it; yours by their own.
             for (int i = 0; i < _photos.Count; i++)
             {
                 int index = i;
                 var pressable = _photos[i].GetComponent<Pressable>();
-                // A post's photo is matched by the post's index, which its post gives it.
                 if (pressable != null)
                     pressable.Tapped += () => _viewer.Open(_photos[index], _captions[index], index.ToString());
             }
-            _pages.Scrolled += OnPagesScrolled;
-            _darkSwitch.Changed += SetDark;
-            _logOut.Tapped += OpenLogOut;
-            _logOutDialog.Dismissing += OnLogOutDismissing;
-            foreach (var button in _logOutButtons)
-                button.Tapped += () => _logOutDialog.Dismiss();
-        }
-
-        private void OnDisable()
-        {
-            _pages.Scrolled -= OnPagesScrolled;
-            _darkSwitch.Changed -= SetDark;
-            _logOut.Tapped -= OpenLogOut;
-            _logOutDialog.Dismissing -= OnLogOutDismissing;
-        }
-
-        // One change: the button goes and the dialog comes, so the dialog takes over from the button and grows out of it.
-        private void OpenLogOut()
-        {
-            if (_logOutDialog.IsPresented) return;
-            UI.Animate(_logOutDialog.Animation, () =>
+            for (int i = 0; i < _myPhotos.Count; i++)
             {
-                _logOut.Node.Display.Value = DisplayMode.Hidden;
-                _logOutDialog.Present();
-            });
+                int index = i;
+                var pressable = _myPhotos[i].GetComponent<Pressable>();
+                if (pressable != null)
+                    pressable.Tapped += () => _viewer.Open(_myPhotos[index], "", "me " + index);
+            }
+            foreach (var button in _commentButtons)
+                button.Tapped += OpenComments;
+            _pages.Scrolled += OnPagesScrolled;
         }
 
-        // Inside the change that takes the dialog away: the button comes back, taking over from the dialog as it shrinks home.
-        private void OnLogOutDismissing() => _logOut.Node.Display.Value = DisplayMode.Visible;
+        private void OnDisable() => _pages.Scrolled -= OnPagesScrolled;
+
+        private void OpenComments() => _comments.Present();
+
+        /// <summary>Puts the app in Dark mode, or takes it out: every colour from a token follows, animated.</summary>
+        public void SetDark(bool on)
+        {
+            var root = GetComponent<UINode>();
+            UI.Animate(new UIAnimation(0.5f), () => root.SetState(_dark, on));
+        }
 
         /// <summary>Shows the <paramref name="index"/>th page; the page showing already scrolls back to its top.</summary>
         public void Select(int index)
@@ -128,12 +118,6 @@ namespace TimboJimbo.UINext.Demos.Circle
             var floating = _pill.Floating.Peek;
             floating.Element = _tabs[index].Node;
             UI.Animate(UIAnimation.Snappy, () => _pill.Floating.Value = floating);
-        }
-
-        private void SetDark(bool on)
-        {
-            var root = GetComponent<UINode>();
-            UI.Animate(new UIAnimation(0.5f), () => root.SetState(_dark, on));
         }
     }
 }
