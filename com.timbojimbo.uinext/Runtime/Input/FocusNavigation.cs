@@ -18,7 +18,8 @@ namespace TimboJimbo.UINext
         /// <summary>
         /// The index in <paramref name="rects"/> of the one to move to from <paramref name="from"/> going
         /// <paramref name="direction"/> (a step along one axis, y down), or -1 for none. A candidate lies that way: its
-        /// centre past this one's, and its far edge past this one's far edge. Going up or down, the next row that way is
+        /// centre past this one's, its far edge past this one's far edge, and mostly past it rather than beside it (see
+        /// Ahead). Going up or down, the next row that way is
         /// found first, then the nearest in it across (going left or right, the next column, then the nearest in it up or
         /// down), so a move never skips a row for something better in line further on. The next row is the candidate whose
         /// near edge comes first that way, with every one starting before it ends (a taller neighbour, a staggered card).
@@ -106,13 +107,20 @@ namespace TimboJimbo.UINext
             return first;
         }
 
-        // Whether `to` lies `direction` of `from`: its centre past `from`'s, and its far edge past `from`'s far edge.
+        // Whether `to` lies `direction` of `from`: its centre past `from`'s, its far edge past `from`'s far edge, and mostly
+        // past it, not beside it. One beside it overlaps it along the way the move goes by half the shorter of them or more,
+        // and not at all across: a chip a point lower in the same row, a button above whose edge sticks out a little past,
+        // a wide row above a photo. One over it or under it (a page under the tab bar floating over it) is not beside it.
         private static bool Ahead(Rect from, Rect to, Vector2 direction)
         {
             if (direction == Vector2.zero) return false;
             Span(from, direction, out float fromStart, out float fromEnd);
             Span(to, direction, out float toStart, out float toEnd);
-            return toStart + toEnd > fromStart + fromEnd && toEnd > fromEnd;
+            if (toStart + toEnd <= fromStart + fromEnd || toEnd <= fromEnd) return false;
+            float overlap = Mathf.Min(fromEnd, toEnd) - Mathf.Max(fromStart, toStart);
+            bool beside = overlap > 0f && overlap * 2f >= Mathf.Min(fromEnd - fromStart, toEnd - toStart)
+                          && Across(from, to, direction) > 0f;
+            return !beside;
         }
 
         // Whether `to` lies `direction` of `from` in the row that ends at `rowEnd`: it starts before that.
