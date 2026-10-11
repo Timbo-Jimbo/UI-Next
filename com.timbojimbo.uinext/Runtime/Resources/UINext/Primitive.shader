@@ -209,8 +209,16 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 else if (inst.type == 3u)
                 {
                     // The distance field holds 0.5 at the glyph's edge (less where synthetic bold widens it), resolved
-                    // over about a pixel by how fast the field changes on screen, so edges stay crisp at any size.
-                    coverage = saturate((tex.a - (0.5 - inst.params.y)) / fieldPixel + 0.5);
+                    // over about a pixel by how fast the field changes on screen, so edges stay crisp at any size. An
+                    // outline (params.w, a share of the field) lies past that edge in the second colour.
+                    float edge = 0.5 - inst.params.y;
+                    float fill = saturate((tex.a - edge) / fieldPixel + 0.5);
+                    coverage = fill;
+                    if (inst.params.w > 0)
+                    {
+                        coverage = saturate((tex.a - (edge - inst.params.w)) / fieldPixel + 0.5);
+                        color = lerp(inst.color2, inst.color, fill);
+                    }
                 }
                 else
                 {

@@ -56,8 +56,8 @@ namespace TimboJimbo.UINext
         public Vector4 Color;
         public Vector4 Color2;
 
-        // Shape: x border width, z gradient angle. Shadow: y blur. Image: (unused). Glyph SDF: x the atlas's distance
-        // range in texels.
+        // Shape: x border width, z gradient angle. Shadow: y blur. Image: (unused). Glyph SDF: y synthetic bold's
+        // widening and w an outline's width, as shares of the field (the outline in Color2), z italic's skew.
         public Vector4 Params;
 
         // The rect in the bound texture, in UV: x, y, width, height.

@@ -128,9 +128,12 @@ namespace TimboJimbo.UINext
         /// <summary>
         /// A laid-out text with its top-left corner at <paramref name="origin"/> (layout pixels are points): its glyphs,
         /// as signed distance fields (colour emoji keeping their own colours), and its underlines and strikethroughs, each
-        /// run's colour multiplied by <paramref name="tint"/>.
+        /// run's colour multiplied by <paramref name="tint"/>, with an <paramref name="outline"/> round each glyph
+        /// <paramref name="outlineWidth"/> points wide (as far as its atlas's padding reaches). A
+        /// <paramref name="silhouette"/> (a shadow) leaves colour emoji out.
         /// </summary>
-        public void Text(TextLayout layout, Vector2 origin, Color tint)
+        public void Text(TextLayout layout, Vector2 origin, Color tint, float outlineWidth = 0f, Color outline = default,
+            bool silhouette = false)
         {
             float left = origin.x;
             float top = origin.y;
@@ -149,7 +152,7 @@ namespace TimboJimbo.UINext
             for (int g = 0; g < handle.GroupCount; g++)
             {
                 var group = handle.GetGroup(g);
-                if (AtgSpriteAssets.IsPlaceholder(in group)) continue;
+                if (AtgSpriteAssets.IsPlaceholder(in group) || (silhouette && group.IsBitmap)) continue;
                 // Synthetic bold widens the glyph by a weight the engine gives in its own units; as a share of the
                 // field, through this atlas's padding, so it is the same in texels whatever the padding.
                 float dilateScale = group.AtlasPadding > 0 ? 0.5f / group.AtlasPadding * BoldTexelsPerUnit : 0f;
@@ -168,7 +171,25 @@ namespace TimboJimbo.UINext
                     var color = group.IsBitmap
                         ? new Color(1f, 1f, 1f, quad.BottomLeft.Color.a / 255f * tint.a)
                         : Multiply(quad.BottomLeft.Color, tint);
-                    Glyph(rect, skew, uv, group.Atlas, color, !group.IsBitmap, quad.BottomLeft.Dilate * dilateScale);
+                    float dilate = quad.BottomLeft.Dilate * dilateScale;
+                    if (outlineWidth <= 0f || group.IsBitmap || group.AtlasPadding <= 0 || group.Atlas == null || rect.width <= 0f)
+                    {
+                        Glyph(rect, skew, uv, group.Atlas, color, !group.IsBitmap, dilate);
+                        continue;
+                    }
+                    // The outline as a share of the field: its width in atlas texels (by how many the quad spans across
+                    // its width), the field falling from 0.5 at the edge to nothing at the padding, short of that.
+                    float texelsPerPoint = Mathf.Abs(uv.width) * group.Atlas.width / rect.width;
+                    float share = Mathf.Min(outlineWidth * texelsPerPoint * 0.5f / group.AtlasPadding, 0.45f - dilate);
+                    Add(new PrimitiveInstance
+                    {
+                        Rect = new Vector4(rect.x, rect.y, rect.width, rect.height),
+                        Color = color,
+                        Color2 = new Color(outline.r, outline.g, outline.b, outline.a * tint.a),
+                        Params = new Vector4(0f, dilate, skew, Mathf.Max(0f, share)),
+                        Uv = new Vector4(uv.x, uv.y, uv.width, uv.height),
+                        Type = (uint)PrimitiveType.GlyphSdf,
+                    }, group.Atlas);
                 }
             }
         }

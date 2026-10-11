@@ -35,6 +35,14 @@ namespace TimboJimbo.UINext
 
         [SerializeField] private UIValue<float> _characterSpacing = 0f;
 
+        [Tooltip("An outline round every glyph, in points: game UI's stroked text, as CSS's text-stroke. 0 for none.")]
+        [SerializeField] private UIValue<float> _outlineWidth = 0f;
+        [SerializeField] private UIValue<Color> _outlineColor = UnityEngine.Color.black;
+
+        [Tooltip("A hard shadow drawn under the text (and its outline), as CSS's text-shadow without blur. Clear for none.")]
+        [SerializeField] private UIValue<Color> _shadowColor = new Color(0f, 0f, 0f, 0f);
+        [SerializeField] private UIValue<Vector2> _shadowOffset = new Vector2(0f, 2f);
+
         // The layout drawn from, and what it was laid out with: a change of colour or opacity reuses it.
         private TextLayout _layout;
         private TextLayoutInput _laidOut;
@@ -65,6 +73,23 @@ namespace TimboJimbo.UINext
         public UIValue<TextBlockOverflow> Overflow => _overflow;
         public UIValue<bool> Markdown => _markdown;
         public UIValue<float> CharacterSpacing => _characterSpacing;
+
+        /// <summary>
+        /// An outline round every glyph, in points, in <see cref="OutlineColor"/>: the stroked text of game UI, as CSS's
+        /// text-stroke and TextMeshPro's outline. It lies outside the glyph, so the text keeps its weight, and takes no
+        /// room in layout. As wide as the font's atlas padding allows (about a tenth of its size). Colour emoji have none.
+        /// </summary>
+        public UIValue<float> OutlineWidth => _outlineWidth;
+
+        public UIValue<Color> OutlineColor => _outlineColor;
+
+        /// <summary>
+        /// A hard shadow under the text, its outline included, in this colour (clear for none), moved by
+        /// <see cref="ShadowOffset"/>: as CSS's text-shadow with no blur.
+        /// </summary>
+        public UIValue<Color> ShadowColor => _shadowColor;
+
+        public UIValue<Vector2> ShadowOffset => _shadowOffset;
 
         /// <summary>The layout it last drew, for questions about where its characters are (null before it draws).</summary>
         public TextLayout Layout => _hasLaidOut ? _layout : null;
@@ -130,7 +155,12 @@ namespace TimboJimbo.UINext
                 _laidOut = input;
             }
             if (!_hasLaidOut) return;
-            painter.Text(_layout, new Vector2(box.x, box.y + _layout.TopPx), _color.Value);
+            var origin = new Vector2(box.x, box.y + _layout.TopPx);
+            float outline = Mathf.Max(0f, _outlineWidth.Value);
+            var shadow = _shadowColor.Value;
+            if (shadow.a > 0f)
+                painter.Text(_layout, origin + _shadowOffset.Value, shadow, outline, shadow, silhouette: true);
+            painter.Text(_layout, origin, _color.Value, outline, _outlineColor.Value);
         }
 
         protected override void OnDisable()
@@ -158,7 +188,8 @@ namespace TimboJimbo.UINext
             input.Bold = _bold.Value;
             input.Italic = _italic.Value;
             input.CharacterSpacingPx = _characterSpacing.Value;
-            input.AntiAliasMarginPx = 1f;
+            // Room round every glyph for its edge's anti-aliasing, and for its outline.
+            input.AntiAliasMarginPx = 1f + Mathf.Max(0f, _outlineWidth.Value);
             return input;
         }
 
@@ -169,6 +200,6 @@ namespace TimboJimbo.UINext
             a.Text == b.Text && a.RichText == b.RichText && a.Font == b.Font && a.FontSizePx == b.FontSizePx
             && a.WordWrap == b.WordWrap && a.Alignment == b.Alignment && a.Overflow == b.Overflow && a.MaxLines == b.MaxLines
             && a.Bold == b.Bold && a.Italic == b.Italic && a.CharacterSpacingPx == b.CharacterSpacingPx
-            && (ignoreBox || (a.WidthPx == b.WidthPx && a.HeightPx == b.HeightPx));
+            && a.AntiAliasMarginPx == b.AntiAliasMarginPx && (ignoreBox || (a.WidthPx == b.WidthPx && a.HeightPx == b.HeightPx));
     }
 }
