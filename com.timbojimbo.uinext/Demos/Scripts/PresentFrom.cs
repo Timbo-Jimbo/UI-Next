@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace TimboJimbo.UINext.Demos.Circle
+namespace TimboJimbo.UINext.Demos
 {
     /// <summary>
     /// Presents its presentation from a button, growing out of it: what is presented and the button (or a part of it, its
