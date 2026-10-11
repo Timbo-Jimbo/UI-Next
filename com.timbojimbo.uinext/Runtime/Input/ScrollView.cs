@@ -26,7 +26,10 @@ namespace TimboJimbo.UINext
     /// stretches. The wheel at an end scrolls a scroll view it is in. A pointer that goes down while it moves catches it,
     /// and does not press what is under it; caught bouncing back from past an end, a drag heading further past it goes
     /// where a new drag from that end would, and it springs back. It draws its scroll indicators over what it holds while
-    /// it moves.
+    /// it moves. Nodes floating over its edges (a tab bar, a header), listed for the edge they lie along
+    /// (<see cref="ClearOfBottom"/> and the rest), are kept clear of, with <see cref="ClearMargin"/> on top, as SwiftUI's
+    /// safeAreaInset insets a scroll view: what it holds scrolls out from under them, and <see cref="ScrollIntoView"/>
+    /// lands clear of them.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/UI Next/Scroll View")]
@@ -45,6 +48,21 @@ namespace TimboJimbo.UINext
 
         [SerializeField] private UIValue<bool> _showsIndicators = true;
         [SerializeField] private UIValue<Color> _indicatorColor = new Color(0f, 0f, 0f, 0.35f);
+
+        [Tooltip("Nodes floating over its top edge (a header): what it holds scrolls out from under them, and lands clear of them.")]
+        [SerializeField] private List<UINode> _clearOfTop = new();
+
+        [Tooltip("Nodes floating over its bottom edge (a tab bar).")]
+        [SerializeField] private List<UINode> _clearOfBottom = new();
+
+        [Tooltip("Nodes floating over its left edge.")]
+        [SerializeField] private List<UINode> _clearOfLeft = new();
+
+        [Tooltip("Nodes floating over its right edge.")]
+        [SerializeField] private List<UINode> _clearOfRight = new();
+
+        [Tooltip("Room kept clear at each edge on top of what the nodes listed for it cover.")]
+        [SerializeField] private UIValue<Insets> _clearMargin = new Insets();
 
         // How far a pointer moves before a drag begins, in points.
         private const float Slop = 8f;
@@ -81,6 +99,8 @@ namespace TimboJimbo.UINext
         [NonSerialized] private bool _gliding;
         [NonSerialized] private Vector2 _velocity;
         [NonSerialized] private Vector2 _pageFrom;
+        // While its clear insets are worked out (see ClearInsets).
+        [NonSerialized] private bool _measuring;
 
         /// <summary>Raised whenever it is scrolled, by a drag, a glide, the wheel or code, with its offset as set.</summary>
         public event Action<Vector2> Scrolled;
@@ -96,16 +116,118 @@ namespace TimboJimbo.UINext
         public UIValue<bool> ShowsIndicators => _showsIndicators;
         public UIValue<Color> IndicatorColor => _indicatorColor;
 
+        /// <summary>Nodes floating over its top edge (a header), kept clear of: see <see cref="ClearInsets"/>.</summary>
+        public List<UINode> ClearOfTop => _clearOfTop;
+
+        /// <summary>Nodes floating over its bottom edge (a tab bar), kept clear of: see <see cref="ClearInsets"/>.</summary>
+        public List<UINode> ClearOfBottom => _clearOfBottom;
+
+        /// <summary>Nodes floating over its left edge, kept clear of: see <see cref="ClearInsets"/>.</summary>
+        public List<UINode> ClearOfLeft => _clearOfLeft;
+
+        /// <summary>Nodes floating over its right edge, kept clear of: see <see cref="ClearInsets"/>.</summary>
+        public List<UINode> ClearOfRight => _clearOfRight;
+
+        /// <summary>Room kept clear at each edge on top of what the nodes listed for it cover.</summary>
+        public UIValue<Insets> ClearMargin => _clearMargin;
+
+        /// <summary>
+        /// How far each of its edges is covered, in its own points: how far in from that edge the nodes listed for it
+        /// (<see cref="ClearOfTop"/> and the rest) reach, as drawn now and while shown, a gap between them and the edge
+        /// included, plus <see cref="ClearMargin"/>. It is padding round what it holds that layout never sees, as SwiftUI's
+        /// safeAreaInset and UIKit's contentInset are: its range grows by it, what it holds is drawn from under the top and
+        /// left ones and scrolls out from under the bottom and right ones, <see cref="ScrollIntoView"/> lands clear of it,
+        /// and pages and the indicators keep to the part of it that it leaves. Never kept, it is worked out whenever it is
+        /// needed, so a bar that hides, slides away or shrinks counts for what it is at once.
+        /// </summary>
+        public Insets ClearInsets
+        {
+            get
+            {
+                var insets = _clearMargin.Value;
+                // Asked again while they are worked out (by a listed node whose place hangs on them, in a scroll view that
+                // keeps clear of something in this one), they are the margin alone, rather than each waiting on the other.
+                if (_measuring || _clearOfTop.Count + _clearOfBottom.Count + _clearOfLeft.Count + _clearOfRight.Count == 0)
+                    return insets;
+                var node = Node;
+                var tree = node.Tree;
+                if (tree == null || node.Index < 0) return insets;
+                var world = tree.WorldAhead(node, 0f, out var size);
+                var mine = MatchedGeometry.Bounds(world, size);
+                if (mine.width <= 0f || mine.height <= 0f) return insets;
+                // Reaches are in its root's points; its own are smaller when it is drawn scaled.
+                float scale = Mathf.Max(1e-4f, world.ScaleFactor);
+                _measuring = true;
+                try
+                {
+                    insets.Top += Reach(_clearOfTop, Side.Top, mine, tree) / scale;
+                    insets.Bottom += Reach(_clearOfBottom, Side.Bottom, mine, tree) / scale;
+                    insets.Left += Reach(_clearOfLeft, Side.Left, mine, tree) / scale;
+                    insets.Right += Reach(_clearOfRight, Side.Right, mine, tree) / scale;
+                }
+                finally
+                {
+                    _measuring = false;
+                }
+                return insets;
+            }
+        }
+
+        private enum Side { Top, Bottom, Left, Right }
+
+        // How far the nodes listed for `side` reach into `mine` (its root's points) from that edge, as drawn now: the
+        // furthest in of those shown, from the edge to their far side, at most the whole way across. Where they are along
+        // the edge does not matter: a page in a pager is kept clear of the tab bar over its bottom whether it is under the
+        // bar yet or still off to the side, so what it scrolls into view as it slides in lands clear of the bar.
+        private float Reach(List<UINode> nodes, Side side, Rect mine, UITree tree)
+        {
+            float reach = 0f;
+            foreach (var other in nodes)
+            {
+                if (other == null || other == Node || other.Tree != tree || !tree.DrawnNow(other, out var theirs)) continue;
+                bool vertical = side <= Side.Bottom;
+                if (vertical ? theirs.yMax <= mine.yMin || theirs.yMin >= mine.yMax : theirs.xMax <= mine.xMin || theirs.xMin >= mine.xMax)
+                    continue;
+                float inward = side switch
+                {
+                    Side.Top => theirs.yMax - mine.yMin,
+                    Side.Bottom => mine.yMax - theirs.yMin,
+                    Side.Left => theirs.xMax - mine.xMin,
+                    _ => mine.xMax - theirs.xMin,
+                };
+                reach = Mathf.Max(reach, Mathf.Min(inward, vertical ? mine.height : mine.width));
+            }
+            return reach;
+        }
+
+        // How far what it holds is drawn from its top-left corner before it is scrolled: under its top and left clear
+        // insets.
+        internal Vector2 ClearShift
+        {
+            get
+            {
+                var clear = ClearInsets;
+                return new Vector2(clear.Left, clear.Top);
+            }
+        }
+
         /// <summary>Its size, as last laid out.</summary>
         public Vector2 Viewport { get; private set; }
 
         /// <summary>How big what it holds is, padding included.</summary>
         public Vector2 ContentSize { get; private set; }
 
-        /// <summary>How far it can scroll each way.</summary>
-        public Vector2 Range => new(
-            Scrolls(0) ? Mathf.Max(0f, ContentSize.x - Viewport.x) : 0f,
-            Scrolls(1) ? Mathf.Max(0f, ContentSize.y - Viewport.y) : 0f);
+        /// <summary>How far it can scroll each way: what it holds, with its <see cref="ClearInsets"/> round it, past its size.</summary>
+        public Vector2 Range
+        {
+            get
+            {
+                var clear = ClearInsets;
+                return new Vector2(
+                    Scrolls(0) ? Mathf.Max(0f, ContentSize.x + clear.Horizontal - Viewport.x) : 0f,
+                    Scrolls(1) ? Mathf.Max(0f, ContentSize.y + clear.Vertical - Viewport.y) : 0f);
+            }
+        }
 
         /// <summary>How far its children are scrolled, where it is going (see <see cref="PresentedOffset"/> for as drawn).</summary>
         public Vector2 ContentOffset
@@ -167,7 +289,8 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Scrolls the least it takes to show <paramref name="node"/>, a node inside it, whole (or its start, if it is
-        /// bigger), with <paramref name="margin"/> points of room round it (for a focus ring).
+        /// bigger), clear of what covers its edges (<see cref="ClearInsets"/>), with <paramref name="margin"/> points of
+        /// room round it (for a focus ring, or a photo landing short of a bar).
         /// </summary>
         public void ScrollIntoView(UINode node, bool animated = true, float margin = 0f)
         {
@@ -177,10 +300,13 @@ namespace TimboJimbo.UINext
             for (var parent = node.Parent; parent != null && parent != Node; parent = parent.Parent)
                 rect.position += parent.LaidOutRect.position;
             var offset = ContentOffset;
+            var clear = ClearInsets;
             for (int axis = 0; axis < 2; axis++)
             {
                 if (!Scrolls(axis)) continue;
-                float min = rect.position[axis] - margin, max = rect.position[axis] + rect.size[axis] + margin, view = Viewport[axis];
+                float min = rect.position[axis] - margin, max = rect.position[axis] + rect.size[axis] + margin;
+                // Clear of its insets, it shows what it holds from its offset on, as far as the part of it they leave.
+                float view = Viewport[axis] - (axis == 0 ? clear.Horizontal : clear.Vertical);
                 if (min < offset[axis]) offset[axis] = min;
                 else if (max > offset[axis] + view) offset[axis] = Mathf.Min(min, max - view);
             }
@@ -519,14 +645,16 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // The page a release comes to rest on: the one it is nearest, thrown on one page at most by a flick.
+        // The page a release comes to rest on: the one it is nearest, thrown on one page at most by a flick. A page is the
+        // part of it clear of its edges' insets.
         private Vector2 PageFor(Vector2 offset, Vector2 velocity)
         {
             var range = Range;
+            var clear = ClearInsets;
             var page = offset;
             for (int axis = 0; axis < 2; axis++)
             {
-                float size = Mathf.Max(1f, Viewport[axis]);
+                float size = Mathf.Max(1f, Viewport[axis] - (axis == 0 ? clear.Horizontal : clear.Vertical));
                 if (!Scrolls(axis) || range[axis] <= 0f) continue;
                 float from = Mathf.Round(_pageFrom[axis] / size);
                 float projected = (offset[axis] + velocity[axis] * 0.15f) / size;
@@ -644,21 +772,24 @@ namespace TimboJimbo.UINext
             var overlay = painter.Overlay;
             var viewport = painter.Size;
             var range = Range;
+            var clear = ClearInsets;
             const float thickness = 3f, inset = 3f, shortest = 32f;
             for (int axis = 0; axis < 2; axis++)
             {
                 if (!Scrolls(axis) || range[axis] <= 0.5f) continue;
-                float along = viewport[axis], content = Mathf.Max(along, ContentSize[axis]);
+                // Along the part of it clear of its edges' insets.
+                float lead = axis == 1 ? clear.Top : clear.Left, trail = axis == 1 ? clear.Bottom : clear.Right;
+                float along = viewport[axis] - lead - trail, content = Mathf.Max(along, ContentSize[axis]);
                 float track = along - inset * 2f;
                 float length = Mathf.Max(shortest, track * along / content);
                 // Past an end it shrinks, as iOS's do.
                 float over = offset[axis] < 0f ? -offset[axis] : offset[axis] > range[axis] ? offset[axis] - range[axis] : 0f;
                 length = Mathf.Max(thickness * 2f, length - over);
                 float t = Mathf.Clamp01(offset[axis] / range[axis]);
-                float start = inset + t * (track - length);
+                float start = lead + inset + t * (track - length);
                 var rect = axis == 1
-                    ? new Rect(viewport.x - inset - thickness, start, thickness, length)
-                    : new Rect(start, viewport.y - inset - thickness, length, thickness);
+                    ? new Rect(viewport.x - clear.Right - inset - thickness, start, thickness, length)
+                    : new Rect(start, viewport.y - clear.Bottom - inset - thickness, length, thickness);
                 overlay.Rect(rect, color, thickness * 0.5f);
             }
         }

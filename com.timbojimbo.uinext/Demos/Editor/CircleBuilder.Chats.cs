@@ -18,7 +18,7 @@ namespace TimboJimboEditor.UINext.Demos
             var header = chats.Child("Header").Pad(new Insets(20f, 20f, 12f, 8f));
             DemoKit.Text(header, "Title", "Chats", 30f, s_text, bold: true);
 
-            var list = chats.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column().Pad(new Insets(0f, 0f, 0f, 120f));
+            var list = chats.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column();
             scroll = list.Scroll();
             rows = new List<Pressable>();
             for (int c = 0; c < CircleData.Chats.Length; c++)

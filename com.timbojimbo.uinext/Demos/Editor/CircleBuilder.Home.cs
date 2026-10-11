@@ -24,7 +24,7 @@ namespace TimboJimboEditor.UINext.Demos
             parts.Compose.Node.MatchName.Value = "Compose";
             parts.Compose.Node.ClipRadii.Value = 19f;
 
-            var feed = home.Child("Feed").Sized(Sizing.Grow(), Sizing.Grow()).Column(16f).Pad(new Insets(0f, 0f, 4f, 120f));
+            var feed = home.Child("Feed").Sized(Sizing.Grow(), Sizing.Grow()).Column(16f).Pad(new Insets(0f, 0f, 4f, 16f));
             parts.Feed = feed.Scroll();
 
             Tray(feed, parts);

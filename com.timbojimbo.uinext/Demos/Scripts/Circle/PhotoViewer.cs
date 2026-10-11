@@ -5,9 +5,10 @@ namespace TimboJimbo.UINext.Demos.Circle
     /// <summary>
     /// A photo opened full screen. Its photo and the one in the feed share a match name, and the feed's is hidden as the
     /// viewer is presented and shown again as it is dismissed, so the photo flies out of the feed and home again
-    /// (wherever the feed has scrolled it meanwhile). Thrown away in any direction, or pinched small, it flies home from
-    /// where it was let go, at the speed it was moving; let go of near where it was, it springs back. Pinched, it zooms
-    /// under the fingers, as Instagram's photos do; tapped, or back, it closes. The backdrop and caption fade with a throw.
+    /// (wherever the feed has scrolled it meanwhile), the feed bringing it into view as it goes, clear of the tab bar, so
+    /// it lands whole. Thrown away in any direction, or pinched small, it flies home from where it was let go, at the
+    /// speed it was moving; let go of near where it was, it springs back. Pinched, it zooms under the fingers, as
+    /// Instagram's photos do; tapped, or back, it closes. The backdrop and caption fade with a throw.
     /// </summary>
     [RequireComponent(typeof(Presentation))]
     public sealed class PhotoViewer : MonoBehaviour
@@ -19,6 +20,9 @@ namespace TimboJimbo.UINext.Demos.Circle
 
         // Pinched smaller than this, it closes as the fingers let go.
         private const float PinchedAway = 0.8f;
+
+        // The room kept round the feed's photo as the feed brings it into view to land in, in points.
+        private const float LandingRoom = 12f;
 
         private Presentation _presentation;
         private ScenePhoto _source;
@@ -93,7 +97,8 @@ namespace TimboJimbo.UINext.Demos.Circle
         }
 
         // Inside the presentation's changes: the feed's photo is hidden as this one flies out of it, and shown again as
-        // this one flies home into it.
+        // this one flies home into it, the feed scrolling it into view clear of what covers its edges (the tab bar) as
+        // part of the same change, so it never lands under the bar or cut off at the top.
         private void HideSource()
         {
             if (_source != null)
@@ -102,8 +107,11 @@ namespace TimboJimbo.UINext.Demos.Circle
 
         private void ShowSource()
         {
-            if (_source != null)
-                _source.Node.Display.Value = DisplayMode.Visible;
+            if (_source == null) return;
+            _source.Node.Display.Value = DisplayMode.Visible;
+            var feed = _source.GetComponentInParent<ScrollView>();
+            if (feed != null)
+                feed.ScrollIntoView(_source.Node, margin: LandingRoom);
         }
 
         // What fades as the photo is thrown away.

@@ -4,12 +4,12 @@ using UnityEngine;
 namespace TimboJimbo.UINext.Demos.Circle
 {
     /// <summary>
-    /// Circle, the demo app: three pages (Home, Chats, Me) side by side in a paging scroll view, under a floating tab bar.
-    /// Tapping a tab scrolls to its page and springs the selection pill (floating on the selected tab) across; swiping
-    /// between pages moves the pill when the page settles. Tapping the selected tab again scrolls its page to the top.
-    /// Photos in the feed and on Me open in the viewer, flying out of where they are; a post's comments open the comments
-    /// sheet; and Dark mode (<see cref="SetDark"/>, from the settings' theme) turns the Dark mode state on at the root,
-    /// every colour from a token following, animated.
+    /// Circle, the demo app: three pages (Home, Chats, Me) side by side in a paging scroll view, under a floating tab bar
+    /// their scroll views keep clear of. Tapping a tab scrolls to its page and springs the selection pill (floating on the
+    /// selected tab) across; swiping between pages moves the pill when the page settles. Tapping the selected tab again
+    /// scrolls its page to the top. Photos in the feed and on Me open in the viewer, flying out of where they are; a
+    /// post's comments open the comments sheet; and Dark mode (<see cref="SetDark"/>, from the settings' theme) turns the
+    /// Dark mode state on at the root, every colour from a token following, animated.
     /// </summary>
     public sealed class CircleApp : MonoBehaviour
     {

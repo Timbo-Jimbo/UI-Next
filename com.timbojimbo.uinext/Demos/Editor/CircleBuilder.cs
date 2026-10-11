@@ -9,10 +9,10 @@ namespace TimboJimboEditor.UINext.Demos
 {
     /// <summary>
     /// Builds Circle, the demo app, with the screens the UI package's mobile demo has: three tabs (Home, Chats, Me) side by
-    /// side under a floating tab bar, and what they open, each coming out of what was tapped and going back into it: the
-    /// photo viewer, the stories, a chat's conversation, a profile, the compose card, the reaction picker, the comments
-    /// sheet, the share card, the settings page with a control of each kind, and the log out dialog. Keyboards and gamepads
-    /// move focus through all of it. Its colours are tokens, with a Dark mode.
+    /// side under a floating tab bar they scroll clear of, and what they open, each coming out of what was tapped and going
+    /// back into it: the photo viewer, the stories, a chat's conversation, a profile, the compose card, the reaction picker,
+    /// the comments sheet, the share card, the settings page with a control of each kind, and the log out dialog. Keyboards
+    /// and gamepads move focus through all of it. Its colours are tokens, with a Dark mode.
     /// </summary>
     public static partial class CircleBuilder
     {
@@ -102,7 +102,14 @@ namespace TimboJimboEditor.UINext.Demos
             var homeScroll = Home(pages, parts);
             var chats = Chats(pages, out var chatsScroll, out var rows);
             var meScroll = Me(pages, parts);
-            var tabs = TabBar(app, out var pill);
+            var tabs = TabBar(app, out var pill, out var bar);
+            // The pages scroll clear of the tab bar, by reference, with a little room above it: what they bring into view
+            // (a focused row, a photo coming home) lands clear of it.
+            foreach (var page in new[] { homeScroll, chatsScroll, meScroll })
+            {
+                page.ClearOfBottom.Add(bar);
+                page.ClearMargin.Value = new Insets(0f, 0f, 0f, 12f);
+            }
 
             // What opens from what the pages hold, each drawn at its own level as it is presented.
             StoryScreen(app, parts);
@@ -224,9 +231,9 @@ namespace TimboJimboEditor.UINext.Demos
 
         // The tab bar: a capsule floating over the bottom of the pages, a focus section that comes back to the tab it left.
         // The selection pill floats on the selected tab, behind its icon and title, and springs to the next (CircleApp).
-        private static List<Pressable> TabBar(UINode app, out UINode pill)
+        private static List<Pressable> TabBar(UINode app, out UINode pill, out UINode bar)
         {
-            var bar = app.Child("Tab Bar").Row(2f).Pad(6f).Float(AttachPoint.CenterBottom, AttachPoint.CenterBottom, new Vector2(0f, -28f));
+            bar = app.Child("Tab Bar").Row(2f).Pad(6f).Float(AttachPoint.CenterBottom, AttachPoint.CenterBottom, new Vector2(0f, -28f));
             DemoKit.Shadow(DemoKit.Fill(bar, s_bar, 30f), 0.12f, 24f, 8f);
             bar.FocusScope.Value = FocusScope.Section;
             bar.FocusEntry.Value = FocusEntry.Remembered;

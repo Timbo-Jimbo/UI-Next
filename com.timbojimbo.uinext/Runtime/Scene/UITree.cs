@@ -50,6 +50,10 @@ namespace TimboJimbo.UINext
         public readonly List<ClipShape> ClipShapes = new();
         private Vector4[] _clipChains = new Vector4[32];
 
+        // Per node, how far what it holds is moved in its own space by its scrolling: drawn from under its top and left
+        // clear insets, less its offset (nothing for a node that does not scroll).
+        private Vector2[] _scrolled = new Vector2[32];
+
         // The nodes shown, in the order they are drawn (the compositor's), which hit testing walks backwards; and each
         // presentation level drawn (its root's node, then each presented node, lowest first), where it starts in it, and
         // whether it takes pointers.
@@ -449,18 +453,9 @@ namespace TimboJimbo.UINext
 
                 var local = Affine2.Translate(frame.position + offset)
                             * Affine2.AroundPivot(frame.size * 0.5f, scale, rotation);
-                Affine2 world;
-                if (p < 0)
-                {
-                    world = local;
-                }
-                else
-                {
-                    var parentWorld = World[p];
-                    if (parent.Scroller != null && parent.Scroller.isActiveAndEnabled)
-                        parentWorld = parentWorld * Affine2.Translate(-parent.Scroller.Offset.Value);
-                    world = parentWorld * local;
-                }
+                var world = p < 0 ? local : World[p] * Affine2.Translate(_scrolled[p]) * local;
+                var scroller = node.Scroller;
+                _scrolled[i] = scroller != null && scroller.isActiveAndEnabled ? scroller.ClearShift - scroller.Offset.Value : Vector2.zero;
                 World[i] = world;
                 Shown[i] = shown;
                 float effectiveOpacity = (p < 0 ? 1f : Slots[p].SizeOpacity.z) * opacity;
@@ -534,9 +529,25 @@ namespace TimboJimbo.UINext
             var local = Affine2.Translate(frame.position + offset) * Affine2.AroundPivot(frame.size * 0.5f, scale, rotation);
             if (parent == null) return local;
             var parentWorld = WorldAhead(parent, ahead, out _);
-            if (parent.Scroller != null && parent.Scroller.isActiveAndEnabled)
-                parentWorld = parentWorld * Affine2.Translate(-parent.Scroller.Offset.DrawnAhead(ahead));
+            var scroller = parent.Scroller;
+            if (scroller != null && scroller.isActiveAndEnabled)
+                parentWorld = parentWorld * Affine2.Translate(scroller.ClearShift - scroller.Offset.DrawnAhead(ahead));
             return parentWorld * local;
+        }
+
+        /// <summary>
+        /// Where <paramref name="node"/> is drawn now, in its root's points, as compositing works it out from the values it
+        /// is drawn with now (not as the last frame drew it, so wherever it comes in the tree), and whether it is shown:
+        /// for measuring one node against another while they are composited (a scroll view keeping clear of a bar).
+        /// </summary>
+        internal bool DrawnNow(UINode node, out Rect bounds)
+        {
+            bounds = MatchedGeometry.Bounds(WorldAhead(node, 0f, out var size), size);
+            for (var n = node; n != null; n = n == RootNode ? null : n.PresentationLevel.Peek != 0 ? RootNode : n.ParentNode)
+            {
+                if (n.Display.Peek != DisplayMode.Visible && !n.Leaving.Peek) return false;
+            }
+            return true;
         }
 
         // The clip a node gives what is inside it: its own rect and clip radii, in its own space.
@@ -583,6 +594,7 @@ namespace TimboJimbo.UINext
             Array.Resize(ref LocalOpacities, size);
             Array.Resize(ref Blurs, size);
             Array.Resize(ref _clipChains, size);
+            Array.Resize(ref _scrolled, size);
         }
 
         private sealed class LayoutComputation : Computation
