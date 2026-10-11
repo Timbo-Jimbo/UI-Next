@@ -1149,13 +1149,13 @@ namespace TimboJimbo.UINext
                 Nope(direction);
         }
 
-        // How far the ring swings the way of a move that went nowhere, at first, in points, and the spring it shakes back
-        // on: lively, so it swings back past its place and settles, a quick "no".
+        // How far the ring punches out the way of a move that went nowhere, in points, and the spring it comes back on: no
+        // bounce, so it goes out once and comes back to its place without swinging past it, a quick "no".
         private const float NopeDistance = 8f;
-        private static readonly UIAnimation NopeAnimation = new(0.25f, 0.8f);
+        private static readonly UIAnimation NopeAnimation = new(0.25f);
 
-        // Shakes the focus ring of what has focus no: set off the way the move went, swinging back past its place and
-        // settling. It is part of the node's drawing (see DrawRing), so it shakes wherever the node is drawn.
+        // Shakes the focus ring of what has focus no: one punch out the way the move went, and back. It is part of the
+        // node's drawing (see DrawRing), so it moves wherever the node is drawn.
         private static void Nope(Vector2 direction)
         {
             var focused = Focused;
@@ -1166,13 +1166,12 @@ namespace TimboJimbo.UINext
             focused.DrawComputation?.Invalidate();
         }
 
-        // The speed a nope sets the ring off at for its first swing to reach NopeDistance: a spring at rest set off at v
-        // swings out v / omega * e^(-zeta acos(zeta) / sqrt(1 - zeta^2)) before it turns back.
+        // The speed a nope sets the ring off at to punch out NopeDistance: a spring with no bounce, at rest and set off at
+        // v, is v t e^(-omega t) out, furthest at t = 1 / omega, v / (omega e).
         private static float NopeSpeed()
         {
-            NopeAnimation.Parameters(out float omega, out float zeta);
-            float reach = Mathf.Exp(-zeta * Mathf.Acos(zeta) / Mathf.Sqrt(1f - zeta * zeta)) / omega;
-            return NopeDistance / reach;
+            NopeAnimation.Parameters(out float omega, out _);
+            return NopeDistance * omega * (float)Math.E;
         }
 
         // Lets go of what a submit key pressed: tapped, if it still has focus and the key was let go of (rather than taken
