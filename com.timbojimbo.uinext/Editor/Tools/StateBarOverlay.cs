@@ -23,6 +23,7 @@ namespace TimboJimboEditor.UINext
             ("Pressed", InteractionStates.Pressed),
             ("Hovered", InteractionStates.Hovered),
             ("Focused", InteractionStates.Focused),
+            ("Focus within", InteractionStates.FocusWithin),
             ("Selected", InteractionStates.Selected),
             ("Disabled", InteractionStates.Disabled),
         };

@@ -498,15 +498,15 @@ namespace TimboJimboTests.UINext
             var down = new Vector2(0f, 1f);
             var right = new Vector2(1f, 0f);
             UIFocus.Move(right);
-            Assert.AreSame(a, UIFocus.Focused, "with nothing focused, the first takes it");
+            Assert.AreSame(a.Node, UIFocus.Focused, "with nothing focused, the first takes it");
             UIFocus.Move(right);
-            Assert.AreSame(b, UIFocus.Focused);
+            Assert.AreSame(b.Node, UIFocus.Focused);
             UIFocus.Move(down);
-            Assert.AreSame(d, UIFocus.Focused);
+            Assert.AreSame(d.Node, UIFocus.Focused);
             UIFocus.Move(-right);
-            Assert.AreSame(c, UIFocus.Focused);
+            Assert.AreSame(c.Node, UIFocus.Focused);
             Assert.IsFalse(UIFocus.Move(-right), "nothing further that way");
-            Assert.AreSame(c, UIFocus.Focused);
+            Assert.AreSame(c.Node, UIFocus.Focused);
             Frame();
             Assert.IsTrue((c.Node.Interaction & InteractionStates.Focused) != 0, "the focused button is Focused while focus shows");
         }
@@ -520,9 +520,9 @@ namespace TimboJimboTests.UINext
             Frame();
             UIFocus.Next();
             UIFocus.Next();
-            Assert.AreSame(b, UIFocus.Focused);
+            Assert.AreSame(b.Node, UIFocus.Focused);
             UIFocus.Next();
-            Assert.AreSame(a, UIFocus.Focused, "it wraps round");
+            Assert.AreSame(a.Node, UIFocus.Focused, "it wraps round");
             Assert.IsTrue(UIFocus.IsVisible);
             Down(new Vector2(300f, 700f));
             Assert.IsFalse(UIFocus.IsVisible);
@@ -540,9 +540,9 @@ namespace TimboJimboTests.UINext
             dialog.Present();
             Run(1f);
             UIFocus.Move(new Vector2(0f, 1f));
-            Assert.AreSame(ok, UIFocus.Focused);
+            Assert.AreSame(ok.Node, UIFocus.Focused);
             UIFocus.Move(new Vector2(0f, -1f));
-            Assert.AreSame(ok, UIFocus.Focused, "the button below the dialog cannot take focus");
+            Assert.AreSame(ok.Node, UIFocus.Focused, "the button below the dialog cannot take focus");
         }
 
         [Test]

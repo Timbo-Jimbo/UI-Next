@@ -174,7 +174,10 @@ namespace TimboJimbo.UINext
             if (e.PointerId != _pointer) return;
             bool tapped = _inside && !_longPressed && UIInput.IsOver(Node, e.Position, e.Kind == PointerKind.Touch ? TouchSlop : 0f);
             Release();
-            if (tapped) Tap();
+            if (!tapped) return;
+            // Focus comes here too, unseen, as a click focuses a button on the web.
+            UIFocus.Tapped(Node);
+            Tap();
         }
 
         void IPointerHandler.OnPointerCancel(in PointerEvent e)

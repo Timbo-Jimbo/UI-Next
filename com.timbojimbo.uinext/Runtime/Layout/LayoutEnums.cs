@@ -29,6 +29,13 @@ namespace TimboJimbo.UINext
         TopToBottom,
     }
 
+    /// <summary>Which way the UI reads (<see cref="UI.ReadingDirection"/>): which end of a row comes first.</summary>
+    public enum ReadingDirection
+    {
+        LeftToRight,
+        RightToLeft,
+    }
+
     /// <summary>
     /// Whether a node's children run on in one line or wrap into more (<see cref="Wrap"/>), as CSS's flex-wrap and
     /// SwiftUI's lazy grids. Lines stack across the node's direction.

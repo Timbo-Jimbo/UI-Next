@@ -83,6 +83,17 @@ namespace TimboJimbo.UINext
         [Tooltip("Where what is inside it lines up with its flight while it flies, along the axis the flight does not fit it to: (0, 0) its top left, (0.5, 0.5) its centre, (1, 1) its bottom right.")]
         [SerializeField] private UIValue<Vector2> _matchAnchor = new Vector2(0.5f, 0.5f);
 
+        // ── Focus ────────────────────────────────────────────────────────────────
+
+        [Tooltip("What it is to keyboard and gamepad focus. Section: focus moves in and out of it freely, a move towards it coming into it as one, and Tab goes through it before going on. Group: one stop until Submit enters it; Back leaves it.")]
+        [SerializeField] private UIValue<FocusScope> _focusScope = TimboJimbo.UINext.FocusScope.None;
+
+        [Tooltip("With a section: where a move into it from outside lands. Nearest: whatever is nearest that way. Remembered: where focus last was inside it, else what prefers focus, else its first.")]
+        [SerializeField] private UIValue<FocusEntry> _focusEntry = TimboJimbo.UINext.FocusEntry.Nearest;
+
+        [Tooltip("Focus starts here, or inside it, when it comes to what this is in: a presentation coming up, a group entered, a section with nothing remembered.")]
+        [SerializeField] private UIValue<bool> _prefersFocus = false;
+
         /// <summary>How wide it is: fit, grow, fixed or percent.</summary>
         public UIValue<Sizing> Width => _width;
 
@@ -220,6 +231,30 @@ namespace TimboJimbo.UINext
         /// </summary>
         public UIValue<Vector2> MatchAnchor => _matchAnchor;
 
+        /// <summary>
+        /// What it is to keyboard and gamepad focus (<see cref="UIFocus"/>), as SwiftUI's focusSection and Xbox's focus
+        /// engagement: nothing; a section, which focus moves in and out of freely, a move towards it from outside coming
+        /// into it as one (landing as <see cref="FocusEntry"/> says) and Tab going through everything inside it before
+        /// going on; or a group, one stop until Submit enters it and Back leaves it. A scope provides FocusWithin to itself
+        /// and what is inside it, as a button provides its states.
+        /// </summary>
+        public UIValue<FocusScope> FocusScope => _focusScope;
+
+        /// <summary>
+        /// Where a move into it from outside lands, when it is a section: on whatever is nearest that way inside it, or on
+        /// where focus last was inside it (else what prefers focus, else its first), as UIKit's
+        /// remembersLastFocusedIndexPath.
+        /// </summary>
+        public UIValue<FocusEntry> FocusEntry => _focusEntry;
+
+        /// <summary>
+        /// Whether focus starts here, or inside it, as SwiftUI's prefersDefaultFocus: when focus comes to what it is in (a
+        /// presentation coming up, a group entered, a section entered with nothing remembered), it goes to the first that
+        /// prefers it, in reading order, rather than to the first of all; and of equally near candidates, one that prefers
+        /// it wins.
+        /// </summary>
+        public UIValue<bool> PrefersFocus => _prefersFocus;
+
         // ── Runtime ──────────────────────────────────────────────────────────────
 
         // Where layout puts it in its parent's space (top-left and size), with where it is drawn while it springs there.
@@ -275,6 +310,10 @@ namespace TimboJimbo.UINext
         // it, whose picture of it flies instead (a matched node hidden).
         [NonSerialized] internal Flight FlightIn;
         [NonSerialized] internal Flight FlightOut;
+
+        // Where keyboard and gamepad focus last was inside it: for focus coming back (a presentation over it going, a
+        // section that remembers, a group entered again) and for telling equally near candidates apart.
+        [NonSerialized] internal UINode FocusMemory;
 
         // A cross-fade of its drawing: what it drew before, and how far the new drawing has faded in (made the first
         // time it cross-fades).
@@ -405,7 +444,7 @@ namespace TimboJimbo.UINext
             {
                 // Read on every node passed, so a provider added or a parent changed on the way is noticed.
                 _ = node._stateRevision.Value;
-                if (node._interactionProviders > 0)
+                if (node._interactionProviders > 0 || node.IsFocusScope)
                     return node._interaction.Value;
             }
             return InteractionStates.None;
@@ -414,8 +453,12 @@ namespace TimboJimbo.UINext
         /// <summary>The interaction states this node provides itself.</summary>
         public InteractionStates Interaction => _interaction.Peek;
 
-        // Whether it provides interaction states to itself and what is inside it (a button does).
-        internal bool ProvidesInteraction => _interactionProviders > 0;
+        // Whether it provides interaction states to itself and what is inside it (a button does, and a focus scope).
+        internal bool ProvidesInteraction => _interactionProviders > 0 || _focusScope.Peek != TimboJimbo.UINext.FocusScope.None;
+
+        // A focus scope provides interaction states (FocusWithin) as a button does. Tracked, so what reads states through a
+        // node made a scope, or no longer one, reads them again.
+        private bool IsFocusScope => _focusScope.Value != TimboJimbo.UINext.FocusScope.None;
 
         internal void AddInteractionProvider()
         {
@@ -427,8 +470,9 @@ namespace TimboJimbo.UINext
         {
             if (--_interactionProviders <= 0)
             {
+                // A button's states go with it; whether focus is within it is focus's.
                 _interactionProviders = 0;
-                _interaction.Value = InteractionStates.None;
+                _interaction.Value = _interaction.Peek & InteractionStates.FocusWithin;
             }
             _stateRevision.Value++;
         }
@@ -615,6 +659,7 @@ namespace TimboJimbo.UINext
             action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity); action(_blur);
             action(_saturation); action(_brightness); action(_mask); action(_avoidsKeyboard);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable); action(_matchName); action(_matchId); action(_matchAnchor);
+            action(_focusScope); action(_focusEntry); action(_prefersFocus);
         }
     }
 }

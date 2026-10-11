@@ -359,9 +359,13 @@ namespace TimboJimbo.UINext
             GiveBack(calling);
         }
 
-        /// <summary>Asks for back, as Escape does: the latest handler that takes it acts on it.</summary>
+        /// <summary>
+        /// Asks for back, as Escape does: a group focus shows inside is left first (<see cref="UINode.FocusScope"/>);
+        /// otherwise the latest handler that takes it acts on it.
+        /// </summary>
         public static bool GoBack()
         {
+            if (UIFocus.Back()) return true;
             if (Back == null) return false;
             var handlers = Back.GetInvocationList();
             for (int i = handlers.Length - 1; i >= 0; i--)

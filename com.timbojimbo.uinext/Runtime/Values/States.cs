@@ -4,8 +4,9 @@ using UnityEngine;
 namespace TimboJimbo.UINext
 {
     /// <summary>
-    /// The interaction states the stack's own components provide (Pressable, Focusable), lowest priority first: when
-    /// several variants could apply, one for a later state wins, so Disabled beats Pressed beats Hovered.
+    /// The interaction states the stack's own components provide (Pressable, focus), weakest first but for FocusWithin,
+    /// the weakest of all: when several variants could apply, one for a stronger state wins, so Disabled beats Pressed
+    /// beats Hovered.
     /// </summary>
     [Flags]
     public enum InteractionStates
@@ -16,6 +17,12 @@ namespace TimboJimbo.UINext
         Focused = 4,
         Pressed = 8,
         Disabled = 16,
+
+        /// <summary>
+        /// Focus is on it or inside it, and shows, as CSS's :focus-within: a section or a group lit while focus is in it.
+        /// Provided by focus scopes (<see cref="UINode.FocusScope"/>) and buttons. The weakest of them all.
+        /// </summary>
+        FocusWithin = 32,
     }
 
     /// <summary>What kind of condition a state is, which decides its priority against others.</summary>
@@ -59,8 +66,8 @@ namespace TimboJimbo.UINext
 
         public bool IsEmpty => Interaction == InteractionStates.None && (States == null || States.Length == 0);
 
-        // Its priority: the highest level among its conditions (modes 0, states 1, interaction states 10 up in their
-        // order), then how many conditions it has, so a combination beats a single state at the same level.
+        // Its priority: the highest level among its conditions (modes 0, states 1, interaction states 10 up from the
+        // weakest), then how many conditions it has, so a combination beats a single state at the same level.
         internal int Level
         {
             get
@@ -72,12 +79,9 @@ namespace TimboJimbo.UINext
                         if (state != null)
                             level = Mathf.Max(level, state.Kind == StateKind.Mode ? 0 : 1);
                 }
-                for (int bit = 4; bit >= 0; bit--)
-                {
-                    if (((int)Interaction & (1 << bit)) == 0) continue;
-                    level = Mathf.Max(level, 10 + bit);
-                    break;
-                }
+                int rank = InteractionAnimations.Rank(Interaction);
+                if (rank >= 0)
+                    level = Mathf.Max(level, 10 + rank);
                 return level;
             }
         }
@@ -126,6 +130,7 @@ namespace TimboJimbo.UINext
             InteractionStates.Pressed => null,
             InteractionStates.Hovered => new UIAnimation(0.12f),
             InteractionStates.Focused => new UIAnimation(0.15f),
+            InteractionStates.FocusWithin => new UIAnimation(0.15f),
             InteractionStates.Selected => new UIAnimation(0.25f),
             InteractionStates.Disabled => new UIAnimation(0.2f),
             _ => null,
@@ -136,18 +141,33 @@ namespace TimboJimbo.UINext
             InteractionStates.Pressed => new UIAnimation(0.25f),
             InteractionStates.Hovered => new UIAnimation(0.2f),
             InteractionStates.Focused => new UIAnimation(0.2f),
+            InteractionStates.FocusWithin => new UIAnimation(0.2f),
             InteractionStates.Selected => new UIAnimation(0.25f),
             InteractionStates.Disabled => new UIAnimation(0.2f),
             _ => null,
         };
 
-        // The highest interaction state in a set.
+        // The interaction states, weakest first: a variant for a later one wins over one for an earlier.
+        private static readonly InteractionStates[] s_order =
+        {
+            InteractionStates.FocusWithin, InteractionStates.Selected, InteractionStates.Hovered, InteractionStates.Focused,
+            InteractionStates.Pressed, InteractionStates.Disabled,
+        };
+
+        // Where the strongest interaction state in a set stands among them (0 the weakest), or -1 for none.
+        public static int Rank(InteractionStates states)
+        {
+            for (int rank = s_order.Length - 1; rank >= 0; rank--)
+                if ((states & s_order[rank]) != 0)
+                    return rank;
+            return -1;
+        }
+
+        // The strongest interaction state in a set.
         public static InteractionStates Highest(InteractionStates states)
         {
-            for (int bit = 4; bit >= 0; bit--)
-                if (((int)states & (1 << bit)) != 0)
-                    return (InteractionStates)(1 << bit);
-            return InteractionStates.None;
+            int rank = Rank(states);
+            return rank >= 0 ? s_order[rank] : InteractionStates.None;
         }
     }
 }

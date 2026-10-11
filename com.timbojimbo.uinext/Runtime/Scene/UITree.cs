@@ -50,9 +50,11 @@ namespace TimboJimbo.UINext
         public readonly List<ClipShape> ClipShapes = new();
         private Vector4[] _clipChains = new Vector4[32];
 
-        // The nodes shown, in the order they are drawn (the compositor's), which hit testing walks backwards; and where
-        // each presentation level starts in it, and whether that level takes pointers.
+        // The nodes shown, in the order they are drawn (the compositor's), which hit testing walks backwards; and each
+        // presentation level drawn (its root's node, then each presented node, lowest first), where it starts in it, and
+        // whether it takes pointers.
         public readonly List<int> DrawOrder = new();
+        public readonly List<UINode> Levels = new();
         public readonly List<int> LevelStarts = new();
         public readonly List<bool> LevelInteractive = new();
 

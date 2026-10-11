@@ -248,7 +248,7 @@ namespace TimboJimbo.UINext
             _caretOn.Value = true;
             Reveal = true;
             _keptAbove = float.NaN;
-            UIFocus.FirstResponder = Pressable;
+            UIFocus.FirstResponder = Node;
             TextInputSystem.Begin(this);
             // The field whose session that ended may have taken the keyboard straight back, which ended this one's.
             if (_editing.Peek)
@@ -270,7 +270,7 @@ namespace TimboJimbo.UINext
             LetGoOfPointer();
             HideMenu();
             TextInputSystem.End(this);
-            if (UIFocus.FirstResponder == Pressable)
+            if (UIFocus.FirstResponder == Node)
                 UIFocus.FirstResponder = null;
             _editingEnded.Invoke();
         }
@@ -341,7 +341,7 @@ namespace TimboJimbo.UINext
         private void Update()
         {
             if (!_editing.Peek) return;
-            if (!Pressable.Interactable.Peek || IsHidden() || UIFocus.FirstResponder != Pressable)
+            if (!Pressable.Interactable.Peek || IsHidden() || UIFocus.FirstResponder != Node)
             {
                 EndEditing();
                 return;

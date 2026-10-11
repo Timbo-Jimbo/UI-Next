@@ -1,11 +1,30 @@
 using System;
+using System.Globalization;
 using UnityEngine;
 
 namespace TimboJimbo.UINext
 {
-    /// <summary>The entry points: making changes that animate, and laying out now.</summary>
+    /// <summary>The entry points: making changes that animate, laying out now, and which way the UI reads.</summary>
     public static class UI
     {
+        private static ReadingDirection? s_readingDirection;
+
+        /// <summary>
+        /// Which way the UI reads, as UIKit's userInterfaceLayoutDirection and SwiftUI's layoutDirection: Tab goes along a
+        /// row this way, and of equally near places focus could go, the first this way wins. Unless set, the way the
+        /// current UI culture reads (<see cref="CultureInfo.CurrentUICulture"/>); set it as the app's language changes (to
+        /// the way its culture's TextInfo reads), or to try a layout.
+        /// </summary>
+        public static ReadingDirection ReadingDirection
+        {
+            get => s_readingDirection
+                   ?? (CultureInfo.CurrentUICulture.TextInfo.IsRightToLeft ? ReadingDirection.RightToLeft : ReadingDirection.LeftToRight);
+            set => s_readingDirection = value;
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics() => s_readingDirection = null;
+
         /// <summary>
         /// Makes the change <paramref name="update"/> makes and moves what it changes on <paramref name="animation"/>,
         /// as SwiftUI's withAnimation and UIKit's animate with layoutIfNeeded: what changed before goes where it goes at

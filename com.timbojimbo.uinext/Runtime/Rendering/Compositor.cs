@@ -219,6 +219,7 @@ namespace TimboJimbo.UINext
                     if (tree.Nodes.Count == 0) continue;
                     int start = s_instanceCount;
                     tree.DrawOrder.Clear();
+                    tree.Levels.Clear();
                     tree.LevelStarts.Clear();
                     tree.LevelInteractive.Clear();
                     CollectLevels(tree);
@@ -233,6 +234,7 @@ namespace TimboJimbo.UINext
                     for (int l = from; l < s_levels.Count; l++)
                     {
                         var level = s_levels[l];
+                        tree.Levels.Add(level);
                         tree.LevelStarts.Add(tree.DrawOrder.Count);
                         tree.LevelInteractive.Add(level.PresentationLevel.Peek >= 0);
                         s_topLayer.Clear();
