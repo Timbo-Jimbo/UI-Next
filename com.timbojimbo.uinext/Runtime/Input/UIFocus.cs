@@ -529,8 +529,8 @@ namespace TimboJimbo.UINext
         /// <summary>
         /// Draws the focus ring round <paramref name="node"/>, on which focus shows, as iPadOS's focus halo and a browser's
         /// focus outline: a band as thick as its root's <see cref="UIRoot.FocusRingWidth"/>, out past its edge by
-        /// <see cref="UIRoot.FocusRingOffset"/>, its corners going round the node's (<see cref="UINode.ClipRadii"/>), over
-        /// what is inside it, so it follows the node as it moves, springs and is clipped.
+        /// <see cref="UIRoot.FocusRingOffset"/>, its corners as round as <see cref="UIRoot.FocusRingRadius"/> whatever the
+        /// node's shape, over what is inside it, so it follows the node as it moves, springs and is clipped.
         /// </summary>
         internal static void DrawRing(UINode node, Painter painter)
         {
@@ -540,15 +540,11 @@ namespace TimboJimbo.UINext
             float width = root.FocusRingWidth.Value;
             if (width <= 0f || color.a <= 0f) return;
             float reach = root.FocusRingOffset.Value + width;
-            // A rounded corner is rounded the ring's distance further out; a square one stays square.
-            var radii = node.ClipRadii.Value.ToVector();
-            for (int c = 0; c < 4; c++)
-                if (radii[c] > 0f)
-                    radii[c] = Mathf.Max(0f, radii[c] + reach);
+            float radius = Mathf.Max(0f, root.FocusRingRadius.Value);
             painter.Add(new PrimitiveInstance
             {
                 Rect = new Vector4(-reach, -reach, -reach, -reach),
-                Radii = radii,
+                Radii = new Vector4(radius, radius, radius, radius),
                 Color = Color.clear,
                 Color2 = color,
                 Params = new Vector4(width, 0f, 0f, 0f),

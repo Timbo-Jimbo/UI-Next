@@ -153,8 +153,6 @@ namespace TimboJimboEditor.UINext.Demos
             box.Fill.When(InteractionStates.Pressed, Color.Lerp(fill, Color.black, 0.25f));
             box.Fill.When(InteractionStates.Hovered, Color.Lerp(fill, Color.white, 0.15f));
             box.Fill.When(InteractionStates.Disabled, new Color(0.78f, 0.78f, 0.8f));
-            // Its shape, which the focus ring goes round.
-            button.ClipRadii.Value = 12f;
             button.Child("Title").Label(title, 16f, text, bold: true);
             return button.Pressable();
         }
@@ -166,7 +164,6 @@ namespace TimboJimboEditor.UINext.Demos
             var track = row.Child("Switch").Sized(Sizing.Fixed(51f), Sizing.Fixed(31f)).Pad(2f).Align(AlignX.Left, AlignY.Center);
             var trackBox = track.Box(new Color(0.47f, 0.47f, 0.5f, 0.32f), 15.5f);
             trackBox.Fill.When(InteractionStates.Selected, new Color32(0x34, 0xC7, 0x59, 0xFF));
-            track.ClipRadii.Value = 15.5f;
             var knob = track.Child("Knob").Sized(Sizing.Fixed(27f), Sizing.Fixed(27f));
             DemoKit.Shadow(knob.Box(Color.white, 13.5f), 0.2f, 4f, 2f);
             var pressable = track.Pressable();
@@ -194,7 +191,6 @@ namespace TimboJimboEditor.UINext.Demos
             var alignDemo = Case(body, "Alignment (tap it)");
             var box = Panel(alignDemo.Child("Box").Sized(Sizing.Grow(), Sizing.Fixed(130f)), 10f).Center();
             box.Child("Dot").Sized(Sizing.Fixed(40f), Sizing.Fixed(40f)).Box(Accent, 12f);
-            box.ClipRadii.Value = 14f;
             var alignPressable = box.Pressable();
 
             var wrapDemo = Case(body, "Wrapping").Column(10f);
@@ -234,7 +230,6 @@ namespace TimboJimboEditor.UINext.Demos
                 tracksDemo.Child(name).Label(name, 13f, Secondary);
                 var track = tracksDemo.Child(name + " Track").Sized(Sizing.Grow(), Sizing.Fixed(44f)).Pad(4f).Align(AlignX.Left, AlignY.Center);
                 track.Box(Card, 22f);
-                track.ClipRadii.Value = 22f;
                 track.Child("Ball").Sized(Sizing.Fixed(36f), Sizing.Fixed(36f)).Box(Palette[tracks.Count], 18f);
                 tracks.Add(track.Pressable());
                 animations.Add(animation);
@@ -243,7 +238,6 @@ namespace TimboJimboEditor.UINext.Demos
             var sizeDemo = Case(body, "Size: what is below moves with it").Column(10f);
             var card = sizeDemo.Child("Card").Sized(Sizing.Grow(), Sizing.Fixed(72f)).Pad(16f);
             card.Box(Accent, 16f);
-            card.ClipRadii.Value = 16f;
             card.Child("Text").Label("Tap to grow", 16f, Color.white, bold: true);
             var below = sizeDemo.Child("Below").Sized(Sizing.Grow(), Sizing.Fixed(50f)).Pad(16f).Align(AlignX.Left, AlignY.Center);
             below.Box(Card, 14f);
@@ -283,7 +277,6 @@ namespace TimboJimboEditor.UINext.Demos
             var fadeCase = Case(body, "Cross-fade: text cannot interpolate (tap it)");
             var weather = fadeCase.Child("Weather").Pad(18f, 12f).Align(AlignX.Left, AlignY.Center);
             weather.Box(Card, 14f);
-            weather.ClipRadii.Value = 14f;
             var weatherText = weather.Child("Text").Label("☀️ Sunny", 22f, Text, bold: true);
 
             // Two stepped sliders, alike but for whether their drag hands its speed on.
@@ -328,7 +321,6 @@ namespace TimboJimboEditor.UINext.Demos
             foreach (var title in new[] { "Day", "Week", "Month" })
             {
                 var segment = segmented.Child(title).Sized(Sizing.Grow(), Sizing.Fixed(36f)).Center();
-                segment.ClipRadii.Value = 9f;
                 var label = segment.Child("Title").Label(title, 15f, Secondary, bold: true);
                 label.Color.When(InteractionStates.Selected, Text);
                 segments.Add(segment.Pressable());
@@ -362,7 +354,6 @@ namespace TimboJimboEditor.UINext.Demos
             hold.Width.Value = Sizing.Grow();
             var holdBox = hold.Box(Card, 14f);
             holdBox.Fill.When(InteractionStates.Pressed, new Color(0.9f, 0.9f, 0.93f));
-            hold.ClipRadii.Value = 14f;
             var holdLabel = hold.Child("Text").Label("Hold me", 17f, Text, bold: true);
 
             page.Add<StatesDemo>().Setup(button, disable, segments, pill, warn, panel, warning, hold.Pressable(), holdLabel);
@@ -399,7 +390,6 @@ namespace TimboJimboEditor.UINext.Demos
             {
                 var theme = picker.Child(name).Sized(Sizing.Grow(), Sizing.Fixed(40f)).Center();
                 var box = DemoKit.Fill(theme, surface, 12f);
-                theme.ClipRadii.Value = 12f;
                 box.BorderWidth.Value = 2f;
                 box.BorderColor.Value = Color.clear;
                 box.BorderColor.When(InteractionStates.Selected, Accent);
@@ -415,7 +405,6 @@ namespace TimboJimboEditor.UINext.Demos
             paragraph.Node.Width.Value = Sizing.Grow();
             var cta = sample.Child("Button").Pad(16f, 10f).Center();
             DemoKit.Fill(cta, accent, 12f);
-            cta.ClipRadii.Value = 12f;
             cta.Child("Title").Label("Open report", 15f, Color.white, bold: true);
             cta.Pressable();
 
@@ -643,7 +632,6 @@ namespace TimboJimboEditor.UINext.Demos
                 var card = stack.Child("Card " + (i + 1)).Sized(Sizing.Fixed(170f), Sizing.Fixed(110f)).Pad(14f)
                     .Float(AttachPoint.LeftTop, AttachPoint.LeftTop, new Vector2(i * 70f, i * 28f));
                 DemoKit.Shadow(card.Box(Palette[i], 18f), 0.18f, 18f, 6f);
-                card.ClipRadii.Value = 18f;
                 card.Child("Title").Label("Card " + (i + 1), 18f, Color.white, bold: true);
                 cards.Add(card.Pressable());
             }
@@ -665,7 +653,6 @@ namespace TimboJimboEditor.UINext.Demos
             var blurred = blurCase.Child("Card").Column(6f).Pad(18f);
             blurred.Width.Value = Sizing.Grow();
             var blurBox = blurred.Box(Palette[4], 16f);
-            blurred.ClipRadii.Value = 16f;
             blurBox.Gradient.Value = true;
             blurBox.GradientTo.Value = Palette[1];
             blurred.Child("Title").Label("In and out of focus", 20f, Color.white, bold: true);
@@ -678,7 +665,6 @@ namespace TimboJimboEditor.UINext.Demos
             {
                 var item = lockCase.Child(emoji).Sized(Sizing.Fixed(84f), Sizing.Fixed(84f)).Center();
                 var itemBox = item.Box(colour, 18f);
-                item.ClipRadii.Value = 18f;
                 itemBox.Gradient.Value = true;
                 itemBox.GradientTo.Value = Color.Lerp(colour, Color.black, 0.25f);
                 item.Child("Icon").Label(emoji, 40f);
@@ -805,7 +791,6 @@ namespace TimboJimboEditor.UINext.Demos
             // A group: one stop, ringed as one, until Enter goes in; inside, focus stays until Escape comes out.
             var toolbar = Panel(Case(body, "A group: Enter goes in, Escape comes out").Row(10f), 10f);
             toolbar.FocusScope.Value = FocusScope.Group;
-            toolbar.ClipRadii.Value = 14f;
             toolbar.GetComponent<Box>().Fill.When(InteractionStates.FocusWithin, Lit);
             foreach (var title in new[] { "Bold", "Italic", "Underline" })
             {
@@ -1023,7 +1008,6 @@ namespace TimboJimboEditor.UINext.Demos
             var close = content.Child("Close").Sized(Sizing.Fixed(32f), Sizing.Fixed(32f)).Center()
                 .Float(AttachPoint.RightTop, AttachPoint.RightTop, new Vector2(-16f, 56f));
             close.Box(new Color(0f, 0f, 0f, 0.35f), 16f);
-            close.ClipRadii.Value = 16f;
             close.Child("Mark").Label("✕", 15f, Color.white, bold: true);
 
             page.Add<AppStoreDemo>().Setup(cards, body.GetComponent<ScrollView>(), story, content, heroArt, heroKicker, heroTitle,

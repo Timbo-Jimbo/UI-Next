@@ -94,7 +94,7 @@ namespace TimboJimbo.UINext
         [Tooltip("Focus starts here, or inside it, when it comes to what this is in: a presentation coming up, a group entered, a section with nothing remembered.")]
         [SerializeField] private UIValue<bool> _prefersFocus = false;
 
-        [Tooltip("Draws the focus ring round it while it has keyboard or gamepad focus and focus shows, following its Clip Radii. Off for a node that shows focus its own way (a row's highlight).")]
+        [Tooltip("Draws the focus ring round it while it has keyboard or gamepad focus and focus shows. Off for a node that shows focus its own way (a row's highlight).")]
         [SerializeField] private UIValue<bool> _focusRing = true;
 
         /// <summary>How wide it is: fit, grow, fixed or percent.</summary>
@@ -194,9 +194,8 @@ namespace TimboJimbo.UINext
         public UIValue<bool> Clips => _clips;
 
         /// <summary>
-        /// Its shape's corner radii: what its clip uses, the corners of a matched flight's shape at its end (see
-        /// <see cref="MatchName"/>), and the corners its focus ring goes round (see <see cref="FocusRing"/>), whether it
-        /// clips or not.
+        /// Its shape's corner radii: what its clip uses, and the corners of a matched flight's shape at its end (see
+        /// <see cref="MatchName"/>), whether it clips or not.
         /// </summary>
         public UIValue<CornerRadii> ClipRadii => _clipRadii;
 
@@ -261,9 +260,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Whether the focus ring is drawn round it while it has focus and focus shows (a key or a gamepad moved it), as
-        /// iPadOS's focus halo and a browser's focus outline: a band out past its edge, its corners going round its
-        /// <see cref="ClipRadii"/>, over what is inside it, in its root's look (<see cref="UIRoot.FocusRingColor"/>). Off
-        /// for a node that shows focus its own way, by its values' Focused variants: a list row's highlight.
+        /// iPadOS's focus halo and a browser's focus outline: a band out past its edge, over what is inside it, in its
+        /// root's look (<see cref="UIRoot.FocusRingColor"/>). Off for a node that shows focus its own way, by its values'
+        /// Focused variants: a list row's highlight.
         /// </summary>
         public UIValue<bool> FocusRing => _focusRing;
 

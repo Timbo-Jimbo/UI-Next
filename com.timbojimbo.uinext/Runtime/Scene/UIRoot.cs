@@ -49,6 +49,9 @@ namespace TimboJimbo.UINext
         [Tooltip("How far out past its node's edge the focus ring is, in points.")]
         [SerializeField] private UIValue<float> _focusRingOffset = 2f;
 
+        [Tooltip("How round the focus ring's corners are, in points, whatever it goes round.")]
+        [SerializeField] private UIValue<float> _focusRingRadius = 0f;
+
         internal UITree Tree;
         internal readonly Observable<Vector2> SizeObservable = new(new Vector2(390f, 844f));
         internal readonly Observable<Insets> SafeAreaObservable = new();
@@ -105,6 +108,9 @@ namespace TimboJimbo.UINext
         /// <summary>How far out past its node's edge the focus ring is drawn, in points, as CSS's outline-offset.</summary>
         public UIValue<float> FocusRingOffset => _focusRingOffset;
 
+        /// <summary>How round the focus ring's corners are, in points, whatever shape it goes round: square unless set.</summary>
+        public UIValue<float> FocusRingRadius => _focusRingRadius;
+
         /// <summary>How many screen pixels a point is.</summary>
         public float PixelsPerPoint { get; private set; } = 1f;
 
@@ -131,6 +137,7 @@ namespace TimboJimbo.UINext
             ((IUIValue)_focusRingColor).Attach(Node);
             ((IUIValue)_focusRingWidth).Attach(Node);
             ((IUIValue)_focusRingOffset).Attach(Node);
+            ((IUIValue)_focusRingRadius).Attach(Node);
             _tracker.Add(this, Node.RectTransform, DrivenTransformProperties.Pivot | DrivenTransformProperties.SizeDelta);
             Tree = new UITree(this);
             UITree.Register(Tree);
@@ -143,6 +150,7 @@ namespace TimboJimbo.UINext
             ((IUIValue)_focusRingColor).Detach();
             ((IUIValue)_focusRingWidth).Detach();
             ((IUIValue)_focusRingOffset).Detach();
+            ((IUIValue)_focusRingRadius).Detach();
             _tracker.Clear();
             if (Tree != null)
             {
@@ -160,6 +168,7 @@ namespace TimboJimbo.UINext
                 ((IUIValue)_focusRingColor).Refresh();
                 ((IUIValue)_focusRingWidth).Refresh();
                 ((IUIValue)_focusRingOffset).Refresh();
+                ((IUIValue)_focusRingRadius).Refresh();
             }
             UI.RequestRepaint();
         }

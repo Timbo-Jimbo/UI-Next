@@ -57,6 +57,8 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var root = UIBuild.Root(name);
             root.transform.position = new Vector3(-195f, 422f, 0f);
+            // A rounded focus ring, round whatever has focus.
+            root.FocusRingRadius.Value = 14f;
             return root;
         }
 

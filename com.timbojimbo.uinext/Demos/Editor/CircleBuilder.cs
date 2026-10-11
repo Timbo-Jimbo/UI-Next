@@ -107,7 +107,6 @@ namespace TimboJimboEditor.UINext.Demos
                 var avatar = DemoKit.Avatar(gap, 56f, colour, initials);
                 avatar.MatchName.Value = "Story";
                 DemoKit.Text(story, "Name", name.Split(' ')[0], 12f, s_secondary);
-                story.ClipRadii.Value = 12f;
                 storyButtons.Add(story.Pressable());
                 story.Scale.When(InteractionStates.Pressed, 0.92f);
                 ringAvatars.Add(avatar);
@@ -152,7 +151,6 @@ namespace TimboJimboEditor.UINext.Demos
                     var chip = chips.Child("Reaction").Row(5f).Pad(11f, 6f).Align(AlignX.Left, AlignY.Center);
                     var chipBox = DemoKit.Fill(chip, s_subtle, 15f);
                     chipBox.Fill.When(InteractionStates.Selected, new Color(Accent.r, Accent.g, Accent.b, 0.18f));
-                    chip.ClipRadii.Value = 15f;
                     chip.Child("Emoji").Label(emoji, 15f);
                     var number = DemoKit.Text(chip, "Count", count.ToString(), 14f, s_secondary, bold: true);
                     number.Color.When(InteractionStates.Selected, Accent);
@@ -253,7 +251,6 @@ namespace TimboJimboEditor.UINext.Demos
             var track = parent.Child("Switch").Sized(Sizing.Fixed(51f), Sizing.Fixed(31f)).Pad(2f).Align(AlignX.Left, AlignY.Center);
             var trackBox = track.Box(new Color(0.47f, 0.47f, 0.5f, 0.32f), 15.5f);
             trackBox.Fill.When(InteractionStates.Selected, Green);
-            track.ClipRadii.Value = 15.5f;
             var knob = track.Child("Knob").Sized(Sizing.Fixed(27f), Sizing.Fixed(27f));
             DemoKit.Shadow(knob.Box(Color.white, 13.5f), 0.2f, 4f, 2f);
             knob.HitTestable.Value = false;
@@ -383,7 +380,6 @@ namespace TimboJimboEditor.UINext.Demos
             DemoKit.Fill(header, s_card);
             var back = header.Child("Back").Pad(8f, 4f);
             back.Child("Title").Label("‹ Chats", 17f, Accent);
-            back.ClipRadii.Value = 8f;
             var backPressable = back.Pressable();
             var avatar = DemoKit.Avatar(header, 36f, Color.gray, "");
             avatar.MatchName.Value = "Avatar";
@@ -404,7 +400,6 @@ namespace TimboJimboEditor.UINext.Demos
             {
                 var chip = replies.Child("Reply").Pad(14f, 8f);
                 var chipBox = chip.Box(new Color(Accent.r, Accent.g, Accent.b, 0.12f), 16f);
-                chip.ClipRadii.Value = 16f;
                 chipBox.Fill.When(InteractionStates.Pressed, new Color(Accent.r, Accent.g, Accent.b, 0.3f));
                 chip.Child("Text").Label(reply, 15f, Accent);
                 replyButtons.Add(chip.Pressable());
@@ -436,7 +431,6 @@ namespace TimboJimboEditor.UINext.Demos
             field.Config = config;
             var send = composer.Child("Send").Sized(Sizing.Fixed(36f), Sizing.Fixed(36f)).Center();
             var sendBox = send.Box(Accent, 18f);
-            send.ClipRadii.Value = 18f;
             sendBox.Fill.When(InteractionStates.Disabled, new Color(0.47f, 0.47f, 0.5f, 0.35f));
             sendBox.Fill.When(InteractionStates.Pressed, Color.Lerp(Accent, Color.black, 0.25f));
             send.Child("Arrow").Label("↑", 19f, Color.white, bold: true);
@@ -472,7 +466,6 @@ namespace TimboJimboEditor.UINext.Demos
             foreach (var (label, colour, fill) in new[] { ("Cancel", (Color?)null, true), ("Log out", (Color?)Color.white, false) })
             {
                 var button = row.Child(label).Center().Sized(Sizing.Grow(), Sizing.Fixed(46f));
-                button.ClipRadii.Value = 12f;
                 var box = fill ? DemoKit.Fill(button, s_subtle, 12f) : button.Box(Red, 12f);
                 box.Fill.When(InteractionStates.Pressed, fill ? new Color(0.5f, 0.5f, 0.55f, 0.3f) : Darker(Red));
                 if (colour.HasValue) button.Child("Title").Label(label, 16f, colour.Value, bold: true);
