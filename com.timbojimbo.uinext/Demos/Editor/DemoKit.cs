@@ -1,4 +1,5 @@
 using TimboJimbo.UINext;
+using TimboJimbo.UINext.Demos.Circle;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -120,6 +121,30 @@ namespace TimboJimboEditor.UINext.Demos
             avatar.ClipRadii.Value = size * 0.5f;
             avatar.Child("Initials").Label(initials, size * 0.36f, Color.white, bold: true);
             return avatar;
+        }
+
+        /// <summary>
+        /// A slider: a track the knob rides along, its fill as long as its value. The track takes focus itself, and left and
+        /// right, its focus ring shaking no at its ends.
+        /// </summary>
+        public static Slider Slider(UINode parent, float value, Color fill)
+        {
+            var track = parent.Child("Slider").Row().Pad(13f, 0f).Align(AlignX.Left, AlignY.Center);
+            track.Sized(Sizing.Grow(), Sizing.Fixed(32f));
+            track.Focusable.Value = Focusability.Always;
+            // Centred, so it lies under the fill: a floating child is as wide as its parent inside its padding.
+            var rail = track.Child("Rail").Float(AttachPoint.CenterCenter, AttachPoint.CenterCenter);
+            rail.Sized(Sizing.Percent(1f), Sizing.Fixed(4f));
+            rail.Box(new Color(0.47f, 0.47f, 0.5f, 0.25f), 2f);
+            var bar = track.Child("Fill").Sized(Sizing.Percent(value), Sizing.Fixed(4f));
+            bar.Box(fill, 2f);
+            var knob = track.Child("Knob").Sized(Sizing.Fixed(26f), Sizing.Fixed(26f)).FloatOn(bar, AttachPoint.CenterCenter, AttachPoint.RightCenter);
+            Shadow(knob.Box(Color.white, 13f), 0.25f, 4f, 2f);
+            knob.HitTestable.Value = false;
+            track.Add<Draggable>();
+            var slider = track.Add<Slider>();
+            slider.Setup(bar, value);
+            return slider;
         }
 
         /// <summary>A soft shadow under a box.</summary>

@@ -800,6 +800,11 @@ namespace TimboJimboEditor.UINext.Demos
                 tool.GetComponent<Box>().Fill.When(InteractionStates.Selected, new Color(Accent.r, Accent.g, Accent.b, 0.25f));
             }
 
+            // A control that takes its own arrows: left and right step the slider, and at its end the ring shakes no, as it
+            // does wherever a key finds nowhere to go.
+            var slider = Panel(Case(body, "A slider: left and right are its own").Row(10f), 14f).Align(AlignX.Left, AlignY.Center);
+            DemoKit.Slider(slider, 0.5f, Accent);
+
             // Pressed, a button goes, and focus goes from it to the nearest, until they are brought back.
             var lost = Case(body, "Press one: it goes, and focus goes to the nearest").Column(12f);
             var goersRow = Panel(lost.Child("Buttons").Row(10f), 14f);

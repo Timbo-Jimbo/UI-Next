@@ -151,7 +151,7 @@ namespace TimboJimboEditor.UINext.Demos
             Switch(SettingRow(notifications, "Notifications"), on: true);
             var volume = SettingRow(notifications, "Volume", grows: false);
             DemoKit.Text(volume, "Quiet", "🔈", 15f, s_text);
-            SliderTrack(volume, 0.6f);
+            DemoKit.Slider(volume, 0.6f, Accent);
             DemoKit.Text(volume, "Loud", "🔊", 15f, s_text);
             var quiet = Switch(SettingRow(notifications, "Quiet hours"));
             // Shown while quiet hours are on.
@@ -307,26 +307,6 @@ namespace TimboJimboEditor.UINext.Demos
                 options.Add(swatch.Pressable());
             }
             swatches.Add<SingleChoice>().Setup(options, 0);
-        }
-
-        // A slider: a track the knob rides along, its fill as long as its value. The track takes focus itself, and left and
-        // right. See Slider.
-        private static void SliderTrack(UINode parent, float value)
-        {
-            var track = parent.Child("Slider").Row().Pad(13f, 0f).Align(AlignX.Left, AlignY.Center);
-            track.Sized(Sizing.Grow(), Sizing.Fixed(32f));
-            track.Focusable.Value = Focusability.Always;
-            // Centred, so it lies under the fill: a floating child is as wide as its parent inside its padding.
-            var rail = track.Child("Rail").Float(AttachPoint.CenterCenter, AttachPoint.CenterCenter);
-            rail.Sized(Sizing.Percent(1f), Sizing.Fixed(4f));
-            rail.Box(new Color(0.47f, 0.47f, 0.5f, 0.25f), 2f);
-            var fill = track.Child("Fill").Sized(Sizing.Percent(value), Sizing.Fixed(4f));
-            fill.Box(Accent, 2f);
-            var knob = track.Child("Knob").Sized(Sizing.Fixed(26f), Sizing.Fixed(26f)).FloatOn(fill, AttachPoint.CenterCenter, AttachPoint.RightCenter);
-            DemoKit.Shadow(knob.Box(Color.white, 13f), 0.25f, 4f, 2f);
-            knob.HitTestable.Value = false;
-            track.Add<Draggable>();
-            track.Add<Slider>().Setup(fill, value);
         }
 
         // ── Log out ──────────────────────────────────────────────────────────────

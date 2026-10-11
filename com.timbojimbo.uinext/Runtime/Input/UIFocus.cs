@@ -41,18 +41,34 @@ namespace TimboJimbo.UINext
         Never,
     }
 
+    /// <summary>What a node that has focus did with a move (<see cref="IFocusMoveHandler"/>), as SwiftUI's KeyPress.Result says.</summary>
+    public enum FocusMoveResult
+    {
+        /// <summary>Not its move: focus moves on, as if it had not been asked.</summary>
+        Ignored,
+
+        /// <summary>Its move, made (a slider stepped): focus stays where it is.</summary>
+        Handled,
+
+        /// <summary>
+        /// Its move, but it has none left that way (a slider at its end): focus stays where it is, and the focus ring
+        /// shakes no.
+        /// </summary>
+        Blocked,
+    }
+
     /// <summary>
     /// Takes keyboard and gamepad moves while its node has focus, as SwiftUI's onMoveCommand: a slider stepping along its
     /// track, a stepper's row stepping its value, a story stepping on and back. Asked before focus moves, held keys
-    /// repeating; a move it takes moves nothing else.
+    /// repeating; a move it takes moves nothing else, and one it has no room left for shakes the focus ring no.
     /// </summary>
     public interface IFocusMoveHandler
     {
         /// <summary>
         /// A move <paramref name="direction"/> (a step along one axis, x right, y down) while focus shows on its node:
-        /// true if it took it, so focus stays where it is; false to let focus move on.
+        /// handled, blocked (its move, but at its end that way), or ignored, to let focus move on.
         /// </summary>
-        bool OnFocusMove(Vector2 direction);
+        FocusMoveResult OnFocusMove(Vector2 direction);
     }
 
     /// <summary>Where a move into a section from outside it lands (<see cref="UINode.FocusEntry"/>).</summary>
@@ -74,7 +90,8 @@ namespace TimboJimbo.UINext
     /// <see cref="UI.ReadingDirection"/> reads); Enter, Space or a gamepad's South button (A) press what has it. Buttons
     /// take it (<see cref="Pressable"/>), and anything a node's <see cref="UINode.Focusable"/> says, and groups until
     /// they are entered; sections and groups (<see cref="UINode.FocusScope"/>) shape how it moves, and what has it can
-    /// take the arrows itself (<see cref="IFocusMoveHandler"/>: a slider). Only the topmost presentation takes it: one coming up takes
+    /// take the arrows itself (<see cref="IFocusMoveHandler"/>: a slider). A key that goes nowhere (a slider at its end,
+    /// nothing that way to move to) shakes the focus ring no. Only the topmost presentation takes it: one coming up takes
     /// focus, at what prefers it, and one going gives it back to what had it in the level it uncovers (the button that
     /// opened it). Lost (hidden, disabled, gone), it goes to what is nearest where it was. A tap on a button moves it there,
     /// unseen, as a click focuses a button on the web.
@@ -572,9 +589,11 @@ namespace TimboJimbo.UINext
             if (width <= 0f || color.a <= 0f) return;
             float reach = root.FocusRingOffset.Value + width;
             float radius = Mathf.Max(0f, root.FocusRingRadius.Value);
+            // Shaking no, it is moved by as much, keeping its size.
+            var shake = node.RingShake != null ? node.RingShake.Value : Vector2.zero;
             painter.Add(new PrimitiveInstance
             {
-                Rect = new Vector4(-reach, -reach, -reach, -reach),
+                Rect = new Vector4(-reach + shake.x, -reach + shake.y, -reach - shake.x, -reach - shake.y),
                 Radii = new Vector4(radius, radius, radius, radius),
                 Color = Color.clear,
                 Color2 = color,
@@ -1062,7 +1081,7 @@ namespace TimboJimbo.UINext
                 {
                     if (IsVisible)
                     {
-                        Step(direction);
+                        Step(direction, fresh: true);
                     }
                     else
                     {
@@ -1076,7 +1095,7 @@ namespace TimboJimbo.UINext
             {
                 // Held, it repeats while focus shows: a pointer used meanwhile stops it, until a key is pressed again.
                 s_nextRepeat = now + RepeatInterval;
-                Step(direction);
+                Step(direction, fresh: false);
             }
 
             if (submit && !s_submitting)
@@ -1107,25 +1126,53 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // A move by keys: what has focus takes it, if it takes moves of its own (a slider stepping); else focus moves.
-        private static void Step(Vector2 direction)
+        // A move by keys: what has focus takes it, if it takes moves of its own (a slider stepping); else focus moves. A
+        // fresh press that goes nowhere (a slider at its end, nothing that way to move to) shakes the ring no; a held key's
+        // repeats do not, so holding against an end does not keep it shaking.
+        private static void Step(Vector2 direction, bool fresh)
         {
+            var result = FocusMoveResult.Ignored;
             var focused = Focused;
             if (focused != null)
             {
                 focused.GetComponents(s_moveHandlers);
-                bool taken = false;
                 foreach (var handler in s_moveHandlers)
                 {
                     if (handler is Behaviour behaviour && !behaviour.isActiveAndEnabled) continue;
-                    if (!handler.OnFocusMove(direction)) continue;
-                    taken = true;
-                    break;
+                    result = handler.OnFocusMove(direction);
+                    if (result != FocusMoveResult.Ignored) break;
                 }
                 s_moveHandlers.Clear();
-                if (taken) return;
             }
-            Move(direction);
+            bool moved = result == FocusMoveResult.Handled || (result == FocusMoveResult.Ignored && Move(direction));
+            if (!moved && fresh)
+                Nope(direction);
+        }
+
+        // How far the ring swings the way of a move that went nowhere, at first, in points, and the spring it shakes back
+        // on: lively, so it swings back past its place and settles, a quick "no".
+        private const float NopeDistance = 8f;
+        private static readonly UIAnimation NopeAnimation = new(0.25f, 0.8f);
+
+        // Shakes the focus ring of what has focus no: set off the way the move went, swinging back past its place and
+        // settling. It is part of the node's drawing (see DrawRing), so it shakes wherever the node is drawn.
+        private static void Nope(Vector2 direction)
+        {
+            var focused = Focused;
+            if (focused == null || !IsVisible) return;
+            focused.RingShake ??= new AnimatedValue<Vector2>(Vector2.zero, 0.05f, true);
+            var velocity = direction * NopeSpeed();
+            focused.RingShake.SpringTo(Vector2.zero, new Vector4(velocity.x, velocity.y, 0f, 0f), NopeAnimation);
+            focused.DrawComputation?.Invalidate();
+        }
+
+        // The speed a nope sets the ring off at for its first swing to reach NopeDistance: a spring at rest set off at v
+        // swings out v / omega * e^(-zeta acos(zeta) / sqrt(1 - zeta^2)) before it turns back.
+        private static float NopeSpeed()
+        {
+            NopeAnimation.Parameters(out float omega, out float zeta);
+            float reach = Mathf.Exp(-zeta * Mathf.Acos(zeta) / Mathf.Sqrt(1f - zeta * zeta)) / omega;
+            return NopeDistance / reach;
         }
 
         // Lets go of what a submit key pressed: tapped, if it still has focus and the key was let go of (rather than taken

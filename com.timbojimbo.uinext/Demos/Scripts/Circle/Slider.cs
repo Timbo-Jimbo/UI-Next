@@ -6,7 +6,8 @@ namespace TimboJimbo.UINext.Demos.Circle
     /// <summary>
     /// A slider: a value from 0 to 1, as wide a part of its track as its fill, with a knob riding the fill's end. A drag
     /// along it puts the value under the finger (a drag up or down goes on to the page), a tap on it jumps there, and left
-    /// and right step it while it has focus: its track is one focus stop (Focusable Always) whose left and right are its own.
+    /// and right step it while it has focus: its track is one focus stop (Focusable Always) whose left and right are its
+    /// own, and at its end the focus ring shakes no.
     /// </summary>
     [RequireComponent(typeof(Draggable))]
     public sealed class Slider : MonoBehaviour, IPointerHandler, IFocusMoveHandler
@@ -50,11 +51,13 @@ namespace TimboJimbo.UINext.Demos.Circle
             _pointer = -1;
         }
 
-        public bool OnFocusMove(Vector2 direction)
+        public FocusMoveResult OnFocusMove(Vector2 direction)
         {
-            if (direction.x == 0f) return false;
-            Set(_value + Mathf.Sign(direction.x) * _step, animated: true);
-            return true;
+            if (direction.x == 0f) return FocusMoveResult.Ignored;
+            float to = Mathf.Clamp01(_value + Mathf.Sign(direction.x) * _step);
+            if (Mathf.Approximately(to, _value)) return FocusMoveResult.Blocked;
+            Set(to, animated: true);
+            return FocusMoveResult.Handled;
         }
 
         // Set directly as the finger moves, so the knob is under it.

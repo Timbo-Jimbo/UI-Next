@@ -340,6 +340,9 @@ namespace TimboJimbo.UINext
         // Whether it has focus and focus shows (CSS's :focus-visible): its focus ring is drawn meanwhile.
         [NonSerialized] internal readonly Observable<bool> FocusVisible = new();
 
+        // How far its focus ring is shaken from its place, shaking no where a key went nowhere (made the first time).
+        [NonSerialized] internal AnimatedValue<Vector2> RingShake;
+
         // A cross-fade of its drawing: what it drew before, and how far the new drawing has faded in (made the first
         // time it cross-fades).
         [NonSerialized] private List<PrimitiveInstance> _outgoing;

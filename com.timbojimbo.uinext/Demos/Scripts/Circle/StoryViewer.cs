@@ -100,17 +100,17 @@ namespace TimboJimbo.UINext.Demos.Circle
             _presentation.Present();
         }
 
-        /// <summary>One story on (1) or back (-1); on from the last, it closes.</summary>
-        public void Step(int by)
+        /// <summary>One story on (1) or back (-1), on from the last closing it: false if there is none that way (back from the first).</summary>
+        public bool Step(int by)
         {
-            if (!_presentation.IsPresented || _open < 0) return;
+            if (!_presentation.IsPresented || _open < 0) return false;
             int next = Mathf.Max(0, _open + by);
             if (next >= CircleData.Stories.Length)
             {
                 Close();
-                return;
+                return true;
             }
-            if (next == _open) return;
+            if (next == _open) return false;
             MarkSeen(_open);
             // It closes into the next one's avatar now: the two swap at once, outside any change, so neither flies.
             _ringAvatars[_open].Display.Value = DisplayMode.Visible;
@@ -122,6 +122,7 @@ namespace TimboJimbo.UINext.Demos.Circle
                 _like.IsSelected = false;
             });
             _tray.ScrollIntoView(_stories[next].Node);
+            return true;
         }
 
         public void Close()

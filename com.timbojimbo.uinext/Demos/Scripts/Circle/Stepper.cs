@@ -8,7 +8,7 @@ namespace TimboJimbo.UINext.Demos.Circle
     /// A setting with a few values in order (Small, Default, Large), stepped through by the arrows either side of it, or
     /// with left and right while its row has focus: the row is one focus stop (Focusable Always) whose left and right are
     /// its own, and the arrows, for the pointer, take no focus. Its value cross-fades as it changes, and an arrow at its
-    /// end fades.
+    /// end fades; pressed on past its end, the focus ring shakes no.
     /// </summary>
     public sealed class Stepper : MonoBehaviour, IFocusMoveHandler
     {
@@ -44,21 +44,21 @@ namespace TimboJimbo.UINext.Demos.Circle
             _more.Tapped -= StepOn;
         }
 
-        /// <summary>One value back (-1) or on (1), stopping at the ends.</summary>
-        public void Step(int by)
+        /// <summary>One value back (-1) or on (1), stopping at the ends: false if it is at its end that way.</summary>
+        public bool Step(int by)
         {
             int to = Mathf.Clamp(_value + by, 0, _values.Count - 1);
-            if (to == _value) return;
+            if (to == _value) return false;
             _value = to;
             UI.Animate(UIAnimation.Snappy, Show);
             Changed?.Invoke(to);
+            return true;
         }
 
-        public bool OnFocusMove(Vector2 direction)
+        public FocusMoveResult OnFocusMove(Vector2 direction)
         {
-            if (direction.x == 0f) return false;
-            Step(direction.x > 0f ? 1 : -1);
-            return true;
+            if (direction.x == 0f) return FocusMoveResult.Ignored;
+            return Step(direction.x > 0f ? 1 : -1) ? FocusMoveResult.Handled : FocusMoveResult.Blocked;
         }
 
         private void StepBack() => Step(-1);
