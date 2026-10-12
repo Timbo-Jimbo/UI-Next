@@ -1,3 +1,20 @@
+## [0.3.0] - 12/10/2026
+
+### Changed
+
+- Text comes from UI Next Text (`com.timbojimbo.uinext.text`), UI Text's engine moved over to UI Next, rather than UI Text, which brought UGUI and the old UI package with it. Its namespace is `TimboJimbo.UINext.Text`, and `TextBlockDirection`, `TextBlockOverflow` and `TextBlockSettings` are `TextDirection`, `TextOverflow` and `TextSettings`; a project sets its default font under **Project Settings > Timbo Jimbo > UI Next Text**.
+- Text fields moved out to UI Next Text Input (`com.timbojimbo.uinext.textinput`), with the platform layer they type through; the assembly keeps its name, `TimboJimbo.UINext.TextInput`, and scenes keep their fields. The demos' text fields come on with it.
+
+### Added
+
+- `Label` draws what UI Text's TextBlock did:
+  - underlines and strikethroughs, under the glyphs;
+  - backgrounds behind code spans and blocks, and behind whatever else a theme's `InlineBackground` handlers match;
+  - links: a tap on one raises `LinkClicked` (and `OnLinkClicked`) with its href, taking the tap from a button the label is in;
+  - inline content: a theme's handlers' prefabs (UI Next nodes: an emote, a mention chip) placed over their tokens as nodes inside the label's, told what they stand for through `IInlineContent`, and used again as the text changes.
+- Labels lay their text out again when a font stack, a theme or the text settings change.
+- The Showcase's Markdown case shows underline, strike and links, which open in the browser.
+
 ## [0.2.0] - 12/10/2026
 
 ### Changed

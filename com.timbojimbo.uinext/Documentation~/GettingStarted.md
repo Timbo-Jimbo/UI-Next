@@ -10,8 +10,8 @@ everything it does can also be done in the inspector, since every node and drawa
   render pass to every URP camera itself, and draws after the camera stack, in the Game and Scene views.
 - The Input System, set as the active input handling (or Both).
 - The package and its dependencies in `Packages/manifest.json`: `com.timbojimbo.uinext`, `com.timbojimbo.core` and
-  `com.timbojimbo.ui.text`. Add `com.timbojimbo.ui.textinput` too for text fields; without it they are left out and
-  the rest works.
+  `com.timbojimbo.uinext.text`. Add `com.timbojimbo.uinext.textinput` too for text fields; without it they are left out
+  and the rest works.
 
 ## 2. A root
 
@@ -48,7 +48,9 @@ that grows both ways fills its parent to the edges.
 ## 4. Drawing
 
 Drawables draw in their node: `Box` (a rounded rect with a fill, border and shadow, each a colour or a gradient),
-`Label` (Markdown text, wrapped, with an optional outline and hard shadow) and `ImageView` (a sprite or texture).
+`Label` (Markdown text, wrapped, with an optional outline and hard shadow) and `ImageView` (a sprite or texture). A
+label draws its Markdown's underlines, strikethroughs and code backgrounds, and raises `LinkClicked` with a link's href
+as it is tapped.
 
 ```csharp
 var box = card.Box(Color.white, 16f);                    // white, corners 16 points round
@@ -124,8 +126,8 @@ scroll.ClearOfBottom.Add(tabBar);                         // the tab bar floats 
 scroll.ClearMargin.Value = Insets.All(12f);               // and 12 points more at its top and bottom
 ```
 
-With UI Text Input installed, `node.TextField("Message", 16f)` (from the `TimboJimbo.UINext.TextInput` assembly) is a
-text field typed into with the platform's own keyboard.
+With UI Next Text Input installed, `node.TextField("Message", 16f)` (from the `TimboJimbo.UINext.TextInput` assembly)
+is a text field typed into with the platform's own keyboard.
 
 ## 8. Presentations
 
