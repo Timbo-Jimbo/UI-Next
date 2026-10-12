@@ -2,7 +2,7 @@ namespace TimboJimbo.UINext
 {
     /// <summary>
     /// Views for seeing what the UI costs and how focus is shaped, drawn over the UI in the Game and Scene views (in
-    /// builds too). In the editor, the UI Next toolbar in the Scene view turns them on and off.
+    /// builds too). The Rendering Debugger's UI Next panel turns them on and off, in the editor and in development builds.
     /// </summary>
     public static class UIDebug
     {

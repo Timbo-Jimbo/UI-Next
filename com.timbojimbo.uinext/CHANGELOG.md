@@ -4,10 +4,7 @@
 
 - A scroll view's `ClearMargin` is the one room it keeps at its edges, as UIKit's content inset: what it holds starts that far in and scrolls that far past its end, and whatever brings something into view (`ScrollIntoView`, focus) lands that far in. `ScrollPadding` is gone; set the margin instead. Focus still keeps room for its ring where the margin is less.
 - Clear insets (the nodes listed for an edge, and the margin) count only on the edges a scroll view scrolls along: top and bottom for a vertical one, left and right for a horizontal one. Across, what it holds is laid out to its size, and a margin there pushed it out past its edge.
-- Editor: the Scene view's UI Next overlays are one toolbar, *UI Next*, its name first so what follows is plainly its, then three dropdowns, each opening a popup:
-  - States previews states on the selected node, lit with how many while any are; its groups are labelled Interaction, Modes and States, two of a name are told apart by their folder, and Clear preview takes it all back;
-  - Debug turns the debug views on and off, lit with how many are on, each with what it shows and its colours' key;
-  - Stats says what drawing the UI took in the last frame: draw calls (main, and layers'), primitives, layers and their images' memory, nodes, and springs moving.
+- Editor: the state bar is the *UI States* toolbar among the Scene view's overlays, one dropdown lit with how many states are previewed, opening a popup that says what it previews on, labels its groups Interaction, Modes and States, tells two of a name apart by their folder, and has Clear preview. Its icon is Unity's own unless States.png is in the package's Editor/Icons folder.
 
   Its icons are Unity's own, unless a PNG of the same name is in the package's Editor/Icons folder.
 
@@ -27,10 +24,11 @@
 ### Added
 
 - Editor: a click in the Scene view selects the node drawn topmost under it, where it is drawn (moved, scrolled, presented), inside its clips, whether it takes the pointer or not; clicked again in the same place, the one under it. It is a custom picking pass (`HandleUtility.pickGameObjectCustomPasses`).
-- Debug views: `UIDebug` in code (with `Changed`), and the UI Next toolbar's Debug popup in the editor, a toggle and a colour key for each (kept on for the session):
+- Debug views: `UIDebug` in code (with `Changed`), and toggles in the Rendering Debugger's UI Next panel, in the editor and in development builds (kept on for the session in the editor):
   - Overdraw: what is behind the UI is darkened, and every pixel shaded adds heat, a quad's clear parts and clipped parts included; what is drawn into a layer shows through its quad.
   - Layer Bounds: an outline where each layer's image lies: cyan fading as one, magenta blurred, yellow masked, green a flight's end.
   - Focus Path: an outline round what has focus, and round every section and group it is in, out to its presentation.
+- The Rendering Debugger's UI Next panel (SRP Core's DebugManager, as URP adds its own): the debug views, and what drawing the UI took in the last frame: draw calls (main, and layers'), primitives, layers and their images' memory, nodes, and springs moving.
 
 ## [0.1.0] - 12/10/2026
 
