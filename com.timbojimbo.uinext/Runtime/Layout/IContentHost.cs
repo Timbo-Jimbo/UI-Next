@@ -15,7 +15,7 @@ namespace TimboJimbo.UINext
         Vector2 Measure(float availableWidth, in HostedChildren children);
 
         /// <summary>The narrowest it can go, its children at the sizes they have so far.</summary>
-        float MinWidth(in HostedChildren children);
+        float Narrowest(in HostedChildren children);
 
         /// <summary>
         /// The size it gives <paramref name="child"/> along <paramref name="axis"/>, once its own content box is final
@@ -44,7 +44,13 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>The size layout has given a floating child of the node so far; false for a node that is not one.</summary>
-        public bool TryGetSize(UINode child, out Vector2 size)
+        public bool TryGetSize(UINode child, out Vector2 size) => TryGetSize(child, out size, out _);
+
+        /// <summary>
+        /// The size layout has given a floating child of the node so far, and the smallest it can be squeezed to (its
+        /// content's own smallest, within its min and max); false for a node that is not one.
+        /// </summary>
+        public bool TryGetSize(UINode child, out Vector2 size, out Vector2 min)
         {
             if (_nodes != null)
             {
@@ -52,10 +58,11 @@ namespace TimboJimbo.UINext
                 {
                     if (_nodes[c].Node != child || !_nodes[c].Floating.IsFloating) continue;
                     size = _nodes[c].Size;
+                    min = _nodes[c].MinSize;
                     return true;
                 }
             }
-            size = default;
+            size = min = default;
             return false;
         }
     }

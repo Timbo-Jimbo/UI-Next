@@ -438,7 +438,7 @@ namespace TimboJimbo.UINext
                             {
                                 var hosted = new HostedChildren(nodes, i);
                                 measured = host.Measure(-1f, in hosted).x;
-                                narrowest = host.MinWidth(in hosted);
+                                narrowest = host.Narrowest(in hosted);
                             }
                             else
                             {

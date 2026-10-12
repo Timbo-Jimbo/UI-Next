@@ -482,7 +482,7 @@ namespace TimboJimboEditor.UINext
             new("Text", true, "_text", "_font", "_fontSize", "_color", "_bold", "_italic"),
             new("Lines", true, "_alignment", "_wrap", "_maxLines", "_overflow", "_characterSpacing"),
             new("Outline and shadow", true, "_outlineWidth", "_outlineColor", "_shadowColor", "_shadowOffset"),
-            new("Markup", true, "_markdown", "_theme", "_onLinkClicked"),
+            new("Markup", true, "_richText", "_markup", "_onLinkClicked", "_onSpanTapped"),
         };
 
         protected override Section[] Sections => s_sections;

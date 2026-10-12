@@ -151,10 +151,11 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// A laid-out text with its top-left corner at <paramref name="origin"/> (layout pixels are points): its glyphs,
-        /// as signed distance fields (colour emoji keeping their own colours), and its underlines and strikethroughs, each
-        /// run's colour multiplied by <paramref name="tint"/>, with an <paramref name="outline"/> round each glyph
+        /// as signed distance fields (colour emoji keeping their own colours), and its underlines and strikethroughs, in
+        /// <paramref name="tint"/> where they are in the text's own colour and in their span's colour (at the tint's
+        /// opacity) where a span gives them one, with an <paramref name="outline"/> round each glyph
         /// <paramref name="outlineWidth"/> points wide (as far as its atlas's padding reaches). A
-        /// <paramref name="silhouette"/> (a shadow) leaves colour emoji out.
+        /// <paramref name="silhouette"/> (a shadow) is all in the tint, and leaves colour emoji out.
         /// </summary>
         public void Text(TextLayout layout, Vector2 origin, Color tint, float outlineWidth = 0f, Color outline = default,
             bool silhouette = false)
@@ -169,7 +170,7 @@ namespace TimboJimbo.UINext
                 var rect = decoration.Px;
                 rect.x += left;
                 rect.y += top;
-                Rect(rect, Multiply(decoration.Color, tint), default);
+                Rect(rect, RunColor(decoration.Color, tint, silhouette), default);
             }
 
             var handle = layout.Handle;
@@ -194,7 +195,7 @@ namespace TimboJimbo.UINext
                     // Colour bitmaps (emoji) keep their own colours: only the alpha is tinted.
                     var color = group.IsBitmap
                         ? new Color(1f, 1f, 1f, quad.BottomLeft.Color.a / 255f * tint.a)
-                        : Multiply(quad.BottomLeft.Color, tint);
+                        : RunColor(quad.BottomLeft.Color, tint, silhouette);
                     float dilate = quad.BottomLeft.Dilate * dilateScale;
                     if (outlineWidth <= 0f || group.IsBitmap || group.AtlasPadding <= 0 || group.Atlas == null || rect.width <= 0f)
                     {
@@ -221,8 +222,15 @@ namespace TimboJimbo.UINext
         // Atlas texels one unit of the engine's bold weight dilates a glyph by, as the text engine's own drawing has it.
         private const float BoldTexelsPerUnit = 2.25f;
 
-        private static Color Multiply(Color32 run, Color tint) =>
-            new(run.r / 255f * tint.r, run.g / 255f * tint.g, run.b / 255f * tint.b, run.a / 255f * tint.a);
+        // A run's colour as drawn: the tint for the text's own colour (TextLayout.TextColor) and in a silhouette, otherwise
+        // the span's own, at the tint's opacity.
+        private static Color RunColor(Color32 run, Color tint, bool silhouette)
+        {
+            bool own = run.r != 255 || run.g != 255 || run.b != 255 || run.a != 255;
+            if (!own) return tint;
+            if (silhouette) return new Color(tint.r, tint.g, tint.b, run.a / 255f * tint.a);
+            return new Color(run.r / 255f, run.g / 255f, run.b / 255f, run.a / 255f * tint.a);
+        }
 
         /// <summary>
         /// A glyph quad at <paramref name="rect"/> from an atlas, its top moved right by <paramref name="skew"/> (italic):

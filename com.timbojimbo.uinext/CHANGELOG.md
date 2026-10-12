@@ -1,3 +1,24 @@
+## [Unreleased]
+
+### Added
+
+- Text handlers, for a label's markup to show what their triggers find: a `SpanHandler` keeps it text, in a style of its own, with a node made from a prefab behind each line of it and perhaps tappable; an `ElementHandler` makes it a node from a prefab sitting in its line, and a `BlockHandler` a node across the width, each as big as its own layout makes it. A `Markup` asset holds handlers in order, then the parts of the built-in Markdown it keeps (`MarkdownFeatures`). A label reads its text with its own markup, else the project's default (**Project Settings > Timbo Jimbo > UI Next Text**), else the built-in Markdown.
+- `ITextContent` tells a handler's prefab what a node made from it stands for; `TextSlot` shows a match's text (or its argument, or its list marker) in a label, in the font, size, colour and markup of the label it is in, following them as they change.
+- The built-in Markdown has fenced code blocks, in a monospaced font the platform has, and quotes and list items, as blocks; code has a node behind it on each of its lines.
+- `Label.SpanTapped` and `OnSpanTapped`, for tappable spans other than links; `Label.Document` and `Label.EffectiveMarkup`.
+- Content can host its node's floating children (`IContentHost`): a label measures, sizes and places what its text makes nodes of in the layout pass that lays the text out, so nothing is placed a frame late, and text whose width animates re-wraps with what is in it.
+
+### Changed
+
+- `Label.Markup` (a `Markup`) replaces `Label.Theme`, and `Label.RichText` replaces `Label.Markdown`; scenes keep whether a label reads Markdown.
+- A label draws its glyphs over its children, which its inline content is.
+- Text a span colours (a link) keeps its colour in a label of any colour, at the label's opacity; the two were multiplied, so links in dark text were near black.
+- The Showcase's Markdown case highlights ==text== with a markup of its own: a span handler with a highlight prefab behind it.
+
+### Fixed
+
+- A label drew its underlines and strikethroughs twice.
+
 ## [0.3.1] - 12/10/2026
 
 ### Added
