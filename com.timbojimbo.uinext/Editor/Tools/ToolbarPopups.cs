@@ -8,32 +8,27 @@ using Label = UnityEngine.UIElements.Label;
 namespace TimboJimboEditor.UINext
 {
     /// <summary>
-    /// A popup from the UI Next toolbar: built with UI Toolkit into its window as it opens, as tall as what it holds.
+    /// A popup from the UI Next toolbar, built with UI Toolkit: handed to Unity's popup window from CreateGUI, which lays
+    /// it out unconstrained and sizes the window to it, again whenever its size changes.
     /// </summary>
     internal abstract class ToolbarPopup : PopupWindowContent
     {
-        private float _height = 120f;
-
         protected VisualElement Content { get; private set; }
 
         protected virtual float Width => 300f;
 
-        // Sized to what it holds, measured once it is laid out.
-        public override Vector2 GetWindowSize() => new(Width, _height);
-
-        public override void OnGUI(Rect rect) { }
-
-        public override void OnOpen()
+        public override VisualElement CreateGUI()
         {
-            Content = new VisualElement { style = { paddingLeft = 8, paddingRight = 8, paddingTop = 6, paddingBottom = 8 } };
-            Content.RegisterCallback<GeometryChangedEvent>(e =>
+            Content = new VisualElement
             {
-                _height = Mathf.Ceil(e.newRect.height);
-                editorWindow.Repaint();
-            });
-            editorWindow.rootVisualElement.Add(Content);
+                style = { width = Width, paddingLeft = 8, paddingRight = 8, paddingTop = 6, paddingBottom = 8 },
+            };
             Build();
+            return Content;
         }
+
+        // Drawn by UI Toolkit (CreateGUI): nothing for IMGUI.
+        public override void OnGUI(Rect rect) { }
 
         protected abstract void Build();
 

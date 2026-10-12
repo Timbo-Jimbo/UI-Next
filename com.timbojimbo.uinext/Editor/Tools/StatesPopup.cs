@@ -50,7 +50,7 @@ namespace TimboJimboEditor.UINext
         protected override void Build()
         {
             var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 4 } };
-            _target = new Label { style = { flexGrow = 1, flexShrink = 1, unityFontStyleAndWeight = FontStyle.Bold } };
+            _target = new Label { style = { flexGrow = 1, flexShrink = 1, unityFontStyleAndWeight = FontStyle.Bold, whiteSpace = WhiteSpace.Normal } };
             header.Add(_target);
             _clear = new Button(UIStatePreview.Clear) { text = "Clear preview", tooltip = "Take back every state the preview turned on." };
             header.Add(_clear);

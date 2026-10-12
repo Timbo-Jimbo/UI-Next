@@ -41,7 +41,7 @@ namespace TimboJimboEditor.UINext
         // Each icon's name, and the built-in icon standing in for it.
         public static readonly (string Name, string BuiltIn) UINext = ("UINext", "Canvas Icon");
         public static readonly (string Name, string BuiltIn) States = ("States", "AnimatorState Icon");
-        public static readonly (string Name, string BuiltIn) Debug = ("Debug", "DebuggerEnabled");
+        public static readonly (string Name, string BuiltIn) Debug = ("Debug", "ViewToolZoom");
         public static readonly (string Name, string BuiltIn) Stats = ("Stats", "Profiler.Rendering");
 
         public static Texture2D Get((string Name, string BuiltIn) icon)
