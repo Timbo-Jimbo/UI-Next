@@ -4,6 +4,7 @@
 
 - A scroll view's `ClearMargin` is the one room it keeps at its edges, as UIKit's content inset: what it holds starts that far in and scrolls that far past its end, and whatever brings something into view (`ScrollIntoView`, focus) lands that far in. `ScrollPadding` is gone; set the margin instead. Focus still keeps room for its ring where the margin is less.
 - Clear insets (the nodes listed for an edge, and the margin) count only on the edges a scroll view scrolls along: top and bottom for a vertical one, left and right for a horizontal one. Across, what it holds is laid out to its size, and a margin there pushed it out past its edge.
+- Editor: the Scene view's UI Next overlays are one toolbar, *UI Next*, its name first so what follows is plainly its: States (a popup previewing states on the selected node, lit with how many while any are; its groups labelled Interaction, Modes and States, two of a name told apart by their folder, and Clear preview), the debug views, and what drawing the UI took in the last frame. Its icons are Unity's own, unless a PNG of the same name is in the package's Editor/Icons folder.
 
 ### Removed
 
@@ -21,7 +22,7 @@
 ### Added
 
 - Editor: a click in the Scene view selects the node drawn topmost under it, where it is drawn (moved, scrolled, presented), inside its clips, whether it takes the pointer or not; clicked again in the same place, the one under it. It is a custom picking pass (`HandleUtility.pickGameObjectCustomPasses`).
-- Debug views: `UIDebug` in code (with `Changed`), and the UI Next Debug toolbar among the Scene view's overlays in the editor, a toggle for each (kept on for the session):
+- Debug views: `UIDebug` in code (with `Changed`), and toggles on the UI Next toolbar in the editor (kept on for the session):
   - Overdraw: what is behind the UI is darkened, and every pixel shaded adds heat, a quad's clear parts and clipped parts included; what is drawn into a layer shows through its quad.
   - Layer Bounds: an outline where each layer's image lies: cyan fading as one, magenta blurred, yellow masked, green a flight's end.
   - Focus Path: an outline round what has focus, and round every section and group it is in, out to its presentation.

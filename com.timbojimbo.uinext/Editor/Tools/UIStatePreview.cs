@@ -6,10 +6,10 @@ using UnityEngine;
 namespace TimboJimboEditor.UINext
 {
     /// <summary>
-    /// States previewed in the editor (the state bar's): interaction states and states of your own turned on for a node
-    /// and everything inside it, so values with variants for them show as they would, in the Scene and Game views. Only
-    /// what a node provides at run time is changed, so nothing is saved, and <see cref="Clear"/> takes back everything
-    /// the preview turned on.
+    /// States previewed in the editor (the UI Next toolbar's States): interaction states and states of your own turned
+    /// on for a node and everything inside it, so values with variants for them show as they would, in the Scene and
+    /// Game views. Only what a node provides at run time is changed, so nothing is saved, and <see cref="Clear"/> takes
+    /// back everything the preview turned on.
     /// </summary>
     public static class UIStatePreview
     {
@@ -24,6 +24,19 @@ namespace TimboJimboEditor.UINext
 
         /// <summary>Whether anything is being previewed.</summary>
         public static bool IsPreviewing => s_states.Count > 0 || s_interaction.Count > 0 || s_providers.Count > 0;
+
+        /// <summary>How many states are being previewed: interaction states, and states and modes turned on.</summary>
+        public static int Count
+        {
+            get
+            {
+                int count = s_interaction.Count;
+                foreach (var (node, state) in s_states)
+                    if (node != null && node.IsStateActive(state))
+                        count++;
+                return count;
+            }
+        }
 
         /// <summary>Whether an interaction state is active for <paramref name="node"/>, from the button providing it.</summary>
         public static bool IsActive(UINode node, InteractionStates state) => node != null && (node.ActiveInteraction() & state) != 0;
