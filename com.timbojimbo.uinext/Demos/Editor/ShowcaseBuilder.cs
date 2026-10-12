@@ -3,6 +3,7 @@ using TimboJimbo.UINext;
 using TimboJimbo.UINext.Demos;
 using TimboJimbo.UINext.Demos.Circle;
 using TimboJimbo.UINext.Demos.Showcase;
+using TimboJimbo.UINext.Text.Markup;
 using UnityEditor;
 using UnityEngine;
 
@@ -423,6 +424,9 @@ namespace TimboJimboEditor.UINext.Demos
             var md = markdown.Child("Text").Label("Text is Markdown: **bold**, *italic*, __underline__, ~~strike~~, `code`, and [links](https://unity.com) (tap one).", 16f, Text);
             md.Node.Width.Value = Sizing.Grow();
             md.gameObject.AddComponent<OpenLinks>();
+            var themed = markdown.Child("Themed").Label("A theme of its own puts ==highlights== behind text.", 16f, Text);
+            themed.Node.Width.Value = Sizing.Grow();
+            themed.Theme.Value = HighlightTheme();
 
             var align = Panel(Case(body, "Alignment").Column(6f), 14f);
             foreach (var (title, anchor) in new[] { ("Left", TextAnchor.UpperLeft), ("Centre", TextAnchor.UpperCenter), ("Right", TextAnchor.UpperRight) })
@@ -691,6 +695,32 @@ namespace TimboJimboEditor.UINext.Demos
 
         // A mask texture for the showcase, made once as a PNG beside its scene: white, its alpha from `alpha` at each
         // pixel's centre (0 to 1 across, 0 to 1 up).
+        // A text theme with one inline handler, a background behind ==text==, made once as an asset beside its scene.
+        private static TextTheme HighlightTheme()
+        {
+            string path = Folder + "/Highlight Theme.asset";
+            var theme = AssetDatabase.LoadAssetAtPath<TextTheme>(path);
+            if (theme != null) return theme;
+            theme = ScriptableObject.CreateInstance<TextTheme>();
+            AssetDatabase.CreateAsset(theme, path);
+            var highlight = ScriptableObject.CreateInstance<InlineBackground>();
+            highlight.name = "Highlight";
+            var serialized = new SerializedObject(highlight);
+            serialized.FindProperty("_kind").stringValue = "highlight";
+            serialized.FindProperty("_trigger.Open").stringValue = "==";
+            serialized.FindProperty("_trigger.Close").stringValue = "";
+            serialized.FindProperty("_color").colorValue = new Color(1f, 0.8f, 0.15f, 0.45f);
+            serialized.FindProperty("_borderWidth").floatValue = 0f;
+            serialized.FindProperty("_paddingEm").vector2Value = new Vector2(0.1f, 0.05f);
+            serialized.FindProperty("_cornerRadiusEm").floatValue = 0.2f;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            AssetDatabase.AddObjectToAsset(highlight, theme);
+            theme.Handlers.Add(highlight);
+            EditorUtility.SetDirty(theme);
+            AssetDatabase.SaveAssets();
+            return theme;
+        }
+
         private static Texture2D MaskTexture(string name, int width, int height, System.Func<float, float, float> alpha)
         {
             string path = Folder + "/" + name + ".png";

@@ -14,8 +14,8 @@ Core comes from [OpenUPM](https://openupm.com); UI Next Text, UI Next and UI Nex
 	- URL: `https://package.openupm.com/`
 	- Scope(s): `com.timbojimbo`
 2. Open **Window > Package Manager**, click Add, choose **Add package from git URL...** and paste, in turn:
-	- `https://github.com/Timbo-Jimbo/UI-Next.Text.git?path=com.timbojimbo.uinext.text#0.1.0`
-	- `https://github.com/Timbo-Jimbo/UI-Next.git?path=com.timbojimbo.uinext#0.3.0`
+	- `https://github.com/Timbo-Jimbo/UI-Next.Text.git?path=com.timbojimbo.uinext.text#0.1.1`
+	- `https://github.com/Timbo-Jimbo/UI-Next.git?path=com.timbojimbo.uinext#0.3.1`
 	- for text fields, `https://github.com/Timbo-Jimbo/UI-Next.TextInput.git?path=com.timbojimbo.uinext.textinput#0.1.0`
 
 New to it? [Getting started](com.timbojimbo.uinext/Documentation~/GettingStarted.md) walks through a first screen: a root, layout, drawing, values and states, animation, input, presentations, focus and the tools.

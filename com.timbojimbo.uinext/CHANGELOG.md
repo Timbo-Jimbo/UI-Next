@@ -1,3 +1,9 @@
+## [0.3.1] - 12/10/2026
+
+### Added
+
+- `Label.Theme`: the text theme its Markdown is read with (heading sizes, link and code colours, and inline handlers, such as an `InlineBackground` behind text of your own); none for the project's default theme, which UI Next Text 0.1.1 now hands texts that have none. The Showcase's Markdown case highlights ==text== with a theme of its own.
+
 ## [0.3.0] - 12/10/2026
 
 ### Changed

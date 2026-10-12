@@ -14,7 +14,9 @@ namespace TimboJimbo.UINext
     /// field glyphs, crisp at any scale. Its node fits to it when nothing else sizes it. A change of colour draws it again
     /// without shaping it again.
     /// <para>
-    /// Underlines and strikethroughs are drawn under the glyphs, and code has a background behind it (the theme's
+    /// Its <see cref="Theme"/> (else the project's default) sets heading sizes, link and code colours and the inline
+    /// handlers the Markdown is read with. Underlines and strikethroughs are drawn under the glyphs, and code has a
+    /// background behind it (the theme's
     /// <see cref="InlineBackground"/> handlers). A tap on a link raises <see cref="LinkClicked"/> with its href, taking the
     /// tap from a button the label is in. Inline content of the theme's handlers (an emote, a mention chip) is made from
     /// the handler's prefab, a UI Next node, as a node inside the label's own, placed over the token as the text is laid
@@ -43,6 +45,9 @@ namespace TimboJimbo.UINext
 
         [Tooltip("Reads the text as Markdown: **bold**, *italic*, __underline__, ~~strike~~, [links](url), `code`.")]
         [SerializeField] private UIValue<bool> _markdown = true;
+
+        [Tooltip("The theme its Markdown is read with: heading sizes, link and code colours, and inline handlers (backgrounds, inline content). Empty for the project's default.")]
+        [SerializeField] private UIValue<TextTheme> _theme = new UIValue<TextTheme>();
 
         [SerializeField] private UIValue<float> _characterSpacing = 0f;
 
@@ -104,6 +109,12 @@ namespace TimboJimbo.UINext
         public UIValue<int> MaxLines => _maxLines;
         public UIValue<TextOverflow> Overflow => _overflow;
         public UIValue<bool> Markdown => _markdown;
+
+        /// <summary>
+        /// The theme its Markdown is read with: heading sizes, link and code colours, and the inline handlers (an
+        /// <see cref="InlineBackground"/> behind text of your own, inline content); none for the project's default.
+        /// </summary>
+        public UIValue<TextTheme> Theme => _theme;
         public UIValue<float> CharacterSpacing => _characterSpacing;
 
         /// <summary>
@@ -290,6 +301,7 @@ namespace TimboJimbo.UINext
             var input = TextLayoutInput.Default;
             input.Text = _text.Value ?? "";
             input.RichText = _markdown.Value;
+            input.Theme = _theme.Value;
             input.Font = _font.Value;
             input.FontSizePx = Mathf.Max(1f, _fontSize.Value);
             input.WidthPx = width;
@@ -311,7 +323,7 @@ namespace TimboJimbo.UINext
 
         // Whether two inputs shape the same text: everything but colour, and the box when asked to ignore it.
         private static bool SameShape(in TextLayoutInput a, in TextLayoutInput b, bool ignoreBox) =>
-            a.Text == b.Text && a.RichText == b.RichText && a.Font == b.Font && a.FontSizePx == b.FontSizePx
+            a.Text == b.Text && a.RichText == b.RichText && a.Theme == b.Theme && a.Font == b.Font && a.FontSizePx == b.FontSizePx
             && a.WordWrap == b.WordWrap && a.Alignment == b.Alignment && a.Overflow == b.Overflow && a.MaxLines == b.MaxLines
             && a.Bold == b.Bold && a.Italic == b.Italic && a.CharacterSpacingPx == b.CharacterSpacingPx
             && a.AntiAliasMarginPx == b.AntiAliasMarginPx && (ignoreBox || (a.WidthPx == b.WidthPx && a.HeightPx == b.HeightPx));

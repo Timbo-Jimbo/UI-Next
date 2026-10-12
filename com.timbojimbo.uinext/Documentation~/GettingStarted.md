@@ -50,7 +50,8 @@ that grows both ways fills its parent to the edges.
 Drawables draw in their node: `Box` (a rounded rect with a fill, border and shadow, each a colour or a gradient),
 `Label` (Markdown text, wrapped, with an optional outline and hard shadow) and `ImageView` (a sprite or texture). A
 label draws its Markdown's underlines, strikethroughs and code backgrounds, and raises `LinkClicked` with a link's href
-as it is tapped.
+as it is tapped. Its `Theme` (a Text Theme asset, else the project's default) sets heading sizes, link and code colours
+and inline handlers, such as an `InlineBackground` behind text of your own.
 
 ```csharp
 var box = card.Box(Color.white, 16f);                    // white, corners 16 points round
