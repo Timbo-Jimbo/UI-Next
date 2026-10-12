@@ -1,0 +1,304 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7323209829677491368
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9110385665355692288}
+  - component: {fileID: 701616326200801263}
+  - component: {fileID: 6417523417909961620}
+  m_Layer: 0
+  m_Name: Tag
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &9110385665355692288
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7323209829677491368}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &701616326200801263
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7323209829677491368}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1dc04579fe745442a25d942cb45725c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.UINode
+  _width:
+    _value:
+      Mode: 0
+      Value: 0
+      Min: 0
+      Max: 0
+    _token: {fileID: 0}
+    _variants: []
+  _height:
+    _value:
+      Mode: 0
+      Value: 0
+      Min: 0
+      Max: 0
+    _token: {fileID: 0}
+    _variants: []
+  _padding:
+    _value:
+      Left: 0
+      Right: 0
+      Top: 0
+      Bottom: 0
+    _token: {fileID: 0}
+    _variants: []
+  _gap:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _direction:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _wrap:
+    _value:
+      Mode: 0
+      Count: 0
+      MinSize: 0
+    _token: {fileID: 0}
+    _variants: []
+  _alignX:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _alignY:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _aspectRatio:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _floating:
+    _value:
+      AttachTo: 0
+      Element: {fileID: 0}
+      Point: 0
+      TargetPoint: 0
+      Offset: {x: 0, y: 0}
+    _token: {fileID: 0}
+    _variants: []
+  _display:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _ignoresSafeArea:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _opacity:
+    _value: 1
+    _token: {fileID: 0}
+    _variants: []
+  _offset:
+    _value: {x: 0, y: 0}
+    _token: {fileID: 0}
+    _variants: []
+  _scale:
+    _value: 1
+    _token: {fileID: 0}
+    _variants: []
+  _rotation:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _zIndex:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _compositeGroup:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _blur:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _saturation:
+    _value: 1
+    _token: {fileID: 0}
+    _variants: []
+  _brightness:
+    _value: 1
+    _token: {fileID: 0}
+    _variants: []
+  _mask:
+    _value: {fileID: 0}
+    _token: {fileID: 0}
+    _variants: []
+  _avoidsKeyboard:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _clips:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _clipRadii:
+    _value:
+      TopLeft: 0
+      TopRight: 0
+      BottomRight: 0
+      BottomLeft: 0
+    _token: {fileID: 0}
+    _variants: []
+  _topLayer:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _hitTestable:
+    _value: 1
+    _token: {fileID: 0}
+    _variants: []
+  _matchName:
+    _value: 
+    _token: {fileID: 0}
+    _variants: []
+  _matchId:
+    _value: 
+    _token: {fileID: 0}
+    _variants: []
+  _matchAnchor:
+    _value: {x: 0.5, y: 0.5}
+    _token: {fileID: 0}
+    _variants: []
+  _focusScope:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _focusEntry:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _prefersFocus:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _focusable:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _focusRing:
+    _value: 1
+    _token: {fileID: 0}
+    _variants: []
+--- !u!114 &6417523417909961620
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7323209829677491368}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4187c2653eac11c41b1f1b63318c5d9a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.Box
+  _fill:
+    _value: {r: 0.20392157, g: 0.47058824, b: 0.9647059, a: 0.12}
+    _token: {fileID: 0}
+    _variants:
+    - When:
+        Interaction: 8
+        States: []
+      Value: {r: 0.20392157, g: 0.47058824, b: 0.9647059, a: 0.24}
+      Token: {fileID: 0}
+  _cornerRadii:
+    _value:
+      TopLeft: 5
+      TopRight: 5
+      BottomRight: 5
+      BottomLeft: 5
+    _token: {fileID: 0}
+    _variants: []
+  _gradient:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _gradientTo:
+    _value: {r: 0, g: 0, b: 0, a: 1}
+    _token: {fileID: 0}
+    _variants: []
+  _gradientAngle:
+    _value: 90
+    _token: {fileID: 0}
+    _variants: []
+  _borderWidth:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _borderColor:
+    _value: {r: 0, g: 0, b: 0, a: 1}
+    _token: {fileID: 0}
+    _variants: []
+  _borderGradient:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _borderColorTo:
+    _value: {r: 0, g: 0, b: 0, a: 1}
+    _token: {fileID: 0}
+    _variants: []
+  _borderGradientAngle:
+    _value: 90
+    _token: {fileID: 0}
+    _variants: []
+  _shadowColor:
+    _value: {r: 0, g: 0, b: 0, a: 0}
+    _token: {fileID: 0}
+    _variants: []
+  _shadowBlur:
+    _value: 8
+    _token: {fileID: 0}
+    _variants: []
+  _shadowOffset:
+    _value: {x: 0, y: 2}
+    _token: {fileID: 0}
+    _variants: []
+  _shadowSpread:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _shadowGradient:
+    _value: 0
+    _token: {fileID: 0}
+    _variants: []
+  _shadowColorTo:
+    _value: {r: 0, g: 0, b: 0, a: 0}
+    _token: {fileID: 0}
+    _variants: []
+  _shadowGradientAngle:
+    _value: 90
+    _token: {fileID: 0}
+    _variants: []

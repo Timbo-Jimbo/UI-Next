@@ -1,0 +1,136 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-3698932992045837870
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 65725bf0323847378b75870083f7a49e, type: 3}
+  m_Name: Emoji
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.ImageHandler
+  _trigger:
+    Kind: 0
+    Open: ':'
+    Close: 
+    Pattern: 
+    InsideWords: 0
+    Merge: 0
+    BareUrls: 0
+    Literal: 0
+  _prefab: {fileID: 0}
+  _alignment: 0
+  _tappable: 0
+  _images:
+  - Name: heart
+    Sprite: {fileID: 21300000, guid: 2f51aca894e8c5f499d07f2430ac83c3, type: 3}
+  - Name: star
+    Sprite: {fileID: 21300000, guid: 92b51efc5e588264082743df2a65e9f0, type: 3}
+  _sizeEm: 1.25
+--- !u!114 &-215685679738114271
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c04cc248d41459cac399f3ba5f47a8e, type: 3}
+  m_Name: Mention
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.ElementHandler
+  _trigger:
+    Kind: 1
+    Open: '@'
+    Close: 
+    Pattern: 
+    InsideWords: 0
+    Merge: 0
+    BareUrls: 0
+    Literal: 0
+  _prefab: {fileID: 0}
+  _alignment: 0
+  _tappable: 1
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3855f86f07f54b7082de989b99f99059, type: 3}
+  m_Name: Rich Text Markup
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.Markup
+  _handlers:
+  - {fileID: -215685679738114271}
+  - {fileID: 5363952765218803058}
+  - {fileID: -3698932992045837870}
+  - {fileID: 1845970198083795922}
+  _markdown: -1
+--- !u!114 &1845970198083795922
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5da2ee5f9fc49af8c89986d552ae6c4, type: 3}
+  m_Name: Highlight
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.SpanHandler
+  _trigger:
+    Kind: 0
+    Open: ==
+    Close: 
+    Pattern: 
+    InsideWords: 0
+    Merge: 0
+    BareUrls: 0
+    Literal: 0
+  _font: {fileID: 0}
+  _scale: 1
+  _color: {r: 0, g: 0, b: 0, a: 0}
+  _bold: 0
+  _italic: 0
+  _underline: 0
+  _strikethrough: 0
+  _background: {fileID: 7076483279138424042, guid: 376361826fa4a3a42afc0142fec8570c, type: 3}
+  _padding: {x: 0.1, y: 0.05}
+  _tappable: 0
+--- !u!114 &5363952765218803058
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5da2ee5f9fc49af8c89986d552ae6c4, type: 3}
+  m_Name: Tag
+  m_EditorClassIdentifier: TimboJimbo.UINext::TimboJimbo.UINext.SpanHandler
+  _trigger:
+    Kind: 1
+    Open: '#'
+    Close: 
+    Pattern: 
+    InsideWords: 0
+    Merge: 0
+    BareUrls: 0
+    Literal: 0
+  _font: {fileID: 0}
+  _scale: 1
+  _color: {r: 0.20392157, g: 0.47058824, b: 0.9647059, a: 1}
+  _bold: 0
+  _italic: 0
+  _underline: 0
+  _strikethrough: 0
+  _background: {fileID: 7323209829677491368, guid: ce05d894026269142b297595aa8fc9a0, type: 3}
+  _padding: {x: 0.2, y: 0.06}
+  _tappable: 1
