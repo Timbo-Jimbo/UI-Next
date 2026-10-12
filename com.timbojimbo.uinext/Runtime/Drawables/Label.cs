@@ -84,12 +84,16 @@ namespace TimboJimbo.UINext
         private Effect _reader;
         private int _depth;
 
-        // Each element's and block's size as layout last gave it, by match, and the same with each block as narrow as it
-        // can be (what the narrowest the label can be is measured with), each counting its changes.
-        private readonly List<Vector2> _sizes = new();
+        // Each element's and block's size by match, as layout gave it: while widths are shared out, before heights are
+        // known; the same with each block as narrow as it can be (what the narrowest the label can be is measured with); and
+        // once heights are known too. Each counts its changes: kept apart, none changes from one layout pass to the next
+        // when nothing does, so what was laid out from it is kept.
+        private readonly List<Vector2> _widthSizes = new();
         private readonly List<Vector2> _narrowest = new();
-        private int _sizesVersion;
+        private readonly List<Vector2> _sizes = new();
+        private int _widthVersion;
         private int _narrowestVersion;
+        private int _sizesVersion;
 
         // How many lines each span with a background is on, by match, and the elements and blocks the text was cut short
         // before, in the last final layout: their nodes, and the backgrounds' as many, are made as the text is read.
@@ -101,6 +105,7 @@ namespace TimboJimbo.UINext
         private TextLayout _layout;
         private TextLayoutInput _laidOut;
         private int _laidOutVersion;
+        private List<Vector2> _laidOutSizesList;
         private int _laidOutSizes;
         private bool _valid;
         private bool _drawn;
@@ -116,8 +121,9 @@ namespace TimboJimbo.UINext
         // Measures, kept until what they were measured from changes: unwrapped, at the last width asked for, and narrowest.
         private TextLayoutInput _measuredFor;
         private int _measuredVersion = -1;
-        private int _measuredSizes = -1;
-        private Vector2 _unwrapped = new(-1f, -1f);
+        private int _unwrappedSizes = -1;
+        private int _wrappedSizes = -1;
+        private Vector2 _unwrapped;
         private float _measuredWidth = -1f;
         private Vector2 _measured;
         private TextLayoutInput _narrowestFor;
@@ -250,27 +256,29 @@ namespace TimboJimbo.UINext
 
         public Vector2 Measure(float availableWidth)
         {
-            var input = Input(availableWidth, -1f, _sizes);
-            if (!SameShape(in input, in _measuredFor, ignoreBox: true) || _measuredVersion != _version || _measuredSizes != _sizesVersion)
+            // With no limit, widths are being shared out, before heights are known: its objects at the sizes they have then.
+            bool widths = availableWidth < 0f;
+            var input = Input(availableWidth, -1f, widths ? _widthSizes : _sizes);
+            if (!SameShape(in input, in _measuredFor, ignoreBox: true) || _measuredVersion != _version)
             {
                 _measuredFor = input;
                 _measuredVersion = _version;
-                _measuredSizes = _sizesVersion;
-                _unwrapped = new Vector2(-1f, -1f);
-                _measuredWidth = -1f;
+                _unwrappedSizes = _wrappedSizes = -1;
             }
-            if (availableWidth < 0f || !input.WordWrap)
+            if (widths)
             {
-                if (_unwrapped.x < 0f)
+                if (_unwrappedSizes != _widthVersion)
                 {
-                    var unwrapped = input;
-                    unwrapped.WidthPx = -1f;
-                    _unwrapped = TextLayout.Measure(in unwrapped);
+                    _unwrappedSizes = _widthVersion;
+                    _unwrapped = TextLayout.Measure(in input);
                 }
                 return _unwrapped;
             }
-            if (!Mathf.Approximately(_measuredWidth, availableWidth))
+            if (!input.WordWrap)
+                input.WidthPx = -1f;
+            if (_wrappedSizes != _sizesVersion || !Mathf.Approximately(_measuredWidth, availableWidth))
             {
+                _wrappedSizes = _sizesVersion;
                 _measuredWidth = availableWidth;
                 _measured = TextLayout.Measure(in input);
             }
@@ -306,13 +314,16 @@ namespace TimboJimbo.UINext
 
         Vector2 IContentHost.Measure(float availableWidth, in HostedChildren children)
         {
-            TakeSizes(in children);
+            if (availableWidth < 0f)
+                TakeSizes(in children, _widthSizes, ref _widthVersion);
+            else
+                TakeSizes(in children, _sizes, ref _sizesVersion);
             return Measure(availableWidth);
         }
 
         float IContentHost.Narrowest(in HostedChildren children)
         {
-            TakeSizes(in children);
+            TakeSizes(in children, _narrowest, ref _narrowestVersion, narrowest: true);
             return MinWidth;
         }
 
@@ -329,9 +340,17 @@ namespace TimboJimbo.UINext
                     size = contentSize.x;
                     return true;
                 case InlineKind.Background:
-                    TakeSizes(in children);
-                    // Widths are shared out before heights are known: the lines are broken by widths alone.
-                    LayOut(axis == 0 ? new Vector2(contentSize.x, -1f) : contentSize, final: axis == 1);
+                    // Widths are shared out before heights are known: the lines are broken by widths alone, as they were
+                    // taken up then.
+                    if (axis == 0)
+                    {
+                        LayOut(new Vector2(contentSize.x, -1f), _widthSizes, _widthVersion, final: false);
+                    }
+                    else
+                    {
+                        TakeSizes(in children, _sizes, ref _sizesVersion);
+                        LayOut(contentSize, _sizes, _sizesVersion, final: true);
+                    }
                     var rect = PieceRect(in inline);
                     size = axis == 0 ? rect.width : rect.height;
                     return true;
@@ -345,8 +364,8 @@ namespace TimboJimbo.UINext
         {
             topLeft = default;
             if (!_inlineIndex.TryGetValue(child, out int index)) return false;
-            TakeSizes(in children);
-            LayOut(contentSize, final: true);
+            TakeSizes(in children, _sizes, ref _sizesVersion);
+            LayOut(contentSize, _sizes, _sizesVersion, final: true);
             var inline = _inlines[index];
             var origin = new Vector2(0f, _layout.TopPx);
             if (inline.Kind == InlineKind.Background)
@@ -359,28 +378,22 @@ namespace TimboJimbo.UINext
             return true;
         }
 
-        // Takes up the sizes layout has given its elements and blocks so far, and how narrow each block can be.
-        private void TakeSizes(in HostedChildren children)
+        // Takes up into `sizes` the sizes layout has given its elements and blocks so far, each block as narrow as it can be
+        // for the narrowest, counting a change.
+        private void TakeSizes(in HostedChildren children, List<Vector2> sizes, ref int version, bool narrowest = false)
         {
-            bool changed = false, narrower = false;
+            bool changed = false;
             foreach (var inline in _inlines)
             {
-                if (inline.Kind == InlineKind.Background || inline.Node == null || inline.Match >= _sizes.Count) continue;
+                if (inline.Kind == InlineKind.Background || inline.Node == null || inline.Match >= sizes.Count) continue;
                 if (!children.TryGetSize(inline.Node, out var size, out var min)) continue;
-                if (_sizes[inline.Match] != size)
-                {
-                    _sizes[inline.Match] = size;
-                    changed = true;
-                }
-                var narrowest = inline.Kind == InlineKind.Block ? new Vector2(Mathf.Min(min.x, size.x), size.y) : size;
-                if (_narrowest[inline.Match] != narrowest)
-                {
-                    _narrowest[inline.Match] = narrowest;
-                    narrower = true;
-                }
+                if (narrowest && inline.Kind == InlineKind.Block)
+                    size.x = Mathf.Min(min.x, size.x);
+                if (sizes[inline.Match] == size) continue;
+                sizes[inline.Match] = size;
+                changed = true;
             }
-            if (changed) _sizesVersion++;
-            if (narrower) _narrowestVersion++;
+            if (changed) version++;
         }
 
         // A background's rect in the layout: its piece of its span's line, reaching above and below it as its handler says;
@@ -407,20 +420,22 @@ namespace TimboJimbo.UINext
 
         // ── Laying out and drawing ───────────────────────────────────────────────
 
-        // Lays its text out in a content box, its elements and blocks at the sizes layout gave them, unless it is laid out
-        // so already. A height that cannot change the layout is left out, so laid out at a width alone and then in the
-        // whole box, it is laid out once. The final layout, in the box it is drawn in, is watched (Watch).
-        private void LayOut(Vector2 box, bool final)
+        // Lays its text out in a content box, its elements and blocks at `sizes` (counting changes in `version`), unless it
+        // is laid out so already. A height that cannot change the layout is left out. The final layout, in the box it is
+        // drawn in, is watched (Watch).
+        private void LayOut(Vector2 box, List<Vector2> sizes, int version, bool final)
         {
-            var input = Input(box.x, HeightMatters ? box.y : -1f, _sizes);
-            if (!_valid || !SameShape(in input, in _laidOut, ignoreBox: false) || _laidOutVersion != _version || _laidOutSizes != _sizesVersion)
+            var input = Input(box.x, HeightMatters ? box.y : -1f, sizes);
+            if (!_valid || !SameShape(in input, in _laidOut, ignoreBox: false) || _laidOutVersion != _version
+                || _laidOutSizesList != sizes || _laidOutSizes != version)
             {
                 _layout ??= new TextLayout();
                 _drawn = _layout.Generate(in input);
                 _valid = true;
                 _laidOut = input;
                 _laidOutVersion = _version;
-                _laidOutSizes = _sizesVersion;
+                _laidOutSizesList = sizes;
+                _laidOutSizes = version;
                 _stamp++;
             }
             if (final)
@@ -468,7 +483,7 @@ namespace TimboJimbo.UINext
         {
             var box = painter.ContentRect;
             if (string.IsNullOrEmpty(_text.Value) || box.width <= 0f) return;
-            LayOut(box.size, final: true);
+            LayOut(box.size, _sizes, _sizesVersion, final: true);
             if (!_drawn) return;
             _origin = new Vector2(box.x, box.y + _layout.TopPx);
 
@@ -562,11 +577,13 @@ namespace TimboJimbo.UINext
             }
             _version++;
             int count = _document.Matches.Count;
-            Fill(_sizes, count, Vector2.zero);
+            Fill(_widthSizes, count, Vector2.zero);
             Fill(_narrowest, count, Vector2.zero);
+            Fill(_sizes, count, Vector2.zero);
             Fill(_pieces, count, 1);
-            _sizesVersion++;
+            _widthVersion++;
             _narrowestVersion++;
+            _sizesVersion++;
             _cut.Clear();
         }
 
