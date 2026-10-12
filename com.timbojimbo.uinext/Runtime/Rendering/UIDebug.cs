@@ -2,13 +2,16 @@ namespace TimboJimbo.UINext
 {
     /// <summary>
     /// Views for seeing what the UI costs and how focus is shaped, drawn over the UI in the Game and Scene views (in
-    /// builds too). In the editor, Tools/UI Next/Debug turns them on and off.
+    /// builds too). In the editor, the Scene view's UI Next Debug toolbar turns them on and off.
     /// </summary>
     public static class UIDebug
     {
         private static bool s_overdraw;
         private static bool s_layerBounds;
         private static bool s_focusPath;
+
+        /// <summary>Raised as a view is turned on or off.</summary>
+        public static event System.Action Changed;
 
         /// <summary>
         /// Overdraw: what is behind the UI is darkened, and every pixel the GPU shades for it adds heat, brighter the more
@@ -47,6 +50,7 @@ namespace TimboJimbo.UINext
             if (field == value) return;
             field = value;
             Compositor.MarkOrderDirty();
+            Changed?.Invoke();
         }
     }
 }

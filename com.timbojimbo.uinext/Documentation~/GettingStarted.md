@@ -163,6 +163,7 @@ The focus ring's look is on the root: `FocusRingColor`, `FocusRingWidth`, `Focus
 - **Inspectors** in sections, small choices as buttons, and a link at the end of any value that can take a token.
 - **The state bar** (*UI Next States* among the Scene view's overlays) previews states and modes on the selected node.
 - **Scene view picking:** a click in the Scene view selects the node drawn under it; again, the one under that.
-- **Debug views** (**Tools → UI Next → Debug**, or `UIDebug` in code): Overdraw, Layer Bounds and Focus Path.
+- **Debug views** (the *UI Next Debug* toolbar among the Scene view's overlays, or `UIDebug` in code): Overdraw, Layer
+  Bounds and Focus Path.
 - **Demos:** **Tools → UI Next → Demos → Build Circle** (a small social app) and **Build Showcase** (one idea a case)
   build the demo scenes in `Demos/Scenes`.
