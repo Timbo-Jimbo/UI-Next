@@ -121,14 +121,21 @@ namespace TimboJimbo.UINext
         /// <summary>The cell showing a row, if it is made.</summary>
         public bool TryGetCell(int index, out UINode cell) => _cells.TryGetValue(index, out cell);
 
-        /// <summary>Scrolls a row to the top of the view, as far as the list goes, and makes the rows there.</summary>
+        /// <summary>
+        /// Scrolls a row to the top of the view (under what covers its top edge, with its scroll padding above it), as far
+        /// as the list goes, and makes the rows there.
+        /// </summary>
         public void ScrollTo(int index, bool animated = true)
         {
             if (_scroll == null) return;
-            float range = Mathf.Max(0f, TopOf(_count) - _scroll.Viewport.y);
-            _scroll.ScrollTo(new Vector2(0f, Mathf.Min(TopOf(index), range)), animated);
+            EnsureRows();
+            float top = RowsTop + TopOf(index) - _scroll.ScrollPadding.Peek.Top;
+            _scroll.ScrollTo(new Vector2(0f, top), animated);
             Reconcile();
         }
+
+        // Where the rows start in what its scroll view holds: past its padding and anything above them.
+        private float RowsTop => _rows != null ? _rows.LaidOutRect.y : 0f;
 
         private void OnEnable()
         {
@@ -158,10 +165,12 @@ namespace TimboJimbo.UINext
             if (CreateCell == null || BindCell == null || node == null || !isActiveAndEnabled) return;
             EnsureRows();
 
-            // What is in view is anchored to the row at its top: rows above it measuring other than they were counted
-            // move the offset with them, not what is in view.
+            // Where the view's top is, in points down the list: the scroll view shows what it holds from its offset on,
+            // drawn from under its top clear inset, and the rows start past its padding. What is in view is anchored to
+            // the row at its top: rows above it measuring other than they were counted move the offset with them, not
+            // what is in view.
             EnsureTops();
-            float offset = _scroll.PresentedOffset.y;
+            float offset = _scroll.PresentedOffset.y - _scroll.ClearShift.y - RowsTop;
             int anchor = _count > 0 ? RowAt(offset) : -1;
             float intoAnchor = anchor >= 0 ? offset - _tops[anchor] : 0f;
 

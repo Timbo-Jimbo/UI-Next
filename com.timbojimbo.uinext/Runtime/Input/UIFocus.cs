@@ -295,14 +295,23 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Moves focus to the next stop in Tab order (or the previous one), wrapping round: in reading order, each section's
-        /// stops all in their turn. Shows focus.
+        /// stops all in their turn, skipping what is out of sight in a scroll view (another page of a pager), but for what
+        /// the scroll view focus is in holds, which it scrolls into view. Shows focus.
         /// </summary>
         public static bool Next(bool backwards = false)
         {
             var container = Collect(FocusTree());
             if (container == null || s_stops.Count == 0) return false;
             var order = TabOrder(container);
-            int at = order.IndexOf(CurrentStop());
+            int current = CurrentStop();
+            var from = current >= 0 ? s_stops[current] : null;
+            for (int k = order.Count - 1; k >= 0; k--)
+            {
+                if (order[k] != current && !InSight(s_stops[order[k]], from, Vector2.zero))
+                    order.RemoveAt(k);
+            }
+            if (order.Count == 0) return false;
+            int at = order.IndexOf(current);
             at = at < 0 ? (backwards ? order.Count - 1 : 0) : (at + (backwards ? -1 : 1) + order.Count) % order.Count;
             SetFocus(s_stops[order[at]], true, true);
             return true;
@@ -784,22 +793,30 @@ namespace TimboJimbo.UINext
             return null;
         }
 
-        // Whether a move from `at` going `direction` can reach `node`: it is in sight in every scroll view it is in (drawn
-        // over some of it), but for one `at` is in too that scrolls the way the move goes, which scrolls it into view as
-        // focus lands. What is clipped out of sight elsewhere (another page of a pager, the hidden end of a row of stories
-        // focus is not in) is out of reach.
+        // Whether a move from `at` going `direction` (none for Tab) can reach `node`: it is in sight in every scroll view it
+        // is in (drawn over some of it), but for one that brings it into view as focus lands (see Brings). What is clipped
+        // out of sight elsewhere (another page of a pager, the hidden end of a row of stories focus is not in) is out of
+        // reach.
         private static bool InSight(UINode node, UINode at, Vector2 direction)
         {
             var rect = node.DrawnRect;
             for (var n = node.ParentNode; n != null; n = n.ParentNode)
             {
                 var scroll = n.Scroller;
-                if (scroll != null && scroll.isActiveAndEnabled && !rect.Overlaps(n.DrawnRect)
-                    && !(IsInside(at, n) && scroll.Along(direction) != Vector2.zero))
+                if (scroll != null && scroll.isActiveAndEnabled && !rect.Overlaps(n.DrawnRect) && !Brings(n, scroll, at, direction))
                     return false;
                 if (n.PresentationLevel.Peek != 0) break;
             }
             return true;
+        }
+
+        // Whether scroll view `node` brings what it holds into view for a move from `at` going `direction`: `at` is in it,
+        // and it scrolls that way; for Tab, which goes no way, it is the scroll view `at` is in, so Tab goes on down a
+        // list but not onto another page.
+        private static bool Brings(UINode node, ScrollView scroll, UINode at, Vector2 direction)
+        {
+            if (!IsInside(at, node)) return false;
+            return direction == Vector2.zero ? ScrollViewAround(at) == node : scroll.Along(direction) != Vector2.zero;
         }
 
         // The outermost section between `container` and `stop` (both left out) that `at` is not in, or null.

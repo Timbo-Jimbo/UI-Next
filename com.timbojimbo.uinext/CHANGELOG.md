@@ -4,6 +4,12 @@
 
 - The Arena demo (a mobile game's menus): what it showed off stays in the engine (`Label`'s outline and shadow, `Box`'s gradient borders and shadows), and `PresentFrom`, which it shared with Circle, stays with the demos' shared scripts
 
+### Fixed
+
+- `ListView` works out what is in view where its rows really are: past its scroll view's padding (and anything above the rows), and drawn from under its top clear inset, so rows under a header floating over it are made; `ScrollTo` puts a row under what covers the top, with the scroll padding above it
+- Tab skips what is out of sight in a scroll view (another page of a pager, the hidden end of a row), as the arrows do, but goes on down the list focus is in, scrolling it
+- A text field being edited keeps itself clear of what covers its scroll view's edges (its clear insets) and keeps its scroll padding, as well as above the keyboard
+
 ## [0.1.0] - 12/10/2026
 
 ### Added
