@@ -1,5 +1,5 @@
-using TimboJimbo.UI.Text;
-using TimboJimbo.UI.Text.Bridge;
+using TimboJimbo.UINext.Text;
+using TimboJimbo.UINext.Text.Bridge;
 using UnityEngine;
 
 namespace TimboJimbo.UINext

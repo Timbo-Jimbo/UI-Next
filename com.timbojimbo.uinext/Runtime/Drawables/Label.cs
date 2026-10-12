@@ -1,5 +1,5 @@
-using TimboJimbo.UI.Text;
-using TimboJimbo.UI.Text.Markup;
+using TimboJimbo.UINext.Text;
+using TimboJimbo.UINext.Text.Markup;
 using UnityEngine;
 
 namespace TimboJimbo.UINext
@@ -28,7 +28,7 @@ namespace TimboJimbo.UINext
         [SerializeField] private UIValue<int> _maxLines = 0;
 
         [Tooltip("What happens to text that runs past the node's height or Max Lines.")]
-        [SerializeField] private UIValue<TextBlockOverflow> _overflow = TextBlockOverflow.Ellipsis;
+        [SerializeField] private UIValue<TextOverflow> _overflow = TextOverflow.Ellipsis;
 
         [Tooltip("Reads the text as Markdown: **bold**, *italic*, [links](url), `code`.")]
         [SerializeField] private UIValue<bool> _markdown = true;
@@ -70,7 +70,7 @@ namespace TimboJimbo.UINext
         public UIValue<bool> Italic => _italic;
         public UIValue<bool> Wrap => _wrap;
         public UIValue<int> MaxLines => _maxLines;
-        public UIValue<TextBlockOverflow> Overflow => _overflow;
+        public UIValue<TextOverflow> Overflow => _overflow;
         public UIValue<bool> Markdown => _markdown;
         public UIValue<float> CharacterSpacing => _characterSpacing;
 

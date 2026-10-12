@@ -74,6 +74,12 @@ namespace TimboJimbo.UINext
             renderer?.EnqueuePass(s_pass ??= new UIRenderPass());
         }
 
+        /// <summary>
+        /// Raised as a frame ends, everything in it laid out and drawn: for what follows it on screen (the text input
+        /// system hands the platform where the text being edited is).
+        /// </summary>
+        internal static event System.Action Ended;
+
         /// <summary>Runs the frame: once per frame with stepping, and again (without stepping) whenever something is pending.</summary>
         public static void Run()
         {
@@ -108,6 +114,7 @@ namespace TimboJimbo.UINext
                 UIScheduler.Flush(Phase.Draw);
             Compositor.Build();
             PendingSprings.LandUnread(FrameIndex);
+            Ended?.Invoke();
         }
 
         private static void UpdateRoots()

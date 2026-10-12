@@ -5,10 +5,9 @@
         "TimboJimbo.UINext",
         "TimboJimbo.UINext.Demos",
         "TimboJimboEditor.UINext",
-        "TimboJimbo.UI.Text.Runtime",
+        "TimboJimbo.UINext.Text",
         "Unity.RenderPipelines.Universal.Runtime",
-        "TimboJimbo.UINext.TextInput",
-        "TimboJimbo.UI.TextInput.Runtime"
+        "TimboJimbo.UINext.TextInput"
     ],
     "includePlatforms": [
         "Editor"
@@ -21,7 +20,7 @@
     "defineConstraints": [],
     "versionDefines": [
         {
-            "name": "com.timbojimbo.ui.textinput",
+            "name": "com.timbojimbo.uinext.textinput",
             "expression": "0.1.0",
             "define": "UINEXT_TEXTINPUT"
         }

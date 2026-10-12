@@ -131,7 +131,7 @@ namespace TimboJimboEditor.UINext.Demos
             field.CaretColor.Value = Accent;
             field.SelectionColor.Value = new Color(Accent.r, Accent.g, Accent.b, 0.25f);
             var config = field.Config;
-            config.ReturnKey = TimboJimbo.UI.TextInput.TextReturnKey.Send;
+            config.ReturnKey = TimboJimbo.UINext.TextInput.TextReturnKey.Send;
             field.Config = config;
             var send = composer.Child("Send").Sized(Sizing.Fixed(36f), Sizing.Fixed(36f)).Center();
             var sendBox = send.Box(Accent, 18f);

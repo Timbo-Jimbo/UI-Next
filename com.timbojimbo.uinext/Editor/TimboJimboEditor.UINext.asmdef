@@ -4,7 +4,7 @@
     "references": [
         "TimboJimbo.UINext",
         "Unity.InputSystem",
-        "TimboJimbo.UI.Text.Runtime",
+        "TimboJimbo.UINext.Text",
         "TimboJimbo.Core.Runtime",
         "TimboJimboEditor.Core",
         "Unity.RenderPipelines.Core.Runtime",

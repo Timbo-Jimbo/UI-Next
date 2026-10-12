@@ -4,9 +4,7 @@
     "references": [
         "TimboJimbo.UINext",
         "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner",
-        "TimboJimbo.UINext.TextInput",
-        "TimboJimbo.UI.TextInput.Runtime"
+        "UnityEditor.TestRunner"
     ],
     "includePlatforms": [
         "Editor"
@@ -21,12 +19,6 @@
     "defineConstraints": [
         "UNITY_INCLUDE_TESTS"
     ],
-    "versionDefines": [
-        {
-            "name": "com.timbojimbo.ui.textinput",
-            "expression": "0.1.0",
-            "define": "UINEXT_TEXTINPUT"
-        }
-    ],
+    "versionDefines": [],
     "noEngineReferences": false
 }

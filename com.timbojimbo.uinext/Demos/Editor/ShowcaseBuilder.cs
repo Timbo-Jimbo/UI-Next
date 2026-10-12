@@ -446,7 +446,7 @@ namespace TimboJimboEditor.UINext.Demos
             Field(fields, "Name", "Your name");
             var password = Field(fields, "Password", "Password");
             var secure = password.Config;
-            secure.ContentType = TimboJimbo.UI.TextInput.TextContentType.Password;
+            secure.ContentType = TimboJimbo.UINext.TextInput.TextContentType.Password;
             password.Config = secure;
             Field(fields, "Note", "A note that grows to four lines", multiline: true, maxLines: 4);
 #endif
