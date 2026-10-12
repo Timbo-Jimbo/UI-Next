@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Removed
+
+- The Arena demo (a mobile game's menus): what it showed off stays in the engine (`Label`'s outline and shadow, `Box`'s gradient borders and shadows), and `PresentFrom`, which it shared with Circle, stays with the demos' shared scripts
+
 ## [0.1.0] - 12/10/2026
 
 ### Added
