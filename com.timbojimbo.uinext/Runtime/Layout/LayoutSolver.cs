@@ -41,6 +41,8 @@ namespace TimboJimbo.UINext
         // What it measures, if anything (null: nothing); it is fitted to when it has no children in its flow
         // (floating ones do not count).
         public IMeasurable Content;
+        // The node it is, for content that hosts its floating children (IContentHost) to know them by.
+        public UINode Node;
 
         // Out: where it goes, relative to its parent's top-left corner, x right and y down, in its parent's units (the
         // root's is its own rect, at 0, 0).
@@ -431,14 +433,30 @@ namespace TimboJimbo.UINext
                         {
                             // As wide as it is unwrapped, and no narrower than its longest word (which can be no wider
                             // than the whole of it).
-                            float measured = node.Content.Measure(-1f).x;
+                            float measured, narrowest;
+                            if (node.Content is IContentHost host)
+                            {
+                                var hosted = new HostedChildren(nodes, i);
+                                measured = host.Measure(-1f, in hosted).x;
+                                narrowest = host.MinWidth(in hosted);
+                            }
+                            else
+                            {
+                                measured = node.Content.Measure(-1f).x;
+                                narrowest = node.Content.MinWidth;
+                            }
                             size = measured + padding;
-                            min = Mathf.Min(node.Content.MinWidth, measured) + padding;
+                            min = Mathf.Min(narrowest, measured) + padding;
                         }
                         else
                         {
                             // As tall as it is wrapped to its final width, padding included; text cannot be squeezed
-                            // shorter than that.
+                            // shorter than that. Content hosting children is measured now, theirs fitted before it.
+                            if (node.Content is IContentHost host && (sizing.Mode == SizingMode.Fit || sizing.Mode == SizingMode.Grow))
+                            {
+                                float width = Mathf.Max(0f, node.Size.x - node.Padding.Horizontal);
+                                node.ContentHeight = host.Measure(width, new HostedChildren(nodes, i)).y + node.Padding.Vertical;
+                            }
                             size = min = node.ContentHeight;
                         }
                     }
@@ -589,7 +607,8 @@ namespace TimboJimbo.UINext
 
                     if (child.Floating.IsFloating)
                     {
-                        SizeFloatingChild(ref child, sizing, axis, followsWidth, whole, rootSafe);
+                        if (!HostSizes(nodes, p, ref child, axis))
+                            SizeFloatingChild(ref child, sizing, axis, followsWidth, whole, rootSafe);
                         continue;
                     }
 
@@ -778,6 +797,21 @@ namespace TimboJimbo.UINext
             }
         }
 
+        // A floating child of content hosting it (IContentHost), sized along an axis as the content says, once the
+        // parent's content box is final that way: true when it did.
+        private static bool HostSizes(SolverNode[] nodes, int parent, ref SolverNode child, int axis)
+        {
+            ref var host = ref nodes[parent];
+            if (host.Content is not IContentHost content || child.Floating.AttachTo == FloatingAttach.Element) return false;
+            if (!content.SizeChild(child.Node, axis, ContentBoxSize(host), new HostedChildren(nodes, parent), out float size)) return false;
+            child.Size[axis] = Mathf.Max(0f, size);
+            return true;
+        }
+
+        // A node's size inside its padding, as far as the passes have it.
+        private static Vector2 ContentBoxSize(in SolverNode node) =>
+            new(Mathf.Max(0f, node.Size.x - node.Padding.Horizontal), Mathf.Max(0f, node.Size.y - node.Padding.Vertical));
+
         // A floating child, but for one attached to an element (sized in its own turn) or whose height follows its
         // width, sized against its parent's whole rect, or the root's safe rect when it floats against the root
         // (SizeFloating).
@@ -922,6 +956,8 @@ namespace TimboJimbo.UINext
                 ref var node = ref nodes[i];
                 if (node.Content == null || node.FlowCount > 0 || node.AspectRatio > 0f) continue;
                 if (node.Height.Mode != SizingMode.Fit && node.Height.Mode != SizingMode.Grow) continue;
+                // Measured as heights are fitted, once the children it holds have theirs (FitAxis).
+                if (node.Content is IContentHost) continue;
 
                 // A negative width would mean no limit to Measure, so a node narrower than its padding wraps at 0.
                 float width = Mathf.Max(0f, node.Size.x - node.Padding.Horizontal);
@@ -1040,14 +1076,21 @@ namespace TimboJimbo.UINext
                 else if (parent.FlowCount > 0)
                     PlaceRun(nodes, parent, start, content, align, rootSize, safe);
 
-                // Floating children, but for one attached to an element (placed in its own turn): against the root's
-                // safe rect, brought into this parent's space, or against this parent's rect as laid out, before it
-                // reached out past the safe area, so what floats in it stays where it was as what is in its flow does.
+                // Floating children, but for one attached to an element (placed in its own turn): where content
+                // hosting it puts it, or against the root's safe rect, brought into this parent's space, or against this
+                // parent's rect as laid out, before it reached out past the safe area, so what floats in it stays where
+                // it was as what is in its flow does.
+                var host = parent.Content as IContentHost;
                 for (int c = parent.FirstChild; c >= 0; c = nodes[c].NextSibling)
                 {
                     ref var child = ref nodes[c];
                     var attach = child.Floating.AttachTo;
                     if (attach == FloatingAttach.None || attach == FloatingAttach.Element) continue;
+                    if (host != null && host.PlaceChild(child.Node, ContentBoxSize(parent), new HostedChildren(nodes, p), out var hosted))
+                    {
+                        PutAt(ref child, parent, hosted + new Vector2(parent.Padding.Left, parent.Padding.Top), rootSize, safe);
+                        continue;
+                    }
                     var reach = parent.Reach;
                     var topLeft = attach == FloatingAttach.Root
                         ? FloatingTopLeft(child, safe.position - parent.RootRect.position, safe.size)

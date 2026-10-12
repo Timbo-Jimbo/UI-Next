@@ -359,6 +359,7 @@ namespace TimboJimbo.UINext
                     Ignores = node.IgnoresSafeArea.Value,
                     Scroll = node.Scroller != null && node.Scroller.isActiveAndEnabled ? node.Scroller.Axis.Value : ScrollAxis.None,
                     Content = node.Content,
+                    Node = node,
                 };
                 if (parentIndex >= 0)
                 {
