@@ -23,6 +23,7 @@ namespace TimboJimbo.UINext
         private static readonly List<(MarkdownFeatures Feature, TextRule Rule)> s_rules = new();
         private static readonly List<Object> s_made = new();
         private static Markup s_all;
+        private static FontStack s_code;
         private static GameObject s_chip;
         private static GameObject s_image;
 
@@ -36,6 +37,16 @@ namespace TimboJimbo.UINext
                 s_all.name = "Built-in Markdown";
                 s_all.hideFlags = HideFlags.HideAndDontSave;
                 return s_all;
+            }
+        }
+
+        /// <summary>The fonts the Markdown shows code in.</summary>
+        public static FontStack CodeFont
+        {
+            get
+            {
+                MakeMarkdown();
+                return s_code;
             }
         }
 
@@ -60,7 +71,7 @@ namespace TimboJimbo.UINext
         {
             if (s_rules.Count > 0 && s_rules[0].Rule != null) return;
             ClearMarkdown();
-            var code = CodeFont();
+            var code = s_code = MakeCodeFont();
             var item = ListItem();
             Add(MarkdownFeatures.CodeBlocks, "Code block", BlockHandler.Create(TextTrigger.Fenced(), CodeBlock(code)));
             Add(MarkdownFeatures.Headings, "Heading 1", SpanHandler.Create(TextTrigger.Line("# "), scale: 1.6f, bold: true));
@@ -172,7 +183,7 @@ namespace TimboJimbo.UINext
         }
 
         // Code's fonts: the first monospaced family the platform has.
-        private static FontStack CodeFont()
+        private static FontStack MakeCodeFont()
         {
             var stack = ScriptableObject.CreateInstance<FontStack>();
             stack.name = "Built-in code font";

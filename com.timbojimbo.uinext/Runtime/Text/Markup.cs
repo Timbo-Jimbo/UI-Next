@@ -67,6 +67,13 @@ namespace TimboJimbo.UINext
             BuiltInText.GetRules(_markdown, rules);
         }
 
+        /// <summary>
+        /// The fonts the built-in Markdown shows code in: the first of Consolas, Menlo, Droid Sans Mono and DejaVu Sans Mono
+        /// the platform has. Prewarm it on a loading screen (<see cref="FontStack.Prewarm"/>), so the first code shown does
+        /// not hold up its frame, or show code of your own in it.
+        /// </summary>
+        public static FontStack CodeFont => BuiltInText.CodeFont;
+
         /// <summary>A markup made in code: <paramref name="handlers"/> of its own, then the built-in Markdown's <paramref name="markdown"/>.</summary>
         public static Markup Create(IEnumerable<TextRule> handlers, MarkdownFeatures markdown = (MarkdownFeatures)~0)
         {

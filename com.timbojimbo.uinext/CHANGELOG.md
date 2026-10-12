@@ -8,6 +8,7 @@
 - An element handler with no prefab makes chips: a pill with the match as written in it (@name). `ImageHandler` shows images in the text by name (:name:), from a table of sprites, each as big as the text around it times its size, and leaves names it has none for as text; `TextImage` shows one in a prefab of your own. Both are handlers to add to a markup, not part of the built-in Markdown.
 - Tappable elements: a tap on one raises `Label.MatchTapped` (and `OnMatchTapped`), as a tap on a tappable span other than a link does, and the nodes standing for a match held down (a chip, the backgrounds behind a span) are Pressed meanwhile. `Label.Document`, `Label.EffectiveMarkup`, and `Label.FontSizeAround`, the size of the text around a match, which elements sized in em follow.
 - Content can host its node's floating children (`IContentHost`): a label measures, sizes and places what its text makes nodes of in the layout pass that lays the text out, so nothing is placed a frame late, and text whose width animates re-wraps with what is in it.
+- `Markup.CodeFont`, the fonts the built-in Markdown shows code in: prewarm it on a loading screen (`FontStack.Prewarm`), so the first code shown does not hold up its frame, or show code of your own in it. The Showcase prewarms it as it starts.
 
 ### Changed
 
