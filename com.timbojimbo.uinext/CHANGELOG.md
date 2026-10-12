@@ -10,6 +10,10 @@
 - Tab skips what is out of sight in a scroll view (another page of a pager, the hidden end of a row), as the arrows do, but goes on down the list focus is in, scrolling it
 - A text field being edited keeps itself clear of what covers its scroll view's edges (its clear insets) and keeps its scroll padding, as well as above the keyboard
 
+### Added
+
+- Editor: a click in the Scene view selects the node drawn topmost under it, where it is drawn (moved, scrolled, presented), inside its clips, whether it takes the pointer or not; clicked again in the same place, the one under it (a custom picking pass, `HandleUtility.pickGameObjectCustomPasses`)
+
 ## [0.1.0] - 12/10/2026
 
 ### Added

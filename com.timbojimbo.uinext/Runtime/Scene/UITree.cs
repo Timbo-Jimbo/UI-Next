@@ -234,6 +234,24 @@ namespace TimboJimbo.UINext
             return -1;
         }
 
+        /// <summary>
+        /// The node drawn topmost at <paramref name="point"/> (its root's points) that <paramref name="accepts"/>, inside
+        /// its clips, whether it takes the pointer or not: what a click in the Scene view selects. -1 for none.
+        /// </summary>
+        internal int PickTopmost(Vector2 point, Predicate<UINode> accepts)
+        {
+            for (int k = DrawOrder.Count - 1; k >= 0; k--)
+            {
+                int i = DrawOrder[k];
+                if (i >= Nodes.Count) continue;
+                var node = Nodes[i];
+                if (node == null || !Shown[i] || Opacities[i] <= 0.001f || !accepts(node)) continue;
+                if (Contains(i, point, 0f) && InsideClips(i, point))
+                    return i;
+            }
+            return -1;
+        }
+
         /// <summary>Whether <paramref name="point"/> is over node <paramref name="index"/> as drawn, give or take <paramref name="slop"/> points.</summary>
         public bool Contains(int index, Vector2 point, float slop)
         {
