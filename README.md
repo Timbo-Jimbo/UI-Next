@@ -4,6 +4,18 @@ A UI stack owned end to end, as the design in `Design/UIStack.md` lays it out: l
 
 Requires Unity 6000.5 or newer, URP 17.5 (render graph), the Input System, and the Core and UI Text packages. Text fields also need UI Text Input; without it they are left out and the rest works.
 
+## Installation
+
+UI Next's dependencies, Core and UI Text, come from [OpenUPM](https://openupm.com); UI Next itself comes from GitHub.
+
+1. Add the Scoped Registry: open **Edit > Project Settings > Package Manager** and add a new Scoped Registry (or the scope
+   to one you have):
+	- Name: `OpenUPM`
+	- URL: `https://package.openupm.com/`
+	- Scope(s): `com.timbojimbo`
+2. Open **Window > Package Manager**, click Add, choose **Add package from git URL...** and paste
+   `https://github.com/Timbo-Jimbo/UI-Next.git?path=com.timbojimbo.uinext#0.2.0`.
+
 New to it? [Getting started](com.timbojimbo.uinext/Documentation~/GettingStarted.md) walks through a first screen: a root, layout, drawing, values and states, animation, input, presentations, focus and the tools.
 
 ## How it works

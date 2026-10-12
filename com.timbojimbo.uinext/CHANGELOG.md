@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.2.0] - 12/10/2026
 
 ### Changed
 
@@ -16,7 +16,7 @@
   - Box, Label, Image View and Scroll View have the same headers, and a size offers its min and max only when it is not fixed, which they do not bound.
 - Editor: UI States previews everywhere: a state turned on is on for every node in every tree, over its own (a state previewed turns the others of its group off), rather than on the selected node, so a page of controls can be seen pressed or focused at once.
 - Editor: a value's field shows what is drawn. While a variant gives it (its states on, or previewed), the field shows the variant's value, read-only, tinted blue as Unity tints what an animation drives, its states in the tooltip. A value with variants has a mark at the end of its line naming them, which lists them when clicked, rather than the list always open; right-click a value to remove one.
-- Editor: the state bar is the *UI States* toolbar among the Scene view's overlays, one dropdown lit with how many states are previewed, opening a popup that says what it previews on, labels its groups Interaction, Modes and States, tells two of a name apart by their folder, and has Clear preview. Its icon is Unity's own unless States.png is in the package's Editor/Icons folder.
+- Editor: the state bar is the *UI States* toolbar among the Scene view's overlays, one dropdown lit with how many states are previewed, opening a popup that labels its groups Interaction, Modes and States, tells two of a name apart by their folder, and has Clear preview. Its icon is Unity's own unless States.png is in the package's Editor/Icons folder.
 
 ### Removed
 
