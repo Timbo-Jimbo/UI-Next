@@ -26,9 +26,10 @@ namespace TimboJimboEditor.UINext.Demos
         // A press, over something clear or faint.
         private static readonly Color Pressed = new(0.5f, 0.5f, 0.55f, 0.2f);
 
-        // The room the scroll views keep round what they bring into view (focus moving to it, a photo coming home), so it
-        // lands the same whatever brings it.
-        private static readonly Insets ScrollRoom = Insets.All(12f);
+        // The room the scroll views keep clear at the edges they scroll along: what they hold starts that far in, and what
+        // they bring into view (focus moving to it, a photo coming home) lands that far in, whatever brings it. Their own
+        // padding is the rest of the room they start with.
+        private static readonly Insets ScrollMargin = Insets.All(12f);
 
         // The tokens, made by Tokens().
         private static UIState s_dark;
@@ -107,13 +108,12 @@ namespace TimboJimboEditor.UINext.Demos
             var chats = Chats(pages, out var chatsScroll, out var rows);
             var meScroll = Me(pages, parts);
             var tabs = TabBar(app, out var pill, out var bar);
-            // The pages scroll clear of the tab bar, by reference, with a little room above it: what they bring into view
-            // (a focused row, a photo coming home) lands clear of it, with room round it.
+            // The pages scroll clear of the tab bar, by reference, with their margin above it: what they bring into view
+            // (a focused row, a photo coming home) lands clear of it.
             foreach (var page in new[] { homeScroll, chatsScroll, meScroll })
             {
                 page.ClearOfBottom.Add(bar);
-                page.ClearMargin.Value = new Insets(0f, 0f, 0f, 12f);
-                page.ScrollPadding.Value = ScrollRoom;
+                page.ClearMargin.Value = ScrollMargin;
             }
 
             // What opens from what the pages hold, each drawn at its own level as it is presented.
@@ -209,9 +209,9 @@ namespace TimboJimboEditor.UINext.Demos
             var backNode = header.Child("Back").Pad(8f, 4f);
             backNode.Child("Title").Label("‹ Back", 17f, Accent);
             back = backNode.Pressable();
-            body = content.Child("Body").Sized(Sizing.Grow(), Sizing.Grow()).Column(18f).Pad(new Insets(16f, 16f, 8f, 40f));
+            body = content.Child("Body").Sized(Sizing.Grow(), Sizing.Grow()).Column(18f).Pad(new Insets(16f, 16f, 0f, 28f));
             scroll = body.Scroll();
-            scroll.ScrollPadding.Value = ScrollRoom;
+            scroll.ClearMargin.Value = ScrollMargin;
             // Focus starts on what the page holds, not on Back, which is a move up away.
             body.PrefersFocus.Value = true;
             return page;

@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Changed
+
+- A scroll view's `ClearMargin` is the one room it keeps at its edges, as UIKit's content inset: what it holds starts that far in and scrolls that far past its end, and whatever brings something into view (`ScrollIntoView`, focus) lands that far in. `ScrollPadding` is gone; set the margin instead. Focus still keeps room for its ring where the margin is less.
+- Clear insets (the nodes listed for an edge, and the margin) count only on the edges a scroll view scrolls along: top and bottom for a vertical one, left and right for a horizontal one. Across, what it holds is laid out to its size, and a margin there pushed it out past its edge.
+
 ### Removed
 
 - The Arena demo (a mobile game's menus). What it showed off stays in the engine (`Label`'s outline and shadow, `Box`'s gradient borders and shadows), and `PresentFrom`, which it shared with Circle, stays with the demos' shared scripts.
@@ -9,9 +14,9 @@
 - `ListView` works out what is in view where its rows really are:
   - past its scroll view's padding, and anything above the rows;
   - drawn from under its top clear inset, so rows under a header floating over it are made;
-  - `ScrollTo` puts a row under what covers the top, with the scroll padding above it.
+  - `ScrollTo` puts a row under what covers the top, and the clear margin.
 - Tab skips what is out of sight in a scroll view (another page of a pager, the hidden end of a row), as the arrows do, but goes on down the list focus is in, scrolling it.
-- A text field being edited keeps itself clear of what covers its scroll view's edges (its clear insets) and keeps its scroll padding, as well as above the keyboard.
+- A text field being edited keeps itself clear of what covers its scroll view's edges (its clear insets), as well as above the keyboard.
 
 ### Added
 

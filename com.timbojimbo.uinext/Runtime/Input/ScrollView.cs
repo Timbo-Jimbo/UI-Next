@@ -27,9 +27,9 @@ namespace TimboJimbo.UINext
     /// and does not press what is under it; caught bouncing back from past an end, a drag heading further past it goes
     /// where a new drag from that end would, and it springs back. It draws its scroll indicators over what it holds while
     /// it moves. Nodes floating over its edges (a tab bar, a header), listed for the edge they lie along
-    /// (<see cref="ClearOfBottom"/> and the rest), are kept clear of, with <see cref="ClearMargin"/> on top, as SwiftUI's
-    /// safeAreaInset insets a scroll view: what it holds scrolls out from under them, and <see cref="ScrollIntoView"/>
-    /// lands clear of them, with <see cref="ScrollPadding"/> round what it brings into view, whatever brings it.
+    /// (<see cref="ClearOfBottom"/> and the rest), are kept clear of, with <see cref="ClearMargin"/> of room on top, as
+    /// UIKit's contentInset and SwiftUI's safeAreaInset inset a scroll view: what it holds starts clear of them and scrolls
+    /// out from under them, and what is brought into view (<see cref="ScrollIntoView"/>, focus) lands clear of them.
     /// </summary>
     [DisallowMultipleComponent]
     [AddComponentMenu("Timbo Jimbo/UI Next/Scroll View")]
@@ -61,11 +61,8 @@ namespace TimboJimbo.UINext
         [Tooltip("Nodes floating over its right edge.")]
         [SerializeField] private List<UINode> _clearOfRight = new();
 
-        [Tooltip("Room kept clear at each edge on top of what the nodes listed for it cover.")]
+        [Tooltip("Room kept clear at each edge it scrolls along, on top of what the nodes listed for it cover: what it holds starts that far in, and what is brought into view lands that far in.")]
         [SerializeField] private UIValue<Insets> _clearMargin = new Insets();
-
-        [Tooltip("Room kept round anything it scrolls into view, whatever brings it (focus, code), as CSS's scroll-padding. It moves nothing at rest.")]
-        [SerializeField] private UIValue<Insets> _scrollPadding = new Insets();
 
         // How far a pointer moves before a drag begins, in points.
         private const float Slop = 8f;
@@ -131,21 +128,19 @@ namespace TimboJimbo.UINext
         /// <summary>Nodes floating over its right edge, kept clear of: see <see cref="ClearInsets"/>.</summary>
         public List<UINode> ClearOfRight => _clearOfRight;
 
-        /// <summary>Room kept clear at each edge on top of what the nodes listed for it cover.</summary>
-        public UIValue<Insets> ClearMargin => _clearMargin;
-
         /// <summary>
-        /// Room kept round anything it scrolls into view (<see cref="ScrollIntoView"/>), on each side, inside what its
-        /// <see cref="ClearInsets"/> leave, as CSS's scroll-padding: whatever brings a node into view (focus moving to it,
-        /// code), it lands the same. It moves nothing at rest and does not change its range, so at its ends a node lands
-        /// only as far in as its range lets it.
+        /// Room kept clear at each edge it scrolls along, on top of what the nodes listed for it cover, as part of its
+        /// <see cref="ClearInsets"/>: what it holds starts that far in at rest and scrolls that far past its end, and what
+        /// is brought into view, whatever brings it (focus moving to it, <see cref="ScrollIntoView"/>), lands that far in.
         /// </summary>
-        public UIValue<Insets> ScrollPadding => _scrollPadding;
+        public UIValue<Insets> ClearMargin => _clearMargin;
 
         /// <summary>
         /// How far each of its edges is covered, in its own points: how far in from that edge the nodes listed for it
         /// (<see cref="ClearOfTop"/> and the rest) reach, as drawn now and while shown, a gap between them and the edge
-        /// included, plus <see cref="ClearMargin"/>. It is padding round what it holds that layout never sees, as SwiftUI's
+        /// included, plus <see cref="ClearMargin"/>. Only the edges it scrolls along count (top and bottom for a vertical
+        /// one, left and right for a horizontal one): across, what it holds is laid out to its size, and a node or margin
+        /// there would push it out past its edge. It is padding round what it holds that layout never sees, as SwiftUI's
         /// safeAreaInset and UIKit's contentInset are: its range grows by it, what it holds is drawn from under the top and
         /// left ones and scrolls out from under the bottom and right ones, <see cref="ScrollIntoView"/> lands clear of it,
         /// and pages and the indicators keep to the part of it that it leaves. Never kept, it is worked out whenever it is
@@ -155,10 +150,12 @@ namespace TimboJimbo.UINext
         {
             get
             {
-                var insets = _clearMargin.Value;
+                bool across = Scrolls(0), down = Scrolls(1);
+                var insets = ScrollingEdges(_clearMargin.Value);
                 // Asked again while they are worked out (by a listed node whose place hangs on them, in a scroll view that
                 // keeps clear of something in this one), they are the margin alone, rather than each waiting on the other.
-                if (_measuring || _clearOfTop.Count + _clearOfBottom.Count + _clearOfLeft.Count + _clearOfRight.Count == 0)
+                if (_measuring || ((!down || _clearOfTop.Count + _clearOfBottom.Count == 0)
+                                   && (!across || _clearOfLeft.Count + _clearOfRight.Count == 0)))
                     return insets;
                 var node = Node;
                 var tree = node.Tree;
@@ -171,10 +168,16 @@ namespace TimboJimbo.UINext
                 _measuring = true;
                 try
                 {
-                    insets.Top += Reach(_clearOfTop, Side.Top, mine, tree) / scale;
-                    insets.Bottom += Reach(_clearOfBottom, Side.Bottom, mine, tree) / scale;
-                    insets.Left += Reach(_clearOfLeft, Side.Left, mine, tree) / scale;
-                    insets.Right += Reach(_clearOfRight, Side.Right, mine, tree) / scale;
+                    if (down)
+                    {
+                        insets.Top += Reach(_clearOfTop, Side.Top, mine, tree) / scale;
+                        insets.Bottom += Reach(_clearOfBottom, Side.Bottom, mine, tree) / scale;
+                    }
+                    if (across)
+                    {
+                        insets.Left += Reach(_clearOfLeft, Side.Left, mine, tree) / scale;
+                        insets.Right += Reach(_clearOfRight, Side.Right, mine, tree) / scale;
+                    }
                 }
                 finally
                 {
@@ -185,6 +188,11 @@ namespace TimboJimbo.UINext
         }
 
         private enum Side { Top, Bottom, Left, Right }
+
+        // Insets on the edges it scrolls along only: top and bottom when it scrolls down, left and right when across.
+        private Insets ScrollingEdges(Insets insets) => new(
+            Scrolls(0) ? insets.Left : 0f, Scrolls(0) ? insets.Right : 0f,
+            Scrolls(1) ? insets.Top : 0f, Scrolls(1) ? insets.Bottom : 0f);
 
         // How far the nodes listed for `side` reach into `mine` (its root's points) from that edge, as drawn now: the
         // furthest in of those shown, from the edge to their far side, at most the whole way across. Where they are along
@@ -300,8 +308,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Scrolls the least it takes to show <paramref name="node"/>, a node inside it, whole (or its start, if it is
-        /// bigger), clear of what covers its edges (<see cref="ClearInsets"/>), with its <see cref="ScrollPadding"/> round
-        /// it, or <paramref name="margin"/> points where that is more (room for a focus ring).
+        /// bigger), clear of what covers its edges and its margin (<see cref="ClearInsets"/>), with at least
+        /// <paramref name="margin"/> points of room past what covers them where its <see cref="ClearMargin"/> leaves less
+        /// (room for a focus ring).
         /// </summary>
         public void ScrollIntoView(UINode node, bool animated = true, float margin = 0f)
         {
@@ -312,12 +321,12 @@ namespace TimboJimbo.UINext
                 rect.position += parent.LaidOutRect.position;
             var offset = ContentOffset;
             var clear = ClearInsets;
-            var room = _scrollPadding.Peek;
+            var room = ScrollingEdges(_clearMargin.Peek);
             for (int axis = 0; axis < 2; axis++)
             {
                 if (!Scrolls(axis)) continue;
-                float before = Mathf.Max(margin, axis == 0 ? room.Left : room.Top);
-                float after = Mathf.Max(margin, axis == 0 ? room.Right : room.Bottom);
+                float before = Mathf.Max(0f, margin - (axis == 0 ? room.Left : room.Top));
+                float after = Mathf.Max(0f, margin - (axis == 0 ? room.Right : room.Bottom));
                 float min = rect.position[axis] - before, max = rect.position[axis] + rect.size[axis] + after;
                 // Clear of its insets, it shows what it holds from its offset on, as far as the part of it they leave.
                 float view = Viewport[axis] - (axis == 0 ? clear.Horizontal : clear.Vertical);

@@ -555,8 +555,8 @@ namespace TimboJimbo.UINext
         }
 
         // Scrolls every scroll view the node is in, up to its presentation, until it is in view: the innermost to show it,
-        // with its scroll padding round it (or room for its focus ring, where that is more), and each one further out to
-        // show the one inside it.
+        // clear of what covers its edges and its margin (with room for its focus ring, where the margin is less), and
+        // each one further out to show the one inside it.
         private static void ScrollIntoView(UINode node)
         {
             if (node.PresentationLevel.Peek != 0) return;

@@ -24,7 +24,7 @@ namespace TimboJimboEditor.UINext.Demos
             parts.Compose.Node.MatchName.Value = "Compose";
             parts.Compose.Node.ClipRadii.Value = 19f;
 
-            var feed = home.Child("Feed").Sized(Sizing.Grow(), Sizing.Grow()).Column(16f).Pad(new Insets(0f, 0f, 4f, 16f));
+            var feed = home.Child("Feed").Sized(Sizing.Grow(), Sizing.Grow()).Column(16f).Pad(new Insets(0f, 0f, 0f, 16f));
             parts.Feed = feed.Scroll();
 
             Tray(feed, parts);
@@ -40,13 +40,13 @@ namespace TimboJimboEditor.UINext.Demos
         // grow out of. A focus section, which focus comes back into where it left.
         private static void Tray(UINode feed, Parts parts)
         {
-            var tray = feed.Child("Stories").Row(14f).Pad(new Insets(20f, 20f, 6f, 6f));
+            var tray = feed.Child("Stories").Row(14f).Pad(new Insets(8f, 8f, 6f, 6f));
             tray.Width.Value = Sizing.Grow();
             tray.FocusScope.Value = FocusScope.Section;
             tray.FocusEntry.Value = FocusEntry.Remembered;
             parts.Tray = tray.Scroll(ScrollAxis.Horizontal);
             parts.Tray.ShowsIndicators.Value = false;
-            parts.Tray.ScrollPadding.Value = ScrollRoom;
+            parts.Tray.ClearMargin.Value = ScrollMargin;
             for (int i = 0; i < CircleData.Stories.Length; i++)
             {
                 var (name, initials, colour, _, _) = CircleData.People[CircleData.Stories[i].Person];
@@ -267,7 +267,7 @@ namespace TimboJimboEditor.UINext.Demos
             var scroll = list.Scroll();
             // At its top, the rest of a pull down goes to the sheet, which follows the finger.
             scroll.AtEnd.Value = ScrollEnd.PassOn;
-            scroll.ScrollPadding.Value = ScrollRoom;
+            scroll.ClearMargin.Value = ScrollMargin;
             foreach (var (who, text) in CircleData.Comments)
             {
                 var (name, initials, colour, _, _) = CircleData.People[who];

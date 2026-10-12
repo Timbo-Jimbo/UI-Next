@@ -365,7 +365,7 @@ namespace TimboJimbo.UINext
         }
 
         // Scrolls the nearest scroll view the field is in the least it takes to show the field within it (clear of what
-        // covers its edges, with its scroll padding) and above the keyboard, as iOS brings the field being edited into
+        // covers its edges, and its margin) and above the keyboard, as iOS brings the field being edited into
         // view as editing begins and as its keyboard rises: once
         // when editing begins, and each frame the keyboard's height changes. A scroll view that avoids the keyboard has
         // room past what it holds for it.
@@ -382,13 +382,15 @@ namespace TimboJimbo.UINext
                 if (scroller == null || !scroller.isActiveAndEnabled) continue;
                 var view = n.DrawnRect;
                 var field = node.DrawnRect;
-                // Clear of what covers the scroll view's edges, with its scroll padding (or the margin, if more) round
-                // the field; its own points are root points unless it is drawn scaled.
+                // Clear of what covers the scroll view's edges and its margin, with at least `margin` of room past what
+                // covers them, and `margin` above the keyboard; its own points are root points unless it is drawn scaled.
                 float scale = scroller.Viewport.y > 0f ? view.height / scroller.Viewport.y : 1f;
                 var clear = scroller.ClearInsets;
-                var room = scroller.ScrollPadding.Peek;
-                float bottom = Mathf.Min(view.yMax - clear.Bottom * scale, keyboardTop) - Mathf.Max(margin, room.Bottom * scale);
-                float top = view.yMin + clear.Top * scale + Mathf.Max(margin, room.Top * scale);
+                var room = scroller.ClearMargin.Peek;
+                float clearBottom = view.yMax - clear.Bottom * scale;
+                float bottom = keyboardTop < clearBottom ? keyboardTop - margin
+                    : clearBottom - Mathf.Max(0f, margin - room.Bottom * scale);
+                float top = view.yMin + clear.Top * scale + Mathf.Max(0f, margin - room.Top * scale);
                 float by = field.yMax > bottom ? field.yMax - bottom : field.yMin < top ? field.yMin - top : 0f;
                 if (Mathf.Abs(by) > 0.5f)
                     scroller.ScrollTo(scroller.ContentOffset + new Vector2(0f, by / scale));

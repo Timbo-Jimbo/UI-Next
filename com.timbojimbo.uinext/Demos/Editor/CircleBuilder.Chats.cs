@@ -15,7 +15,7 @@ namespace TimboJimboEditor.UINext.Demos
         {
             var chats = TabPage(pages, "Chats");
             var controller = chats.Add<ChatsController>();
-            var header = chats.Child("Header").Pad(new Insets(20f, 20f, 12f, 8f));
+            var header = chats.Child("Header").Pad(new Insets(20f, 20f, 12f, 0f));
             DemoKit.Text(header, "Title", "Chats", 30f, s_text, bold: true);
 
             var list = chats.Child("List").Sized(Sizing.Grow(), Sizing.Grow()).Column();

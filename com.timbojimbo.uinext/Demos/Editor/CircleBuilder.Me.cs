@@ -14,7 +14,7 @@ namespace TimboJimboEditor.UINext.Demos
         // row (its title named as the settings page's, which rises out of it), and your photos, which open into the viewer.
         private static ScrollView Me(UINode pages, Parts parts)
         {
-            var me = TabPage(pages, "Me").Column(16f).Pad(16f);
+            var me = TabPage(pages, "Me").Column(16f).Pad(new Insets(16f, 16f, 4f, 16f));
             var scroll = me.Scroll();
             var mine = CircleData.Me;
 

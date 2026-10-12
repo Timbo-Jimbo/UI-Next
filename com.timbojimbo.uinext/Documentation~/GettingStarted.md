@@ -106,14 +106,16 @@ button.Pressable(() => unread.Value = 0);                 // tapped
 
 `Pressable` also long presses and toggles; `Draggable` pans, `Pinchable` pinches and turns. `node.Scroll()` makes a
 node scroll what it holds with iOS's physics, and `ListView` makes only the rows of a long list that are near view. A
-scroll view keeps clear of what floats over its edges, and keeps room round what it brings into view:
+scroll view keeps clear of what floats over its edges, with a margin on top, as UIKit's content inset: what it holds
+starts clear of them and scrolls out from under them, and whatever it brings into view (focus moving to it, or
+`ScrollIntoView`) lands clear of them. Only the edges it scrolls along count:
 
 ```csharp
 var feed = page.Child("Feed").Sized(Sizing.Grow(), Sizing.Grow()).Column(12f);
 var tabBar = root.Node.Child("Tab Bar").Row(8f).Pad(12f).Float(AttachPoint.CenterBottom, AttachPoint.CenterBottom, new Vector2(0f, -20f));
 var scroll = feed.Scroll();
 scroll.ClearOfBottom.Add(tabBar);                         // the tab bar floats over its bottom
-scroll.ScrollPadding.Value = Insets.All(12f);             // room round whatever it scrolls into view
+scroll.ClearMargin.Value = Insets.All(12f);               // and 12 points more at its top and bottom
 ```
 
 With UI Text Input installed, `node.TextField("Message", 16f)` (from the `TimboJimbo.UINext.TextInput` assembly) is a

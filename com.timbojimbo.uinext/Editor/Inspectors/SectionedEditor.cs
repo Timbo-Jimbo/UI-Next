@@ -113,7 +113,6 @@ namespace TimboJimboEditor.UINext
             ("Scrolling", new[] { "_axis", "_bounces", "_atEnd", "_snap" }),
             ("Indicators", new[] { "_showsIndicators", "_indicatorColor" }),
             ("Clear of", new[] { "_clearOfTop", "_clearOfBottom", "_clearOfLeft", "_clearOfRight", "_clearMargin" }),
-            ("Into view", new[] { "_scrollPadding" }),
         };
     }
 }

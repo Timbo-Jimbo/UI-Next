@@ -122,14 +122,14 @@ namespace TimboJimbo.UINext
         public bool TryGetCell(int index, out UINode cell) => _cells.TryGetValue(index, out cell);
 
         /// <summary>
-        /// Scrolls a row to the top of the view (under what covers its top edge, with its scroll padding above it), as far
-        /// as the list goes, and makes the rows there.
+        /// Scrolls a row to the top of the view (under what covers its top edge, and its clear margin), as far as the list
+        /// goes, and makes the rows there.
         /// </summary>
         public void ScrollTo(int index, bool animated = true)
         {
             if (_scroll == null) return;
             EnsureRows();
-            float top = RowsTop + TopOf(index) - _scroll.ScrollPadding.Peek.Top;
+            float top = RowsTop + TopOf(index);
             _scroll.ScrollTo(new Vector2(0f, top), animated);
             Reconcile();
         }
