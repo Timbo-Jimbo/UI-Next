@@ -39,6 +39,11 @@ namespace TimboJimboEditor.UINext
 
         protected abstract Section[] Sections { get; }
 
+        // What it shows follows the states previewed, and recorded.
+        protected virtual void OnEnable() => UIStatePreview.Changed += Repaint;
+
+        protected virtual void OnDisable() => UIStatePreview.Changed -= Repaint;
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -79,8 +84,19 @@ namespace TimboJimboEditor.UINext
             serializedObject.ApplyModifiedProperties();
         }
 
-        /// <summary>Draws one field: its property drawer, unless an editor draws it some other way.</summary>
-        protected virtual void DrawField(SerializedProperty property) => EditorGUILayout.PropertyField(property, true);
+        /// <summary>
+        /// Draws one field: its property drawer, unless an editor draws it some other way. While a state is recorded, a
+        /// field that is not a value (which only values can be) is greyed out.
+        /// </summary>
+        protected virtual void DrawField(SerializedProperty property)
+        {
+            using (new EditorGUI.DisabledScope(UIStatePreview.RecordTarget != null && !IsValue(property)))
+                EditorGUILayout.PropertyField(property, true);
+        }
+
+        /// <summary>Whether a field is a value (a <see cref="UIValue{T}"/>), which can be recorded into a state.</summary>
+        protected static bool IsValue(SerializedProperty property) =>
+            property.FindPropertyRelative("_value") != null && property.FindPropertyRelative("_variants") != null;
 
         /// <summary>Whether a field is shown: all of them, unless an editor leaves out one that does nothing as the others are set.</summary>
         protected virtual bool Shows(SerializedProperty property) => true;
@@ -117,10 +133,17 @@ namespace TimboJimboEditor.UINext
             }
         }
 
-        // Fields no section names, under Other.
+        // Fields no section names, under Other; with no sections at all, just them.
         private void DrawOther()
         {
             var iterator = serializedObject.GetIterator();
+            if (Sections.Length == 0)
+            {
+                for (bool enter = true; iterator.NextVisible(enter); enter = false)
+                    if (iterator.name != "m_Script")
+                        DrawField(iterator);
+                return;
+            }
             bool header = false;
             for (bool enter = true; iterator.NextVisible(enter); enter = false)
             {
@@ -232,6 +255,29 @@ namespace TimboJimboEditor.UINext
 
         protected override Section[] Sections => s_sections;
 
+        public override void OnInspectorGUI()
+        {
+            RecordingStrip();
+            base.OnInspectorGUI();
+        }
+
+        // While recording, a red strip at the top saying what edits go to, with Stop.
+        private static void RecordingStrip()
+        {
+            if (!UIStatePreview.Recording) return;
+            float line = EditorGUIUtility.singleLineHeight;
+            var rect = EditorGUILayout.GetControlRect(false, line + 6f);
+            EditorGUI.DrawRect(rect, StatesDropdown.Recording);
+            string text = UIStatePreview.Target is { } target
+                ? "● Recording " + target.Name + ": edits go to its variants"
+                : "● Recording: turn a state on in UI States to record into it";
+            var style = new GUIStyle(EditorStyles.boldLabel) { normal = { textColor = Color.white } };
+            GUI.Label(new Rect(rect.x + 6f, rect.y + 3f, rect.width - 70f, line), text, style);
+            if (GUI.Button(new Rect(rect.xMax - 58f, rect.y + 3f, 54f, line), "Stop", EditorStyles.miniButton))
+                UIStatePreview.Recording = false;
+            EditorGUILayout.Space(2f);
+        }
+
         protected override bool Shows(SerializedProperty property) => property.name switch
         {
             // With no name it is not matched, so nothing lines up in a flight.
@@ -277,7 +323,10 @@ namespace TimboJimboEditor.UINext
             float rows = EditorGUI.GetPropertyHeight(width, true) + EditorGUI.GetPropertyHeight(height, true)
                          + EditorGUI.GetPropertyHeight(aspect, true) + 2f * space;
             var block = EditorGUILayout.GetControlRect(false, Mathf.Max(SizeGridHeight, rows));
-            SizeGrid(new Rect(block.x, block.y, SizeGridWidth, SizeGridHeight), width, height);
+            // The grid sets the node's own sizes, so not while a state is recorded or a variant gives either.
+            var node = (UINode)target;
+            using (new EditorGUI.DisabledScope(UIStatePreview.RecordTarget != null || Given(node.Width) || Given(node.Height)))
+                SizeGrid(new Rect(block.x, block.y, SizeGridWidth, SizeGridHeight), width, height);
 
             // The rows' fields line up with every other field, their labels taking what the grid leaves.
             float labels = EditorGUIUtility.labelWidth;
@@ -308,6 +357,9 @@ namespace TimboJimboEditor.UINext
             SizingDrawer.SetMode(across, GridModes[picked % 3], size.x);
             SizingDrawer.SetMode(down, GridModes[picked / 3], size.y);
         }
+
+        // Whether a variant gives a value now (its states on, or previewed).
+        private static bool Given(IVariantSource value) => value.Winner >= 0;
 
         private static int GridIndex(SerializedProperty mode) =>
             mode.hasMultipleDifferentValues ? -1 : Array.IndexOf(GridModes, (SizingMode)mode.intValue);
@@ -342,11 +394,11 @@ namespace TimboJimboEditor.UINext
         private static float Extent(float all, int column) => Mathf.Max(2f, Mathf.Round(all * (column == 0 ? 0.3f : column == 1 ? 0.62f : 1f)));
 
         // Align X and Y as one 3×3 grid, as Figma's auto layout picks where children sit; as their two rows while either
-        // can be other than its literal, so that shows.
+        // can be other than its literal, so that shows, and while a state is recorded, which the rows record into.
         private void DrawAlign(SerializedProperty alignX)
         {
             var alignY = serializedObject.FindProperty("_alignY");
-            if (alignY == null || Varies("_alignX") || Varies("_alignY"))
+            if (alignY == null || Varies("_alignX") || Varies("_alignY") || UIStatePreview.RecordTarget != null)
             {
                 base.DrawField(alignX);
                 if (alignY != null)
@@ -459,4 +511,28 @@ namespace TimboJimboEditor.UINext
 
         protected override Section[] Sections => s_sections;
     }
+
+    /// <summary>
+    /// A UI Next component with no sections: its fields as Unity draws them, following the states previewed, and greyed
+    /// out while a state is recorded where they are not values.
+    /// </summary>
+    internal abstract class PlainEditor : SectionedEditor
+    {
+        protected override Section[] Sections => Array.Empty<Section>();
+    }
+
+    [CustomEditor(typeof(Pressable)), CanEditMultipleObjects]
+    internal sealed class PressableEditor : PlainEditor { }
+
+    [CustomEditor(typeof(Draggable)), CanEditMultipleObjects]
+    internal sealed class DraggableEditor : PlainEditor { }
+
+    [CustomEditor(typeof(Pinchable)), CanEditMultipleObjects]
+    internal sealed class PinchableEditor : PlainEditor { }
+
+    [CustomEditor(typeof(DisplayTransition)), CanEditMultipleObjects]
+    internal sealed class DisplayTransitionEditor : PlainEditor { }
+
+    [CustomEditor(typeof(Presentation)), CanEditMultipleObjects]
+    internal sealed class PresentationEditor : PlainEditor { }
 }

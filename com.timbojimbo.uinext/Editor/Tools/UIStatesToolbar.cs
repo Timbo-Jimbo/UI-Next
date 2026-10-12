@@ -7,8 +7,9 @@ using UnityEngine.UIElements;
 namespace TimboJimboEditor.UINext
 {
     /// <summary>
-    /// The UI States toolbar, among the Scene view's overlays: one dropdown opening the popup that previews states on the
-    /// selected node (<see cref="StatesPopup"/>), lit, with how many, while any are previewed. Its icon is Unity's own,
+    /// The UI States toolbar, among the Scene view's overlays: one dropdown opening the popup that previews states
+    /// everywhere and records into them (<see cref="StatesPopup"/>), lit, with how many, while any are previewed, and red,
+    /// with the state, while recording. Its icon is Unity's own,
     /// unless States.png is in the package's Editor/Icons folder (a 16-point icon, with States@2x.png beside it for
     /// high-DPI screens). The debug views and the stats are in the Rendering Debugger's UI Next panel.
     /// </summary>
@@ -23,7 +24,7 @@ namespace TimboJimboEditor.UINext
         }
     }
 
-    // UI States: opens the popup; lit, with how many, while any states are previewed.
+    // UI States: opens the popup; lit, with how many, while any states are previewed; red, with what, while recording.
     [EditorToolbarElement(Id, typeof(SceneView))]
     internal sealed class StatesDropdown : EditorToolbarDropdown
     {
@@ -31,14 +32,15 @@ namespace TimboJimboEditor.UINext
 
         private const string Name = "UI States";
 
-        // Lit while states are previewed.
+        // Lit while states are previewed, and red while recording.
         internal static readonly Color Lit = new(0.17f, 0.36f, 0.53f);
+        internal static readonly Color Recording = new(0.55f, 0.15f, 0.15f);
 
         public StatesDropdown()
         {
             icon = Icon();
             text = Name;
-            tooltip = "UI Next: preview interaction states, modes and states of your own on the selected node, in the Scene and Game views.";
+            tooltip = "UI Next: preview interaction states, modes and states of your own everywhere, in the Scene and Game views, and record edits into them.";
             clicked += () => UnityEditor.PopupWindow.Show(worldBound, new StatesPopup());
             RegisterCallback<AttachToPanelEvent>(_ =>
             {
@@ -52,6 +54,12 @@ namespace TimboJimboEditor.UINext
         private void Refresh()
         {
             int count = UIStatePreview.Count;
+            if (UIStatePreview.Recording)
+            {
+                text = UIStatePreview.Target is { } target ? "● Recording " + target.Name : "● Recording";
+                style.backgroundColor = new StyleColor(Recording);
+                return;
+            }
             text = count > 0 ? Name + " · " + count : Name;
             style.backgroundColor = count > 0 ? new StyleColor(Lit) : new StyleColor(StyleKeyword.Null);
         }

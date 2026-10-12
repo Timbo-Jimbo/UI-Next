@@ -461,9 +461,14 @@ namespace TimboJimbo.UINext
             _stateRevision.Value++;
         }
 
-        /// <summary>Whether <paramref name="state"/> is active here: from the nearest node at or above it that provides it (or its group).</summary>
+        /// <summary>
+        /// Whether <paramref name="state"/> is active here: from the nearest node at or above it that provides it (or its
+        /// group), unless the editor previews it (or another of its group) everywhere.
+        /// </summary>
         public bool IsStateActive(UIState state)
         {
+            if (StatePreview.Decides(state, out bool previewed))
+                return previewed;
             for (var node = this; node != null; node = node.LayoutParentOrTransform())
             {
                 if (node.TryGetLocalState(state, out bool on))
@@ -476,9 +481,11 @@ namespace TimboJimbo.UINext
         /// The interaction states active here: those of the nearest node at or above it that provides them (a button), but
         /// for whether focus is on it or within it, which the nearest focus scope (<see cref="FocusScope"/>), or node that
         /// takes focus itself (<see cref="Focusable"/> Always), says when there is one nearer: content in a section inside a
-        /// disabled card is still Disabled.
+        /// disabled card is still Disabled. Those the editor previews everywhere are on too.
         /// </summary>
-        public InteractionStates ActiveInteraction()
+        public InteractionStates ActiveInteraction() => ProvidedInteraction() | StatePreview.Interaction;
+
+        private InteractionStates ProvidedInteraction()
         {
             const InteractionStates focus = InteractionStates.Focused | InteractionStates.FocusWithin;
             var scoped = InteractionStates.None;

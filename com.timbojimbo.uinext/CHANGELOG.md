@@ -14,6 +14,8 @@
   - Floating is one row of what it is attached to; while it floats, its point and the point it goes on are two 3×3 grids under it, with the offset;
   - fields that do nothing as the others are set are left out: a match anchor with no match name, the focus entry of anything but a section, the focus ring of a node never focused, and a box's far gradient colour and angle while it is no gradient. One that can differ by state (a token, variants) keeps what it decides shown;
   - Box, Label, Image View and Scroll View have the same headers, and a size offers its min and max only when it is not fixed, which they do not bound.
+- Editor: UI States previews everywhere: a state turned on is on for every node in every tree, over its own (a state previewed turns the others of its group off), rather than on the selected node, so a page of controls can be seen pressed or focused at once.
+- Editor: a value's field shows what is drawn. While a variant gives it (its states on, or previewed), the field shows the variant's value, read-only, tinted blue as Unity tints what an animation drives, its states in the tooltip. A value with variants has a mark at the end of its line naming them, which lists them when clicked, rather than the list always open; right-click a value to remove one.
 - Editor: the state bar is the *UI States* toolbar among the Scene view's overlays, one dropdown lit with how many states are previewed, opening a popup that says what it previews on, labels its groups Interaction, Modes and States, tells two of a name apart by their folder, and has Clear preview. Its icon is Unity's own unless States.png is in the package's Editor/Icons folder.
 
 ### Removed
@@ -31,6 +33,11 @@
 
 ### Added
 
+- Editor: recording states, from the inspector rather than Unity's recording. Record, in the UI States popup, makes an edit to a value the value's variant for a state, on everything selected:
+  - the state turned on last, or another that is on whose dot is clicked; with none on, edits change values as ever;
+  - it stays on as states are turned on and off to compare and objects are selected one after another;
+  - a value recorded for the state is tinted red; one a stronger state's variant gives is locked until that state is off; what is not a value cannot vary by state and is greyed out;
+  - the toolbar turns red, naming the state, and the node's inspector has a red strip with Stop.
 - Editor: a click in the Scene view selects the node drawn topmost under it, where it is drawn (moved, scrolled, presented), inside its clips, whether it takes the pointer or not; clicked again in the same place, the one under it. It is a custom picking pass (`HandleUtility.pickGameObjectCustomPasses`).
 - Debug views: `UIDebug` in code (with `Changed`), and toggles in the Rendering Debugger's UI Next panel, in the editor and in development builds (kept on for the session in the editor):
   - Overdraw: what is behind the UI is darkened, and every pixel shaded adds heat, a quad's clear parts and clipped parts included; what is drawn into a layer shows through its quad.

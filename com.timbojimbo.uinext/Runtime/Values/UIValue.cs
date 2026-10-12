@@ -23,6 +23,16 @@ namespace TimboJimbo.UINext
         void Refresh();
     }
 
+    /// <summary>What the editor reads of a value's variants: which gives its value now, and the states each is for.</summary>
+    internal interface IVariantSource
+    {
+        /// <summary>The variant giving its value now (its index in the list), or -1 for its base.</summary>
+        int Winner { get; }
+
+        /// <summary>The states the variant at <paramref name="index"/> applies in.</summary>
+        StateCondition When(int index);
+    }
+
     /// <summary>
     /// A styleable, animatable property: every property in the stack is one. Its value is resolved from, in rising
     /// priority, its literal or token or binding, then the variant for the most important of the states active on its
@@ -30,7 +40,7 @@ namespace TimboJimbo.UINext
     /// where it is drawn, and a change inside <see cref="UI.Animate(UIAnimation, Action)"/> springs between them.
     /// </summary>
     [Serializable]
-    public class UIValue<T> : AnimatedValue<T>, IUIValue, IDrawnValue, ISerializationCallbackReceiver
+    public class UIValue<T> : AnimatedValue<T>, IUIValue, IDrawnValue, IVariantSource, ISerializationCallbackReceiver
     {
         [SerializeField] private T _value;
         [SerializeField] private TokenAsset _token;
@@ -146,6 +156,17 @@ namespace TimboJimbo.UINext
         {
             set => _crossFades = value;
         }
+
+        int IVariantSource.Winner
+        {
+            get
+            {
+                EnsureResolved();
+                return _winner;
+            }
+        }
+
+        StateCondition IVariantSource.When(int index) => _variants[index].When;
 
         // A drawable's value that cannot interpolate, changed on an animation (a label's text, an image's sprite):
         // its node's old drawing fades out as the new one fades in.

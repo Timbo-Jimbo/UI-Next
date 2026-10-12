@@ -170,7 +170,10 @@ The focus ring's look is on the root: `FocusRingColor`, `FocusRingWidth`, `Focus
   buttons, and a link at the end of any value that can take a token. A node's size, float and drawn transform are
   always shown first, with a 3×3 grid beside Width and Height of the common sizes: fit, fixed or grow on each axis.
 - **UI States** (a toolbar among the Scene view's overlays) previews interaction states, modes and states of your own
-  on the selected node, in the Scene and Game views; nothing is saved, and Clear preview takes it all back.
+  everywhere, in the Scene and Game views; nothing is saved, and Clear preview turns them off. A field a variant gives
+  shows the variant's value, tinted blue. **Record** makes an edit in the inspector the value's variant for the state
+  turned on last (or the one whose dot you click): recorded values are tinted red, and one a stronger state's variant
+  gives is locked until that state is off.
 - **The Rendering Debugger's UI Next panel** (**Window → Analysis → Rendering Debugger**, and in a development build its
   overlay: Ctrl+Backspace, a three-finger double tap, or both sticks pressed in): the debug views (Overdraw, Layer
   bounds and Focus path, also `UIDebug` in code), and what drawing the UI took in the last frame: draw calls,

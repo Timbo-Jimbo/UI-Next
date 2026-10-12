@@ -9,11 +9,12 @@ using Label = UnityEngine.UIElements.Label;
 namespace TimboJimboEditor.UINext
 {
     /// <summary>
-    /// The UI States toolbar's popup: previews states on the selected node, in the Scene and Game views
-    /// (<see cref="UIStatePreview"/>), with nothing saved. A button for each interaction state, mode and state of your own
-    /// in the project, in those groups, lit while it is active for the selection; a press turns one on or off. Two with
-    /// the same name are told apart by their folder. Clear preview takes back everything the preview turned on. Built
-    /// with UI Toolkit and handed to Unity's popup window from CreateGUI, which sizes the window to it.
+    /// The UI States toolbar's popup: previews states everywhere, in the Scene and Game views (<see cref="UIStatePreview"/>),
+    /// with nothing saved, and records edits into one of them. A button for each interaction state, mode and state of
+    /// your own in the project, in those groups, lit while it is on; a press turns one on or off. Two with the same name
+    /// are told apart by their folder. Record turns recording on: while it is, a lit state's dot says whether edits go to
+    /// it (red), and a click on another's records into that one instead. Clear preview turns them all off. Built with UI
+    /// Toolkit and handed to Unity's popup window from CreateGUI, which sizes the window to it.
     /// </summary>
     internal sealed class StatesPopup : PopupWindowContent
     {
@@ -30,9 +31,10 @@ namespace TimboJimboEditor.UINext
         };
 
         private VisualElement _content;
-        private Label _target;
+        private Button _record;
         private Button _clear;
-        private readonly List<(Button Button, System.Func<UINode, bool> Active)> _buttons = new();
+        private Label _hint;
+        private readonly List<(PreviewState State, Button Button, Button Dot)> _buttons = new();
 
         public override VisualElement CreateGUI()
         {
@@ -47,34 +49,30 @@ namespace TimboJimboEditor.UINext
         // Drawn by UI Toolkit (CreateGUI): nothing for IMGUI.
         public override void OnGUI(Rect rect) { }
 
-        public override void OnOpen()
-        {
-            Selection.selectionChanged += Refresh;
-            UIStatePreview.Changed += Refresh;
-        }
+        public override void OnOpen() => UIStatePreview.Changed += Refresh;
 
-        public override void OnClose()
-        {
-            Selection.selectionChanged -= Refresh;
-            UIStatePreview.Changed -= Refresh;
-        }
+        public override void OnClose() => UIStatePreview.Changed -= Refresh;
 
-        // What it previews on, then the interaction states, the modes and the states of your own, each a group.
+        // Record and Clear preview, then the interaction states, the modes and the states of your own, each a group.
         private void Build()
         {
-            var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 4 } };
-            _target = new Label { style = { flexGrow = 1, flexShrink = 1, unityFontStyleAndWeight = FontStyle.Bold, whiteSpace = WhiteSpace.Normal } };
-            header.Add(_target);
-            _clear = new Button(UIStatePreview.Clear) { text = "Clear preview", tooltip = "Take back every state the preview turned on." };
+            var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 2 } };
+            _record = new Button(() => UIStatePreview.Recording = !UIStatePreview.Recording)
+            {
+                text = "● Record",
+                tooltip = "Record edits in the inspector into a state: the one turned on last, or the one whose dot you click.",
+            };
+            header.Add(_record);
+            header.Add(new VisualElement { style = { flexGrow = 1 } });
+            _clear = new Button(UIStatePreview.Clear) { text = "Clear preview", tooltip = "Turn every state the preview turned on off." };
             header.Add(_clear);
             _content.Add(header);
+            _hint = new Label { style = { opacity = 0.75f, whiteSpace = WhiteSpace.Normal, fontSize = 10 } };
+            _content.Add(_hint);
 
             var row = Group("Interaction", "States a button gives what is inside it as it is used.");
             foreach (var (name, state) in s_interaction)
-            {
-                var flag = state;
-                AddButton(row, name, () => UIStatePreview.Toggle(Selected(), flag), node => UIStatePreview.IsActive(node, flag));
-            }
+                AddButton(row, name, new PreviewState(state));
 
             var modes = new List<UIState>();
             var states = new List<UIState>();
@@ -87,7 +85,7 @@ namespace TimboJimboEditor.UINext
             AddStates("Modes", "Environment modes (Dark, a size class): tokens switch on them.", modes);
             AddStates("States", "Game states of your own, turned on for a node and everything inside it.", states);
 
-            var note = new Label("Previews show in the Scene and Game views; nothing is saved.")
+            var note = new Label("Previews show everywhere, in the Scene and Game views; nothing is saved.")
             {
                 style = { marginTop = 6, opacity = 0.6f, whiteSpace = WhiteSpace.Normal, fontSize = 10 },
             };
@@ -110,11 +108,7 @@ namespace TimboJimboEditor.UINext
             states.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
             var row = Group(title, tip);
             foreach (var state in states)
-            {
-                var s = state;
-                var button = AddButton(row, Name(s, states), () => UIStatePreview.Toggle(Selected(), s), node => UIStatePreview.IsActive(node, s));
-                button.tooltip = AssetDatabase.GetAssetPath(s);
-            }
+                AddButton(row, Name(state, states), new PreviewState(state)).tooltip = AssetDatabase.GetAssetPath(state);
         }
 
         // A state's name, with its folder's after it when another of the same name is there too.
@@ -129,33 +123,45 @@ namespace TimboJimboEditor.UINext
             return state.name;
         }
 
-        private Button AddButton(VisualElement row, string text, System.Action pressed, System.Func<UINode, bool> active)
+        // A state's button, which turns it on or off, with the dot that records into it while recording.
+        private Button AddButton(VisualElement row, string text, PreviewState state)
         {
-            var button = new Button(pressed) { text = text };
-            row.Add(button);
-            _buttons.Add((button, active));
+            var item = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center } };
+            var dot = new Button(() => UIStatePreview.SetTarget(state))
+            {
+                text = "●",
+                tooltip = "Record into this state",
+                style = { marginRight = 0, paddingLeft = 2, paddingRight = 2, borderRightWidth = 0 },
+            };
+            item.Add(dot);
+            var button = new Button(() => UIStatePreview.Toggle(state)) { text = text };
+            item.Add(button);
+            row.Add(item);
+            _buttons.Add((state, button, dot));
             return button;
         }
 
-        // What it previews on, and the buttons of what is active for it lit.
+        // Record lit red while recording, what is on lit, and where edits go.
         private void Refresh()
         {
             if (_content == null) return;
-            var node = Selected();
-            _target.text = node != null ? "Previewing on: " + node.name : "Select a UI node to preview states on it";
+            bool recording = UIStatePreview.Recording;
+            var target = UIStatePreview.Target;
+            _record.style.backgroundColor = recording ? new StyleColor(StatesDropdown.Recording) : new StyleColor(StyleKeyword.Null);
             _clear.SetEnabled(UIStatePreview.IsPreviewing);
-            foreach (var (button, active) in _buttons)
+            _hint.text = !recording ? ""
+                : target is { } t ? "Edits in the inspector go to " + t.Name + "; click another lit state's dot to record into it."
+                : "Turn a state on to record into it; until then edits change values as ever.";
+            _hint.style.display = recording ? DisplayStyle.Flex : DisplayStyle.None;
+            foreach (var (state, button, dot) in _buttons)
             {
-                button.SetEnabled(node != null);
-                bool lit = node != null && active(node);
-                button.style.backgroundColor = lit ? new StyleColor(StatesDropdown.Lit) : new StyleColor(StyleKeyword.Null);
+                bool on = UIStatePreview.IsOn(state);
+                button.style.backgroundColor = on ? new StyleColor(StatesDropdown.Lit) : new StyleColor(StyleKeyword.Null);
+                dot.style.display = recording && on ? DisplayStyle.Flex : DisplayStyle.None;
+                bool into = target is { } t2 && t2.Equals(state);
+                dot.style.color = into ? new StyleColor(new Color(1f, 0.35f, 0.35f)) : new StyleColor(new Color(0.6f, 0.6f, 0.6f));
+                dot.tooltip = into ? "Edits are recorded into this state" : "Record into this state";
             }
-        }
-
-        private static UINode Selected()
-        {
-            var go = Selection.activeGameObject;
-            return go != null ? go.GetComponent<UINode>() : null;
         }
     }
 }

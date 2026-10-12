@@ -1,112 +1,131 @@
+using System;
 using System.Collections.Generic;
 using TimboJimbo.UINext;
 using UnityEditor;
-using UnityEngine;
 
 namespace TimboJimboEditor.UINext
 {
+    /// <summary>One state the preview turns on: an interaction state, or a state of your own (a mode is one too).</summary>
+    public readonly struct PreviewState : IEquatable<PreviewState>
+    {
+        public readonly InteractionStates Interaction;
+        public readonly UIState State;
+
+        public PreviewState(InteractionStates interaction)
+        {
+            Interaction = interaction;
+            State = null;
+        }
+
+        public PreviewState(UIState state)
+        {
+            Interaction = InteractionStates.None;
+            State = state;
+        }
+
+        /// <summary>The variant condition for it alone.</summary>
+        public StateCondition Condition => State != null ? new StateCondition(InteractionStates.None, State) : new StateCondition(Interaction);
+
+        public string Name => State != null ? State.name : ObjectNames.NicifyVariableName(Interaction.ToString());
+
+        public bool Equals(PreviewState other) => Interaction == other.Interaction && State == other.State;
+
+        public override bool Equals(object obj) => obj is PreviewState other && Equals(other);
+
+        public override int GetHashCode() => ((int)Interaction * 397) ^ (State != null ? State.GetHashCode() : 0);
+    }
+
     /// <summary>
-    /// States previewed in the editor (the UI Next toolbar's States): interaction states and states of your own turned
-    /// on for a node and everything inside it, so values with variants for them show as they would, in the Scene and
-    /// Game views. Only what a node provides at run time is changed, so nothing is saved, and <see cref="Clear"/> takes
-    /// back everything the preview turned on.
+    /// States previewed in the editor (the UI States toolbar): interaction states, modes and states of your own turned on
+    /// everywhere, for every node in every tree, so values with variants for them show as they would, in the Scene and
+    /// Game views. Nothing on a node changes, so nothing is saved, and <see cref="Clear"/> turns them all off.
+    /// While <see cref="Recording"/>, an edit to a value in the inspector becomes its variant for <see cref="Target"/>:
+    /// the state turned on last, unless another that is on was picked since.
     /// </summary>
     public static class UIStatePreview
     {
-        // What the preview turned on, to take back: states set on nodes, interaction states set on providers, and nodes
-        // made providers for the preview (a node with no button above it).
-        private static readonly List<(UINode Node, UIState State)> s_states = new();
-        private static readonly List<(UINode Node, InteractionStates State)> s_interaction = new();
-        private static readonly List<UINode> s_providers = new();
+        // What is previewed, in the order it was turned on.
+        private static readonly List<PreviewState> s_on = new();
+        private static PreviewState? s_target;
+        private static bool s_recording;
 
-        /// <summary>Raised when what is previewed changes.</summary>
-        public static event System.Action Changed;
+        /// <summary>Raised when what is previewed, or recorded, changes.</summary>
+        public static event Action Changed;
 
         /// <summary>Whether anything is being previewed.</summary>
-        public static bool IsPreviewing => s_states.Count > 0 || s_interaction.Count > 0 || s_providers.Count > 0;
+        public static bool IsPreviewing => s_on.Count > 0;
 
-        /// <summary>How many states are being previewed: interaction states, and states and modes turned on.</summary>
-        public static int Count
-        {
-            get
-            {
-                int count = s_interaction.Count;
-                foreach (var (node, state) in s_states)
-                    if (node != null && node.IsStateActive(state))
-                        count++;
-                return count;
-            }
-        }
+        /// <summary>How many states are being previewed.</summary>
+        public static int Count => s_on.Count;
 
-        /// <summary>Whether an interaction state is active for <paramref name="node"/>, from the button providing it.</summary>
-        public static bool IsActive(UINode node, InteractionStates state) => node != null && (node.ActiveInteraction() & state) != 0;
-
-        /// <summary>Whether a state of your own is active for <paramref name="node"/>.</summary>
-        public static bool IsActive(UINode node, UIState state) => node != null && state != null && node.IsStateActive(state);
+        /// <summary>Whether a state is previewed.</summary>
+        public static bool IsOn(PreviewState state) => s_on.Contains(state);
 
         /// <summary>
-        /// Turns an interaction state on or off for <paramref name="node"/>: on the node providing its interaction states
-        /// (its button), or on the node itself, made to provide them for the preview, when nothing does.
+        /// Whether edits in the inspector are recorded: each value edited takes it as its variant for
+        /// <see cref="Target"/>, or, with nothing previewed, as its own value, as ever.
         /// </summary>
-        public static void Toggle(UINode node, InteractionStates state)
+        public static bool Recording
         {
-            if (node == null) return;
-            var provider = ProviderOf(node);
-            if (provider == null)
+            get => s_recording;
+            set
             {
-                provider = node;
-                provider.AddInteractionProvider();
-                s_providers.Add(provider);
+                if (s_recording == value) return;
+                s_recording = value;
+                Changed?.Invoke();
             }
-            bool on = (provider.Interaction & state) == 0;
-            provider.SetInteraction(state, on);
-            if (on)
-                s_interaction.Add((provider, state));
-            else
-                s_interaction.RemoveAll(entry => entry.Node == provider && entry.State == state);
-            Refresh();
         }
 
-        /// <summary>Turns a state of your own (or a mode) on or off for <paramref name="node"/> and everything inside it.</summary>
-        public static void Toggle(UINode node, UIState state)
+        /// <summary>The state edits are recorded for: the one turned on last, or picked since. None with nothing previewed.</summary>
+        public static PreviewState? Target => s_target;
+
+        /// <summary>The variant condition recorded into now: while recording a state, its own; otherwise none.</summary>
+        public static StateCondition? RecordTarget => s_recording && s_target is { } target ? target.Condition : null;
+
+        /// <summary>Turns a state on everywhere (it is then what is recorded), or off.</summary>
+        public static void Toggle(PreviewState state)
         {
-            if (node == null || state == null) return;
-            bool on = !node.IsStateActive(state);
-            node.SetState(state, on);
-            if (!s_states.Contains((node, state)))
-                s_states.Add((node, state));
-            Refresh();
+            if (s_on.Remove(state))
+            {
+                if (s_target is { } target && target.Equals(state))
+                    s_target = s_on.Count > 0 ? s_on[s_on.Count - 1] : null;
+            }
+            else
+            {
+                s_on.Add(state);
+                s_target = state;
+            }
+            Push();
         }
 
-        /// <summary>Takes back everything the preview turned on.</summary>
+        /// <summary>Records into a state that is on, rather than the one turned on last.</summary>
+        public static void SetTarget(PreviewState state)
+        {
+            if (!s_on.Contains(state) || (s_target is { } target && target.Equals(state))) return;
+            s_target = state;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Turns every state the preview turned on off.</summary>
         public static void Clear()
         {
-            foreach (var (node, state) in s_states)
-                if (node != null)
-                    node.ClearState(state);
-            foreach (var (node, state) in s_interaction)
-                if (node != null)
-                    node.SetInteraction(state, false);
-            foreach (var node in s_providers)
-                if (node != null)
-                    node.RemoveInteractionProvider();
-            s_states.Clear();
-            s_interaction.Clear();
-            s_providers.Clear();
-            Refresh();
+            s_on.Clear();
+            s_target = null;
+            Push();
         }
 
-        // The node at or above it providing its interaction states, if any.
-        private static UINode ProviderOf(UINode node)
+        // Hands what is on to the stack, which every node reads, and redraws.
+        private static void Push()
         {
-            for (var n = node; n != null; n = n.Parent)
-                if (n.ProvidesInteraction)
-                    return n;
-            return null;
-        }
-
-        private static void Refresh()
-        {
+            var interaction = InteractionStates.None;
+            var states = new List<UIState>();
+            foreach (var state in s_on)
+            {
+                interaction |= state.Interaction;
+                if (state.State != null)
+                    states.Add(state.State);
+            }
+            StatePreview.Set(interaction, states);
             UI.RequestRepaint();
             SceneView.RepaintAll();
             UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
