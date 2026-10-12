@@ -420,8 +420,9 @@ namespace TimboJimboEditor.UINext.Demos
             sizes.Child("Caption").Label("Caption", 12f, Secondary);
 
             var markdown = Panel(Case(body, "Markdown").Column(6f), 14f);
-            var md = markdown.Child("Text").Label("Text is Markdown: **bold**, *italic*, `code`, and [links](https://unity.com).", 16f, Text);
+            var md = markdown.Child("Text").Label("Text is Markdown: **bold**, *italic*, __underline__, ~~strike~~, `code`, and [links](https://unity.com) (tap one).", 16f, Text);
             md.Node.Width.Value = Sizing.Grow();
+            md.gameObject.AddComponent<OpenLinks>();
 
             var align = Panel(Case(body, "Alignment").Column(6f), 14f);
             foreach (var (title, anchor) in new[] { ("Left", TextAnchor.UpperLeft), ("Centre", TextAnchor.UpperCenter), ("Right", TextAnchor.UpperRight) })

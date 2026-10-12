@@ -97,6 +97,7 @@ namespace TimboJimbo.UINext
             FrameIndex++;
             UpdateRoots();
             ListView.ReconcileAll();
+            Label.PlaceInlines();
             UIScheduler.Flush(Phase.Layout);
             if (dt > 0f)
             {
