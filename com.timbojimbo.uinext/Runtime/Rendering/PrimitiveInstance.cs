@@ -45,6 +45,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>A shape drawn as its border alone, Params.x wide inside its edge, in its colour (or its gradient).</summary>
         Ring = 4,
+
+        /// <summary>Drawn by a debug view (<see cref="UIDebug"/>): drawn as it is in the overdraw view, not counted.</summary>
+        Debug = 8,
     }
 
     /// <summary>

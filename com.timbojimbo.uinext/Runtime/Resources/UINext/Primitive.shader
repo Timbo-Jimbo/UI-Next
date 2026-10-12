@@ -60,6 +60,8 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
             StructuredBuffer<Clip> _Clips;
             int _InstanceOffset;
             float4x4 _UIMatrix;
+            // Above 0, the overdraw view: every fragment shaded adds heat rather than drawing (UIDebug.Overdraw).
+            float _UINextOverdraw;
             // A batch draws with up to eight textures (atlases of different fonts, emoji, images); each primitive says
             // which it samples.
             Texture2D _Texture0, _Texture1, _Texture2, _Texture3, _Texture4, _Texture5, _Texture6, _Texture7;
@@ -168,6 +170,15 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 float2 uv = clamp(i.uv, uvMin, uvMax);
                 float4 tex = SampleTexture(inst.textureIndex & 15u, uv, uvDx, uvDy);
                 float fieldPixel = max(fwidth(tex.a), 1e-4);
+
+                // The overdraw view: every fragment shaded adds a little heat (alpha 0 adds under premultiplied blending),
+                // whatever it covers, as the GPU pays for it; a group's quad adds its image's heat (what was drawn into
+                // it) at full strength. A debug view's own primitives draw as they are.
+                if (_UINextOverdraw > 0.5 && (inst.flags & 8u) == 0u)
+                {
+                    float4 heat = float4(0.12, 0.055, 0.02, 0);
+                    return inst.type == 5u ? float4(tex.rgb, 0) + heat : heat;
+                }
 
                 // A group's image: premultiplied already, drawn at the group's opacity, covering the root.
                 if (inst.type == 5u)

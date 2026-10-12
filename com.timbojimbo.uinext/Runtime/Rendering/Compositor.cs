@@ -100,6 +100,7 @@ namespace TimboJimbo.UINext
         private static readonly int ClipsId = Shader.PropertyToID("_Clips");
         private static readonly int InstanceOffsetId = Shader.PropertyToID("_InstanceOffset");
         private static readonly int MatrixId = Shader.PropertyToID("_UIMatrix");
+        private static readonly int OverdrawId = Shader.PropertyToID("_UINextOverdraw");
         private static readonly int[] TextureIds =
         {
             Shader.PropertyToID("_Texture0"), Shader.PropertyToID("_Texture1"), Shader.PropertyToID("_Texture2"), Shader.PropertyToID("_Texture3"),
@@ -173,9 +174,11 @@ namespace TimboJimbo.UINext
         /// <summary>Brings the buffers and batches up to date with the trees.</summary>
         public static void Build()
         {
-            // A flight moves every frame it flies.
+            // A flight moves every frame it flies. The focus path is drawn again as focus moves.
             if (MatchedGeometry.Flights.Count > 0)
                 s_orderDirty = s_slotsDirty = true;
+            if (UIDebug.FocusPath && UIFocus.Focused != s_debugFocused)
+                s_orderDirty = true;
             if (!s_orderDirty && !s_slotsDirty) return;
             if (MatchedGeometry.Flights.Count > 0)
                 MatchedGeometry.Update();
@@ -213,11 +216,14 @@ namespace TimboJimbo.UINext
                 s_batchTextures.Clear();
                 Groups.Clear();
                 GroupBatches.Clear();
+                s_debugFocused = UIFocus.Focused;
                 for (int t = 0; t < trees.Count; t++)
                 {
                     var tree = trees[t];
                     if (tree.Nodes.Count == 0) continue;
                     int start = s_instanceCount;
+                    if (UIDebug.Overdraw)
+                        EmitOverdrawBackdrop(tree);
                     tree.DrawOrder.Clear();
                     tree.Levels.Clear();
                     tree.LevelStarts.Clear();
@@ -245,12 +251,99 @@ namespace TimboJimbo.UINext
                     }
                     MakeBatches(Batches, tree, start, s_instanceCount);
                     WalkGroups(tree);
+                    // Over all of it, once its groups (inner ones included) are known: the debug views' outlines.
+                    int debug = s_instanceCount;
+                    EmitDebugOutlines(tree);
+                    if (s_instanceCount > debug)
+                        MakeBatches(Batches, tree, debug, s_instanceCount);
                 }
             }
 
             Upload();
             s_orderDirty = false;
             s_slotsDirty = false;
+        }
+
+        // ── Debug views ──────────────────────────────────────────────────────────
+
+        // What had focus when the focus path was last drawn.
+        private static UINode s_debugFocused;
+
+        private static readonly Color DebugFocused = Color.white;
+        private static readonly Color DebugSection = new(0.2f, 0.85f, 0.75f, 1f);
+        private static readonly Color DebugGroup = new(1f, 0.6f, 0.15f, 1f);
+        private static readonly Color DebugFading = new(0.25f, 0.85f, 1f, 1f);
+        private static readonly Color DebugBlurred = new(1f, 0.3f, 0.9f, 1f);
+        private static readonly Color DebugMasked = new(1f, 0.9f, 0.2f, 1f);
+        private static readonly Color DebugFlight = new(0.4f, 1f, 0.4f, 1f);
+
+        // Under a tree's UI in the overdraw view: its root darkened, so the heat reads over whatever is behind.
+        private static void EmitOverdrawBackdrop(UITree tree)
+        {
+            EmitDebug(new PrimitiveInstance
+            {
+                Color = new Color(0f, 0f, 0f, 0.85f),
+                Slot = (uint)s_slotBase[tree],
+                Type = (uint)PrimitiveType.Shape,
+                Flags = (uint)(PrimitiveFlags.RelativeToNode | PrimitiveFlags.Debug),
+            });
+        }
+
+        // Over a tree's UI: each layer's bounds, and the focus path, as the debug views ask.
+        private static void EmitDebugOutlines(UITree tree)
+        {
+            int slotBase = s_slotBase[tree];
+            if (UIDebug.LayerBounds)
+            {
+                foreach (var group in Groups)
+                {
+                    if (group.Tree != tree) continue;
+                    var colour = group.Flight != null ? DebugFlight : group.Mask != null ? DebugMasked
+                        : group.Blur > 0.01f ? DebugBlurred : DebugFading;
+                    var region = group.Region;
+                    EmitOutline(new Vector4(region.x, region.y, region.width, region.height), colour, 2f, (uint)slotBase, relative: false);
+                }
+            }
+            var focused = UIFocus.Focused;
+            if (UIDebug.FocusPath && focused != null && focused.Tree == tree && focused.Index >= 0)
+            {
+                // Each outline a little further in than the last, so ones round the same rect all show.
+                EmitOutline(Vector4.zero, DebugFocused, 2f, (uint)(slotBase + focused.Index), relative: true);
+                var level = MatchedGeometry.LevelOf(focused);
+                for (var n = focused.ParentNode; n != null; n = n.ParentNode)
+                {
+                    var scope = n.FocusScope.Peek;
+                    if (scope != FocusScope.None && n.Index >= 0)
+                        EmitOutline(Vector4.one * 2f, scope == FocusScope.Group ? DebugGroup : DebugSection, 1.5f,
+                            (uint)(slotBase + n.Index), relative: true);
+                    if (n == level) break;
+                }
+            }
+        }
+
+        // An outline `width` wide inside a rect: insets from a node's edges (`relative`), or a rect in its slot's space.
+        private static void EmitOutline(Vector4 rect, Color colour, float width, uint slot, bool relative)
+        {
+            EmitDebug(new PrimitiveInstance
+            {
+                Rect = rect,
+                Radii = Vector4.one * 4f,
+                Color = colour,
+                Color2 = colour,
+                Params = new Vector4(width, 0f, 0f, 0f),
+                Slot = slot,
+                Type = (uint)PrimitiveType.Shape,
+                Flags = (uint)(PrimitiveFlags.Ring | PrimitiveFlags.Debug | (relative ? PrimitiveFlags.RelativeToNode : PrimitiveFlags.None)),
+            });
+        }
+
+        private static void EmitDebug(in PrimitiveInstance instance)
+        {
+            EnsureInstances(s_instanceCount + 1);
+            s_instances[s_instanceCount] = instance;
+            s_textures[s_instanceCount] = null;
+            s_textures2[s_instanceCount] = null;
+            s_instanceCount++;
         }
 
         // The levels of a tree: its root, then every presented node in it, lowest level first.
@@ -1043,6 +1136,7 @@ namespace TimboJimbo.UINext
                 properties.SetBuffer(ClipsId, s_clipBuffer);
                 properties.SetInt(InstanceOffsetId, batch.Start);
                 properties.SetMatrix(MatrixId, matrix);
+                properties.SetFloat(OverdrawId, UIDebug.Overdraw ? 1f : 0f);
                 for (int t = 0; t < TexturesPerBatch; t++)
                 {
                     var texture = s_batchTextures[batch.Textures + t];

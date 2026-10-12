@@ -13,6 +13,7 @@
 ### Added
 
 - Editor: a click in the Scene view selects the node drawn topmost under it, where it is drawn (moved, scrolled, presented), inside its clips, whether it takes the pointer or not; clicked again in the same place, the one under it (a custom picking pass, `HandleUtility.pickGameObjectCustomPasses`)
+- Debug views (`UIDebug`, and Tools/UI Next/Debug in the editor, kept on for the session): Overdraw (what is behind the UI darkened, and every pixel shaded adding heat, a quad's clear parts and clipped parts included, what is drawn into a layer showing through its quad), Layer Bounds (an outline where each layer's image lies, cyan fading as one, magenta blurred, yellow masked, green a flight's end) and Focus Path (an outline round what has focus, and round every section and group it is in, out to its presentation)
 
 ## [0.1.0] - 12/10/2026
 
