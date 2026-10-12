@@ -69,6 +69,7 @@ namespace TimboJimboEditor.UINext.Demos
             Add("👆", "States", StatesPage);
             Add("🎨", "Tokens and themes", TokensPage);
             Add("🔤", "Text", TextPage);
+            Add("📝", "Rich text", RichTextPage);
             Add("📜", "Scrolling", ScrollPage);
             Add("🪟", "Presentations", PresentPage);
             Add("✂️", "Clips and order", OrderPage);
@@ -420,14 +421,6 @@ namespace TimboJimboEditor.UINext.Demos
             sizes.Child("Body").Label("Body text, the size most reading happens at.", 16f, Text);
             sizes.Child("Caption").Label("Caption", 12f, Secondary);
 
-            var markdown = Panel(Case(body, "Markdown").Column(6f), 14f);
-            var md = markdown.Child("Text").Label("Text is Markdown: **bold**, *italic*, __underline__, ~~strike~~, `code`, and [links](https://unity.com) (tap one).", 16f, Text);
-            md.Node.Width.Value = Sizing.Grow();
-            md.gameObject.AddComponent<OpenLinks>();
-            var themed = markdown.Child("Markup").Label("A markup of its own puts ==highlights== behind text.", 16f, Text);
-            themed.Node.Width.Value = Sizing.Grow();
-            themed.Markup.Value = HighlightMarkup();
-
             var align = Panel(Case(body, "Alignment").Column(6f), 14f);
             foreach (var (title, anchor) in new[] { ("Left", TextAnchor.UpperLeft), ("Centre", TextAnchor.UpperCenter), ("Right", TextAnchor.UpperRight) })
             {
@@ -455,6 +448,27 @@ namespace TimboJimboEditor.UINext.Demos
             password.Config = secure;
             Field(fields, "Note", "A note that grows to four lines", multiline: true, maxLines: 4);
 #endif
+        }
+
+        // Rich text: a label's text read with its markup, the built-in Markdown unless it has one of its own: inline styles
+        // and links, blocks, and handlers of the page's own, saying what was tapped (RichTextDemo).
+        private static void RichTextPage(UINode page, UINode body)
+        {
+            var inline = Panel(Case(body, "Markdown").Column(6f), 14f);
+            var markdown = inline.Child("Text").Label("Text is Markdown: **bold**, *italic*, __underline__, ~~strike~~, `code`, and [links](https://unity.com) (tap one).", 16f, Text);
+            markdown.Node.Width.Value = Sizing.Grow();
+            markdown.gameObject.AddComponent<OpenLinks>();
+
+            var blocks = Panel(Case(body, "Blocks").Column(6f), 14f);
+            var block = blocks.Child("Text").Label("### A heading\n> A quote, read as **Markdown** too\n- A list item\n- One long enough to wrap, hanging clear of its bullet\n```\nvar answer = 42;\n```", 16f, Text);
+            block.Node.Width.Value = Sizing.Grow();
+
+            var own = Panel(Case(body, "Handlers of its own").Column(10f), 14f);
+            var chat = own.Child("Text").Label("Thanks @timbo :heart: It ships ==today==, notes in #design :star:", 16f, Text);
+            chat.Node.Width.Value = Sizing.Grow();
+            chat.Markup.Value = RichTextMarkup();
+            var tapped = own.Child("Tapped").Label("Tap the mention or the tag.", 13f, Secondary);
+            page.Add<RichTextDemo>().Setup(chat, tapped);
         }
 
 #if UINEXT_TEXTINPUT
@@ -693,26 +707,99 @@ namespace TimboJimboEditor.UINext.Demos
             page.Add<OrderDemo>().Setup(cards, liftSwitch, tooltip);
         }
 
-        // A markup with one handler of its own, a highlight behind ==text==, before the built-in Markdown: made once as an
-        // asset beside its scene, with the highlight a prefab.
-        private static Markup HighlightMarkup()
+        // The Rich text page's markup: @mentions as chips and #tags as pills, both tapped, emoji of its own, and
+        // ==highlights==, before the built-in Markdown. Made once as an asset beside its scene, with its prefabs and emoji.
+        private static Markup RichTextMarkup()
         {
-            string path = Folder + "/Highlight Markup.asset";
+            string path = Folder + "/Rich Text Markup.asset";
             var markup = AssetDatabase.LoadAssetAtPath<Markup>(path);
             if (markup != null) return markup;
-            // The theme the highlight was, before text handlers had prefabs.
+            // The theme a highlight was, before text handlers had prefabs.
             AssetDatabase.DeleteAsset(Folder + "/Highlight Theme.asset");
-            var highlight = UIBuild.Node("Highlight");
-            highlight.Box(new Color(1f, 0.8f, 0.15f, 0.45f), CornerRadii.All(3f));
-            var prefab = PrefabUtility.SaveAsPrefabAsset(highlight.gameObject, Folder + "/Highlight.prefab");
-            Object.DestroyImmediate(highlight.gameObject);
-            var handler = SpanHandler.Create(TextTrigger.Wrapped("=="), background: prefab, padding: new Vector2(0.1f, 0.05f));
-            handler.name = "Highlight";
-            markup = Markup.Create(new TextRule[] { handler });
+
+            var mention = ElementHandler.Create(TextTrigger.Prefix("@"), tappable: true);
+            mention.name = "Mention";
+            var tag = SpanHandler.Create(TextTrigger.Prefix("#"), color: Accent, background: Wash("Tag", Accent, 0.12f),
+                padding: new Vector2(0.2f, 0.06f), tappable: true);
+            tag.name = "Tag";
+            var emoji = ImageHandler.Create(TextTrigger.Wrapped(":"), new[]
+            {
+                new NamedImage("heart", Emoji("Heart", new Color(1f, 0.33f, 0.4f), Heart)),
+                new NamedImage("star", Emoji("Star", new Color(1f, 0.74f, 0.2f), (u, v) => Star(u, v) > 0.5f)),
+            });
+            emoji.name = "Emoji";
+            var highlight = SpanHandler.Create(TextTrigger.Wrapped("=="), background: Wash("Highlight", new Color(1f, 0.8f, 0.15f), 0.45f),
+                padding: new Vector2(0.1f, 0.05f));
+            highlight.name = "Highlight";
+
+            markup = Markup.Create(new TextRule[] { mention, tag, emoji, highlight });
             AssetDatabase.CreateAsset(markup, path);
-            AssetDatabase.AddObjectToAsset(handler, markup);
+            foreach (var handler in markup.Handlers)
+                AssetDatabase.AddObjectToAsset(handler, markup);
             AssetDatabase.SaveAssets();
             return markup;
+        }
+
+        // A rounded box in a colour at an opacity, twice as strong held down, saved as a prefab beside the scene: what a
+        // span handler puts behind its text.
+        private static GameObject Wash(string name, Color colour, float opacity)
+        {
+            string path = Folder + "/" + name + ".prefab";
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (existing != null) return existing;
+            var node = UIBuild.Node(name);
+            var box = node.Box(new Color(colour.r, colour.g, colour.b, opacity), CornerRadii.All(5f));
+            box.Fill.When(InteractionStates.Pressed, new Color(colour.r, colour.g, colour.b, Mathf.Min(1f, opacity * 2f)));
+            var prefab = PrefabUtility.SaveAsPrefabAsset(node.gameObject, path);
+            Object.DestroyImmediate(node.gameObject);
+            return prefab;
+        }
+
+        // An emoji of the showcase's own, made once as a sprite beside its scene: a shape in one colour, `inside` saying
+        // whether a point is in it (0 to 1 each way, y up), smoothed by sampling each pixel sixteen times.
+        private static Sprite Emoji(string name, Color colour, System.Func<float, float, bool> inside)
+        {
+            string path = Folder + "/" + name + ".png";
+            var existing = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (existing != null) return existing;
+            const int size = 64, samples = 4;
+            var pixels = new Color32[size * size];
+            Color32 fill = colour;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < samples; sy++)
+                        for (int sx = 0; sx < samples; sx++)
+                            if (inside((x + (sx + 0.5f) / samples) / size, (y + (sy + 0.5f) / samples) / size))
+                                hits++;
+                    fill.a = (byte)Mathf.RoundToInt(255f * hits / (samples * samples));
+                    pixels[y * size + x] = fill;
+                }
+            }
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            System.IO.File.WriteAllBytes(FileUtil.GetPhysicalPath(path), texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
+        // Whether a point (0 to 1 each way, y up) is inside a heart filling the square: the curve (x² + y² - 1)³ = x²y³.
+        private static bool Heart(float u, float v)
+        {
+            float x = (u - 0.5f) * 2.6f, y = (v - 0.42f) * 2.6f;
+            float a = x * x + y * y - 1f;
+            return a * a * a - x * x * y * y * y <= 0f;
         }
 
         // A mask texture for the showcase, made once as a PNG beside its scene: white, its alpha from `alpha` at each

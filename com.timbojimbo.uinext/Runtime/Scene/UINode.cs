@@ -321,6 +321,10 @@ namespace TimboJimbo.UINext
         // one coming back into layout (or laid out for the first time) lands where it goes at once.
         [NonSerialized] internal int LayoutPass = -1;
 
+        // Whether it is always where layout puts it at once, never springing there inside a change: a label's inline
+        // content, which its text puts, as its glyphs are, so the two never part.
+        [NonSerialized] internal bool LandsAtOnce;
+
         // Told when it comes into layout, with where it is laid out (a DisplayTransition bringing it in from there).
         [NonSerialized] internal Action<Rect> EnteredLayout;
 

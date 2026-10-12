@@ -6,7 +6,7 @@ namespace TimboJimbo.UINext
     /// <summary>
     /// Text its trigger finds stays text, wrapping with the rest: in a style of its own (fonts, size, colour, weight,
     /// lines), with a node made from <see cref="Background"/> behind each line of it (a Box, with tokens and states, as
-    /// behind code), and perhaps tappable: a tap raises the label's <see cref="Label.SpanTapped"/>, or with a Link
+    /// behind code), and perhaps tappable: a tap raises the label's <see cref="Label.MatchTapped"/>, or with a Link
     /// trigger, its <see cref="Label.LinkClicked"/>.
     /// </summary>
     [CreateAssetMenu(menuName = "Timbo Jimbo/UI Next/Text/Span Handler", fileName = "Span Handler")]
@@ -32,7 +32,7 @@ namespace TimboJimbo.UINext
         [Tooltip("x: room the layout keeps either side of its text, in em. y: how far its background reaches above and below its line, in em.")]
         [SerializeField] private Vector2 _padding;
 
-        [Tooltip("A tap on its text raises the label's Span Tapped, or for a link, its Link Clicked.")]
+        [Tooltip("A tap on its text raises the label's Match Tapped, or for a link, its Link Clicked.")]
         [SerializeField] private bool _tappable;
 
         public override TextRole Role => TextRole.Span;
@@ -61,7 +61,7 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// A tap on a span's text, when it is tappable: raises the label's <see cref="Label.LinkClicked"/> with a link's
-        /// target, and its <see cref="Label.SpanTapped"/> for the rest. Override to handle it in the handler.
+        /// target, and its <see cref="Label.MatchTapped"/> for the rest. Override to handle it in the handler.
         /// </summary>
         public virtual void Tapped(in TextMatch match, Label label) => label.RaiseTapped(in match);
 

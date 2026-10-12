@@ -391,18 +391,20 @@ namespace TimboJimbo.UINext
                 var node = Nodes[_solverToNode[k]];
                 ref var s = ref _solver[k];
                 var rect = k == 0 ? new Rect(0f, 0f, rootSize.x, rootSize.y) : s.Rect;
-                // Laid out in the pass before, it carries on from where it is drawn (springing inside a change); coming
-                // back into layout, it is where it goes at once, and whatever brings it in starts from there.
+                // Laid out in the pass before, it carries on from where it is drawn (springing inside a change), unless it
+                // lands at once; coming back into layout, it is where it goes at once, and whatever brings it in starts
+                // from there.
                 bool carriesOn = node.LayoutPass == _pass - 1 || node.LayoutPass == _pass;
                 node.LayoutPass = _pass;
-                if (carriesOn)
+                if (carriesOn && !node.LandsAtOnce)
                 {
                     node.Frame.SetModel(rect, null);
                 }
                 else
                 {
                     node.Frame.Jump(rect);
-                    node.EnteredLayout?.Invoke(rect);
+                    if (!carriesOn)
+                        node.EnteredLayout?.Invoke(rect);
                 }
                 if (k > 0)
                     WriteRectTransform(node.RectTransform, rect);

@@ -64,7 +64,7 @@ namespace TimboJimbo.UINext
             foreach (var handler in _handlers)
                 if (handler != null)
                     rules.Add(handler);
-            BuiltInMarkdown.GetRules(_markdown, rules);
+            BuiltInText.GetRules(_markdown, rules);
         }
 
         /// <summary>A markup made in code: <paramref name="handlers"/> of its own, then the built-in Markdown's <paramref name="markdown"/>.</summary>

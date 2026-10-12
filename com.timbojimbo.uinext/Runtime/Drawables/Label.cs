@@ -22,8 +22,8 @@ namespace TimboJimbo.UINext
     /// between the lines above and below it (a code block, a quote, a list item). Those nodes are its node's children,
     /// sized and placed as its text is laid out, in the same pass, and its glyphs are drawn over them. Their components
     /// implementing <see cref="ITextContent"/> are told what they stand for (a <see cref="TextSlot"/> shows it). A tap on a
-    /// tappable span raises <see cref="SpanTapped"/>, or on a link, <see cref="LinkClicked"/>, taking the tap from a
-    /// button the label is in.
+    /// tappable span or element raises <see cref="MatchTapped"/>, or on a link, <see cref="LinkClicked"/>, taking the tap
+    /// from a button the label is in, and what shows it is Pressed while it is held.
     /// </para>
     /// </summary>
     [AddComponentMenu("Timbo Jimbo/UI Next/Label")]
@@ -70,8 +70,8 @@ namespace TimboJimbo.UINext
         [Tooltip("Raised with a link's target when a link in the text is tapped.")]
         [SerializeField] private UnityEvent<string> _onLinkClicked = new();
 
-        [Tooltip("Raised with a tappable span's text when it is tapped (a #tag).")]
-        [SerializeField] private UnityEvent<string> _onSpanTapped = new();
+        [Tooltip("Raised with a tappable span's or element's text when it is tapped (a mention, a #tag).")]
+        [SerializeField] private UnityEvent<string> _onMatchTapped = new();
 
         // The text as read, and what it was read from: the text, whether rich, the rules, and the settings' version.
         private readonly TextDocument _document = new();
@@ -139,19 +139,23 @@ namespace TimboJimbo.UINext
             // The match it was last told it stands for, and in which reading.
             public int BoundMatch;
             public int BoundVersion;
+            // Whether it gives itself and what is in it interaction states, as a button does: it stands for a tappable
+            // match, and is Pressed while that is held.
+            public bool Provides;
         }
 
         private readonly List<Inline> _inlines = new();
         private readonly Dictionary<UINode, int> _inlineIndex = new();
         private readonly List<(GameObject Prefab, UINode Node)> _spares = new();
 
-        // A tappable span pressed, and the pointer pressing it.
+        // A tappable span or element pressed, and the pointer pressing it.
         private int _pointer = -1;
         private int _pressed = -1;
 
         private static readonly HashSet<Label> s_enabled = new();
         private static readonly List<TextRule> s_rules = new();
         private static readonly List<ITextContent> s_contents = new();
+        private static readonly List<int> s_around = new();
         private static bool s_listening;
         private static int s_settings;
 
@@ -206,11 +210,11 @@ namespace TimboJimbo.UINext
         /// <summary>Raised with a link's target when a link in the text is tapped (wired in the inspector).</summary>
         public UnityEvent<string> OnLinkClicked => _onLinkClicked;
 
-        /// <summary>Raised with the match when a tappable span other than a link is tapped (a #tag).</summary>
-        public event Action<TextMatch> SpanTapped;
+        /// <summary>Raised with the match when a tappable span or element other than a link is tapped (a mention, a #tag).</summary>
+        public event Action<TextMatch> MatchTapped;
 
-        /// <summary>Raised with a tappable span's text when it is tapped, a link aside (wired in the inspector).</summary>
-        public UnityEvent<string> OnSpanTapped => _onSpanTapped;
+        /// <summary>Raised with a tappable span's or element's text when it is tapped, a link aside (wired in the inspector).</summary>
+        public UnityEvent<string> OnMatchTapped => _onMatchTapped;
 
         /// <summary>Its text as last read: what its markup's handlers found in it.</summary>
         public TextDocument Document => _document;
@@ -220,6 +224,27 @@ namespace TimboJimbo.UINext
 
         /// <summary>The rules its text is read with: its own markup, else the project's default, else the built-in Markdown.</summary>
         public TextRuleSet EffectiveMarkup => MarkupFor(_markup.Peek);
+
+        /// <summary>
+        /// The size the text around a match is drawn at, in points: its own, scaled by every span the match is in (a
+        /// heading's). An element sized in em is sized against it; read in a binding, it follows the label's size.
+        /// </summary>
+        public float FontSizeAround(in TextMatch match)
+        {
+            var style = TextStyle.Plain;
+            var matches = _document.Matches;
+            s_around.Clear();
+            for (int p = match.Parent; p >= 0 && p < matches.Count; p = matches[p].Parent)
+                s_around.Add(p);
+            for (int i = s_around.Count - 1; i >= 0; i--)
+            {
+                var span = matches[s_around[i]];
+                if (span.Role == TextRole.Span && span.Rule != null)
+                    span.Rule.Style(in span, ref style);
+            }
+            s_around.Clear();
+            return Mathf.Max(1f, _fontSize.Value) * (style.Scale > 0f ? style.Scale : 1f);
+        }
 
         // ── Measuring ────────────────────────────────────────────────────────────
 
@@ -498,7 +523,7 @@ namespace TimboJimbo.UINext
             if (markup != null) return markup;
             var settings = TextSettings.Instance;
             if (settings != null && settings.DefaultMarkup != null) return settings.DefaultMarkup;
-            return BuiltInMarkdown.All;
+            return BuiltInText.All;
         }
 
         // Its reading, run as values resolve, before its tree is laid out: reads its text again when it, or what it is read
@@ -609,6 +634,16 @@ namespace TimboJimbo.UINext
             var node = inline.Node;
             node.Display.Value = kind != InlineKind.Background && _cut.Contains(match) ? DisplayMode.None : DisplayMode.Visible;
             node.Floating.Value = new Floating { AttachTo = FloatingAttach.Parent };
+            var rule = _document.Matches[match].Rule;
+            bool tappable = rule != null && rule.Tappable;
+            if (tappable != inline.Provides)
+            {
+                if (tappable)
+                    node.AddInteractionProvider();
+                else
+                    node.RemoveInteractionProvider();
+                inline.Provides = tappable;
+            }
             if (inline.BoundMatch != match || inline.BoundVersion != _version)
             {
                 inline.BoundMatch = match;
@@ -666,16 +701,24 @@ namespace TimboJimbo.UINext
             foreach (var child in instance.GetComponentsInChildren<Transform>(true))
                 child.gameObject.hideFlags = HideFlags.DontSave;
             instance.AddComponent<InlineOf>().Label = this;
+            var node = instance.GetComponent<UINode>();
+            // Where the text puts it at once, as its glyphs are, rather than springing there inside a change.
+            node.LandsAtOnce = true;
             // Prefabs made in code are kept inactive, out of every tree.
             if (!instance.activeSelf)
                 instance.SetActive(true);
-            return instance.GetComponent<UINode>();
+            return node;
         }
 
-        // An inline node no longer wanted: hidden and kept to be used again.
+        // An inline node no longer wanted: hidden and kept to be used again, standing for nothing tappable.
         private void Spare(in Inline inline)
         {
             if (inline.Node == null) return;
+            if (inline.Provides)
+            {
+                inline.Node.SetInteraction(InteractionStates.Pressed, false);
+                inline.Node.RemoveInteractionProvider();
+            }
             inline.Node.Display.Value = DisplayMode.None;
             _spares.Add((inline.Prefab, inline.Node));
         }
@@ -738,6 +781,7 @@ namespace TimboJimbo.UINext
             _valid = _drawn = false;
             _readSettings = -1;
             _pointer = -1;
+            Press(-1);
             // Its inline content goes out of sight with it: as children when its object goes, hidden when the label alone does.
             if (gameObject.activeInHierarchy)
                 foreach (var inline in _inlines)
@@ -770,11 +814,11 @@ namespace TimboJimbo.UINext
 
         void IPointerHandler.OnPointerDown(in PointerEvent e)
         {
-            if (_pointer >= 0 || !_valid || !_drawn) return;
-            int match = MatchAt(e.Position);
+            if (_pointer >= 0 || !_valid) return;
+            int match = TappableAt(e.Position);
             if (match < 0 || !UIInput.TakeTap(this, e.PointerId)) return;
             _pointer = e.PointerId;
-            _pressed = match;
+            Press(match);
         }
 
         void IPointerHandler.OnPointerMove(in PointerEvent e) { }
@@ -783,26 +827,62 @@ namespace TimboJimbo.UINext
         {
             if (e.PointerId != _pointer) return;
             _pointer = -1;
-            if (!_valid || !_drawn || MatchAt(e.Position) != _pressed || _pressed >= _document.Matches.Count) return;
-            var match = _document.Matches[_pressed];
-            if (match.Rule is SpanHandler span)
-                span.Tapped(in match, this);
-            else
-                RaiseTapped(in match);
+            int pressed = _pressed;
+            Press(-1);
+            if (pressed < 0 || pressed >= _document.Matches.Count || TappableAt(e.Position) != pressed) return;
+            var match = _document.Matches[pressed];
+            switch (match.Rule)
+            {
+                case SpanHandler span:
+                    span.Tapped(in match, this);
+                    break;
+                case ElementHandler element:
+                    element.Tapped(in match, this);
+                    break;
+                default:
+                    RaiseTapped(in match);
+                    break;
+            }
         }
 
         void IPointerHandler.OnPointerCancel(in PointerEvent e)
         {
-            if (e.PointerId == _pointer)
-                _pointer = -1;
+            if (e.PointerId != _pointer) return;
+            _pointer = -1;
+            Press(-1);
         }
 
-        // The tappable span under a point in its root's points, or -1.
-        private int MatchAt(Vector2 point) => _layout.MatchAt(Node.RootToLocal(point) - _origin);
+        // The tappable match under a point in its root's points: an element whose node it is over, else the span whose
+        // text it is over; -1 for none.
+        private int TappableAt(Vector2 point)
+        {
+            var local = Node.RootToLocal(point);
+            foreach (var inline in _inlines)
+            {
+                if (inline.Kind != InlineKind.Element || !inline.Provides || inline.Node == null) continue;
+                if (inline.Node.Display.Peek == DisplayMode.Visible && inline.Node.LaidOutRect.Contains(local))
+                    return inline.Match;
+            }
+            return _drawn ? _layout.MatchAt(local - _origin) : -1;
+        }
+
+        // Shows a match held down, Pressed on the nodes standing for it (a chip, the backgrounds behind a span), and the
+        // one held before not.
+        private void Press(int match)
+        {
+            if (match == _pressed) return;
+            foreach (var inline in _inlines)
+            {
+                if (!inline.Provides || inline.Node == null) continue;
+                if (inline.Match == _pressed || inline.Match == match)
+                    inline.Node.SetInteraction(InteractionStates.Pressed, inline.Match == match);
+            }
+            _pressed = match;
+        }
 
         /// <summary>
-        /// Raises what a tap on a span raises: <see cref="LinkClicked"/> with a link's target (a span with a Link trigger),
-        /// <see cref="SpanTapped"/> for the rest.
+        /// Raises what a tap on a span or an element raises: <see cref="LinkClicked"/> with a link's target (a span with a
+        /// Link trigger), <see cref="MatchTapped"/> for the rest.
         /// </summary>
         public void RaiseTapped(in TextMatch match)
         {
@@ -813,8 +893,8 @@ namespace TimboJimbo.UINext
                 _onLinkClicked.Invoke(target);
                 return;
             }
-            SpanTapped?.Invoke(match);
-            _onSpanTapped.Invoke(match.Text);
+            MatchTapped?.Invoke(match);
+            _onMatchTapped.Invoke(match.Text);
         }
     }
 }

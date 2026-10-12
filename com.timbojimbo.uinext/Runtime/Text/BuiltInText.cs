@@ -5,16 +5,17 @@ using UnityEngine;
 namespace TimboJimbo.UINext
 {
     /// <summary>
-    /// The built-in Markdown: span and block handlers like any of your own, with the prefabs they make nodes from, made
-    /// in code the first time they are wanted, hidden and never saved. A label with no markup, in a project with no
-    /// default, reads its text with all of it; a <see cref="Markup"/> keeps the parts it chooses after its own handlers.
+    /// The built-in text handlers and the prefabs they make nodes from, made in code the first time they are wanted,
+    /// hidden and never saved, on the same classes as any of your own. The Markdown: a label with no markup, in a project
+    /// with no default, reads its text with all of it, and a <see cref="Markup"/> keeps the parts it chooses after its own
+    /// handlers. The chip an element handler with no prefab makes, and the image an image handler with none shows.
     /// </summary>
-    internal static class BuiltInMarkdown
+    internal static class BuiltInText
     {
         // Neutral greys at a low opacity, which read on light and dark alike, and a blue that does too.
         private static readonly Color Wash = new(0.55f, 0.58f, 0.62f, 0.16f);
         private static readonly Color Rule = new(0.55f, 0.58f, 0.62f, 0.5f);
-        private static readonly Color LinkBlue = new(0.2f, 0.5f, 0.95f, 1f);
+        private static readonly Color Blue = new(0.2f, 0.5f, 0.95f, 1f);
 
         // Monospaced families, one of which each platform has: Windows, Apple's, Android, Linux.
         private static readonly string[] CodeFamilies = { "Consolas", "Menlo", "Droid Sans Mono", "DejaVu Sans Mono" };
@@ -22,8 +23,10 @@ namespace TimboJimbo.UINext
         private static readonly List<(MarkdownFeatures Feature, TextRule Rule)> s_rules = new();
         private static readonly List<Object> s_made = new();
         private static Markup s_all;
+        private static GameObject s_chip;
+        private static GameObject s_image;
 
-        /// <summary>All of it, as a markup.</summary>
+        /// <summary>All of the Markdown, as a markup.</summary>
         public static Markup All
         {
             get
@@ -36,21 +39,27 @@ namespace TimboJimbo.UINext
             }
         }
 
-        /// <summary>Adds its handlers for <paramref name="features"/> to <paramref name="rules"/>, in the order they are tried.</summary>
+        /// <summary>A pill with a match as written in it (@name), in blue: what an element handler with no prefab makes.</summary>
+        public static GameObject Chip => s_chip != null ? s_chip : s_chip = MakeChip();
+
+        /// <summary>An image node a <see cref="TextImage"/> shows its match's image in: what an image handler with no prefab makes.</summary>
+        public static GameObject Image => s_image != null ? s_image : s_image = MakeImage();
+
+        /// <summary>Adds the Markdown's handlers for <paramref name="features"/> to <paramref name="rules"/>, in the order they are tried.</summary>
         public static void GetRules(MarkdownFeatures features, List<TextRule> rules)
         {
             if (features == MarkdownFeatures.None) return;
-            Make();
+            MakeMarkdown();
             foreach (var (feature, rule) in s_rules)
                 if ((features & feature) != 0)
                     rules.Add(rule);
         }
 
-        // The handlers, line rules first, longer delimiters before the shorter ones they start with.
-        private static void Make()
+        // The Markdown's handlers, line rules first, longer delimiters before the shorter ones they start with.
+        private static void MakeMarkdown()
         {
             if (s_rules.Count > 0 && s_rules[0].Rule != null) return;
-            Clear();
+            ClearMarkdown();
             var code = CodeFont();
             var item = ListItem();
             Add(MarkdownFeatures.CodeBlocks, "Code block", BlockHandler.Create(TextTrigger.Fenced(), CodeBlock(code)));
@@ -62,7 +71,7 @@ namespace TimboJimbo.UINext
             Add(MarkdownFeatures.Lists, "Numbered item", BlockHandler.Create(TextTrigger.LineMatching(@"\d{1,9}[.)] "), item));
             Add(MarkdownFeatures.Code, "Code", SpanHandler.Create(TextTrigger.Wrapped("`", literal: true), scale: 0.9f, font: code,
                 background: CodeBackground(), padding: new Vector2(0.25f, 0.08f)));
-            Add(MarkdownFeatures.Links, "Link", SpanHandler.Create(TextTrigger.Link(), color: LinkBlue, underline: true, tappable: true));
+            Add(MarkdownFeatures.Links, "Link", SpanHandler.Create(TextTrigger.Link(), color: Blue, underline: true, tappable: true));
             Add(MarkdownFeatures.Emphasis, "Bold", SpanHandler.Create(TextTrigger.Wrapped("**", insideWords: true), bold: true));
             Add(MarkdownFeatures.Underline, "Underline", SpanHandler.Create(TextTrigger.Wrapped("__"), underline: true));
             Add(MarkdownFeatures.Strikethrough, "Strikethrough", SpanHandler.Create(TextTrigger.Wrapped("~~", insideWords: true), strikethrough: true));
@@ -137,6 +146,31 @@ namespace TimboJimbo.UINext
             return Made(node);
         }
 
+        // A chip: a pill with the match as written in it, in blue at nine tenths of the text's size, darker held down.
+        private static GameObject MakeChip()
+        {
+            var node = Template("Chip").Pad(7f, 1f).Center();
+            var box = node.Box(new Color(Blue.r, Blue.g, Blue.b, 0.14f), CornerRadii.All(999f));
+            box.Fill.When(InteractionStates.Pressed, new Color(Blue.r, Blue.g, Blue.b, 0.3f));
+            var text = Node("Text", node);
+            var label = text.Label("", 17f, Blue);
+            label.RichText.Value = false;
+            var slot = text.Add<TextSlot>();
+            slot.Shows = TextSlotShows.Content;
+            slot.Inherits = TextSlotInherits.Font | TextSlotInherits.Size;
+            slot.Scale = 0.9f;
+            return Made(node);
+        }
+
+        // An image: what its image handler has for its match, as big as the handler says, kept whole.
+        private static GameObject MakeImage()
+        {
+            var node = Template("Image");
+            node.Add<ImageView>().Fit.Value = ImageFit.Contain;
+            node.Add<TextImage>();
+            return Made(node);
+        }
+
         // Code's fonts: the first monospaced family the platform has.
         private static FontStack CodeFont()
         {
@@ -150,11 +184,7 @@ namespace TimboJimbo.UINext
         }
 
         // The root of a prefab made in code: inactive, so it is in no tree (what is made from it is), hidden and never saved.
-        private static UINode Template(string name)
-        {
-            var node = Node(name, null);
-            return node;
-        }
+        private static UINode Template(string name) => Node(name, null);
 
         private static UINode Node(string name, UINode parent)
         {
@@ -178,29 +208,40 @@ namespace TimboJimbo.UINext
 
         // ── Lifetime ─────────────────────────────────────────────────────────────
 
-        private static void Clear()
+        // The Markdown made again: what it made goes, but for the chip and the image, which have their own lifetimes.
+        private static void ClearMarkdown()
         {
-            foreach (var made in s_made)
+            for (int i = s_made.Count - 1; i >= 0; i--)
             {
-                if (made == null) continue;
-                if (Application.isPlaying)
-                    Object.Destroy(made);
-                else
-                    Object.DestroyImmediate(made);
+                var made = s_made[i];
+                if (made == s_chip || made == s_image) continue;
+                Destroy(made);
+                s_made.RemoveAt(i);
             }
-            s_made.Clear();
             s_rules.Clear();
         }
 
+        private static void Destroy(Object made)
+        {
+            if (made == null) return;
+            if (Application.isPlaying)
+                Object.Destroy(made);
+            else
+                Object.DestroyImmediate(made);
+        }
+
 #if UNITY_EDITOR
-        // Made objects outlive a script reload, which forgets them: they go before it.
+        // What it made outlives a script reload, which forgets it: it goes before.
         [UnityEditor.InitializeOnLoadMethod]
         private static void ClearOnReload() => UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += () =>
         {
-            Clear();
-            if (s_all != null)
-                Object.DestroyImmediate(s_all);
+            foreach (var made in s_made)
+                Destroy(made);
+            s_made.Clear();
+            s_rules.Clear();
+            Destroy(s_all);
             s_all = null;
+            s_chip = s_image = null;
         };
 #endif
     }

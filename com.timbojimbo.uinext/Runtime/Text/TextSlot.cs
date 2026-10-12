@@ -9,6 +9,8 @@ namespace TimboJimbo.UINext
     {
         /// <summary>Its text: what was wrapped, the word after a prefix, a quote's lines, a code block's code.</summary>
         Text,
+        /// <summary>It as written, as it would show as text: a mention with its @, a tag with its #.</summary>
+        Content,
         /// <summary>Its argument: a link's target, a code block's language, a line's marker.</summary>
         Argument,
         /// <summary>Its argument as a list marker: a bullet (•) for -, * and +, the number as written otherwise.</summary>
@@ -21,7 +23,7 @@ namespace TimboJimbo.UINext
     {
         None = 0,
         Font = 1 << 0,
-        /// <summary>Its size, times the slot's scale.</summary>
+        /// <summary>Its size (of the text around the match, a heading's in a heading), times the slot's scale.</summary>
         Size = 1 << 1,
         Color = 1 << 2,
         /// <summary>Its markup and whether it reads it, so what it shows is read as the label's text is.</summary>
@@ -30,8 +32,8 @@ namespace TimboJimbo.UINext
 
     /// <summary>
     /// Shows what a match says in a label in a handler's prefab, no code needed: the match's text (a quote's lines,
-    /// Markdown and all), its argument or its list marker, in the font, size, colour and markup of the label the match is
-    /// in, as far as it takes them, following them as they change (a dark mode, a state).
+    /// Markdown and all), the match as written, its argument or its list marker, in the font, size, colour and markup of
+    /// the label the match is in, as far as it takes them, following them as they change (a dark mode, a state).
     /// </summary>
     [RequireComponent(typeof(Label))]
     [AddComponentMenu("Timbo Jimbo/UI Next/Text Slot")]
@@ -55,6 +57,7 @@ namespace TimboJimbo.UINext
             var own = GetComponent<Label>();
             own.Text.Value = _shows switch
             {
+                TextSlotShows.Content => ContentOf(in match, label),
                 TextSlotShows.Argument => match.Argument ?? "",
                 TextSlotShows.Marker => MarkerOf(match.Argument),
                 _ => match.Text ?? "",
@@ -63,7 +66,10 @@ namespace TimboJimbo.UINext
             if ((_inherits & TextSlotInherits.Font) != 0)
                 own.Font.Bind(() => label.Font.Value);
             if ((_inherits & TextSlotInherits.Size) != 0)
-                own.FontSize.Bind(() => label.FontSize.Value * _scale);
+            {
+                var around = match;
+                own.FontSize.Bind(() => label.FontSizeAround(in around) * _scale);
+            }
             if ((_inherits & TextSlotInherits.Color) != 0)
                 own.Color.Bind(() => label.Color.Value);
             if ((_inherits & TextSlotInherits.Markup) != 0)
@@ -71,6 +77,14 @@ namespace TimboJimbo.UINext
                 own.Markup.Bind(() => label.Markup.Value);
                 own.RichText.Bind(() => label.RichText.Value);
             }
+        }
+
+        // A match as written: the part of the label's text it shows when it stays text.
+        private static string ContentOf(in TextMatch match, Label label)
+        {
+            var source = label != null ? label.Document.Text : null;
+            if (source == null || match.ContentStart < 0 || match.ContentEnd > source.Length) return match.Text ?? "";
+            return source.Substring(match.ContentStart, match.ContentLength);
         }
 
         // A list item's marker as shown: a bullet for -, * and +, a number as written.
