@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace TimboJimbo.UINext
 {
@@ -44,10 +45,11 @@ namespace TimboJimbo.UINext
         [SerializeField] private UIValue<float> _rotation = 0f;
         [SerializeField] private UIValue<int> _zIndex = 0;
 
-        [Tooltip("Its opacity fades it and what is inside it as one image, so overlapping parts do not show through each other.")]
-        [SerializeField] private UIValue<bool> _groupOpacity = false;
+        [Tooltip("Draws it and what is inside it as one image first, so its opacity, blur and mask apply to that image as a whole rather than to each part. It costs an image only while one of them is in use.")]
+        [FormerlySerializedAs("_groupOpacity")]
+        [SerializeField] private UIValue<bool> _compositeGroup = false;
 
-        [Tooltip("Blurs it and what is inside it, by this many points.")]
+        [Tooltip("Blurs it and what is inside it, by this many points. Only a composite group is blurred.")]
         [SerializeField] private UIValue<float> _blur = 0f;
 
         [Tooltip("How saturated it and what is inside it are drawn: 1 as they are, 0 grey, more than 1 more vivid.")]
@@ -56,7 +58,7 @@ namespace TimboJimbo.UINext
         [Tooltip("How bright it and what is inside it are drawn: 1 as they are, less dims them.")]
         [SerializeField] private UIValue<float> _brightness = 1f;
 
-        [Tooltip("A texture whose alpha, stretched over its rect, cuts it and what is inside it; nothing is kept outside its rect.")]
+        [Tooltip("A texture whose alpha, stretched over its rect, cuts it and what is inside it; nothing is kept outside its rect. Only a composite group is masked.")]
         [SerializeField] private UIValue<Texture> _mask = new UIValue<Texture>();
 
         [Tooltip("Keeps what is inside it above the software keyboard: its bottom padding is at least how far the keyboard reaches into it.")]
@@ -155,16 +157,18 @@ namespace TimboJimbo.UINext
         public UIValue<int> ZIndex => _zIndex;
 
         /// <summary>
-        /// Whether its opacity fades it and everything inside it as one image, as Core Animation's group opacity and
-        /// SwiftUI's compositingGroup do: while it is not fully opaque, it is drawn to an image of its own first, so
-        /// overlapping children do not show through each other. Fully opaque, it costs nothing.
+        /// Whether it and everything inside it are drawn as one image first, so that its opacity, <see cref="Blur"/> and
+        /// <see cref="Mask"/> apply to that image as a whole, as SwiftUI's compositingGroup and Core Animation's group
+        /// opacity do. Without it, its opacity multiplies into each part, so overlapping parts show through each other,
+        /// and blur and masks do nothing. It costs an image only while it is not fully opaque, blurred or masked.
+        /// Saturation and brightness need none: they come out the same either way.
         /// </summary>
-        public UIValue<bool> GroupOpacity => _groupOpacity;
+        public UIValue<bool> CompositeGroup => _compositeGroup;
 
         /// <summary>
         /// Blurs it and everything inside it by this many points, as SwiftUI's blur(radius:) and CSS's filter: blur():
-        /// while it is above zero it is drawn to an image of its own first (as a group), blurred, then drawn. It animates,
-        /// so a node can blur in and out of focus.
+        /// only a <see cref="CompositeGroup"/> is blurred: its image, blurred, is what is drawn. It animates, so a node can
+        /// blur in and out of focus.
         /// </summary>
         public UIValue<float> Blur => _blur;
 
@@ -181,7 +185,7 @@ namespace TimboJimbo.UINext
         /// <summary>
         /// A texture whose alpha cuts it and everything inside it, stretched over its rect as it is drawn, as CSS's
         /// mask-image: a fade at a scroll view's edges, a shape cut out of a photo. Nothing is kept outside its rect.
-        /// While it has one, it is drawn to an image of its own first (as a group), and the mask is applied to that.
+        /// Only a <see cref="CompositeGroup"/> is masked: the mask is applied to its image.
         /// </summary>
         public UIValue<Texture> Mask => _mask;
 
@@ -332,6 +336,9 @@ namespace TimboJimbo.UINext
         // it, whose picture of it flies instead (a matched node hidden).
         [NonSerialized] internal Flight FlightIn;
         [NonSerialized] internal Flight FlightOut;
+
+        // Whether it has been warned of a blur or a mask, which apply only to a composite group.
+        [NonSerialized] internal bool WarnedOutsideGroup;
 
         // Where keyboard and gamepad focus last was inside it: for focus coming back (a presentation over it going, a
         // section that remembers, a group entered again) and for telling equally near candidates apart.
@@ -697,7 +704,7 @@ namespace TimboJimbo.UINext
         {
             action(_width); action(_height); action(_padding); action(_gap); action(_direction); action(_wrap);
             action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
-            action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_groupOpacity); action(_blur);
+            action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_compositeGroup); action(_blur);
             action(_saturation); action(_brightness); action(_mask); action(_avoidsKeyboard);
             action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable); action(_matchName); action(_matchId); action(_matchAnchor);
             action(_focusScope); action(_focusEntry); action(_prefersFocus); action(_focusable); action(_focusRing);

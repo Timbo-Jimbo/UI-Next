@@ -32,8 +32,9 @@ namespace TimboJimbo.UINext
         public Affine2[] World = new Affine2[32];
         public bool[] Shown = new bool[32];
 
-        // How opaque each node is drawn, all told; and, for a node drawn as a group (GroupOpacity, not fully opaque),
-        // the opacity its image is drawn at (0 for the rest). Inside a group, slots' opacities are the group's own.
+        // How opaque each node is drawn, all told; and, for a node drawn as a group (a composite group not fully opaque,
+        // blurred or masked, or a node a transition is fading), the opacity its image is drawn at (0 for the rest).
+        // Inside a group, slots' opacities are the group's own.
         public float[] Opacities = new float[32];
         public float[] GroupOpacities = new float[32];
 
@@ -485,12 +486,20 @@ namespace TimboJimbo.UINext
                 // is drawn at the group's. A node a transition is fading (a page, an alert, an item going away) fades
                 // as a group too, so its parts never show through each other on the way.
                 bool fadingIn = transition != null && transition.Opacity.Value < 0.999f;
-                // A blurred node is a group however opaque it is: its image is what is blurred. A node drawn at no
-                // opacity at all (faded out, a fade's first frame, a bouncy fade past nothing) is no group: nothing in
+                // A composite group is drawn as one image while not fully opaque, blurred or masked: its image is what is
+                // faded, blurred and masked, however opaque it is. Blur and masks apply to nothing else. A node drawn at
+                // no opacity at all (faded out, a fade's first frame, a bouncy fade past nothing) is no group: nothing in
                 // it is seen, so its image is not made, and what is in it is drawn at nothing (not at the group's 1).
-                float blur = node.Blur.Value;
+                bool composite = node.CompositeGroup.Value;
+                float blur = composite ? node.Blur.Value : 0f;
+                bool masked = composite && node.Mask.Value != null;
+                if (!composite && !node.WarnedOutsideGroup && (node.Blur.Value > 0.01f || node.Mask.Value != null))
+                {
+                    node.WarnedOutsideGroup = true;
+                    Debug.LogWarning($"UI Next: {node.name} has a blur or a mask, which apply only to a composite group; turn on its Composite Group.", node);
+                }
                 bool group = shown && effectiveOpacity > 0f
-                             && (((node.GroupOpacity.Value || fadingIn) && opacity < 0.999f) || blur > 0.01f || node.Mask.Value != null);
+                             && (((composite || fadingIn) && opacity < 0.999f) || blur > 0.01f || masked);
                 GroupOpacities[i] = group ? effectiveOpacity : 0f;
                 Blurs[i] = group ? Mathf.Max(0f, blur) : 0f;
                 if (group) effectiveOpacity = 1f;

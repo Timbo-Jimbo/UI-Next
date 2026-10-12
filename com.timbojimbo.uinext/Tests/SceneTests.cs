@@ -1,6 +1,8 @@
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using TimboJimbo.UINext;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace TimboJimboTests.UINext
 {
@@ -54,10 +56,10 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
-        public void AGroupNotFullyOpaqueIsDrawnAsOneImage()
+        public void ACompositeGroupNotFullyOpaqueIsDrawnAsOneImage()
         {
             var group = Root.Node.Child("Group").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
-            group.GroupOpacity.Value = true;
+            group.CompositeGroup.Value = true;
             var child = group.Child("Child").Sized(Sizing.Fixed(50f), Sizing.Fixed(50f));
             child.Box(Color.white);
             Frame();
@@ -76,7 +78,7 @@ namespace TimboJimboTests.UINext
         {
             Root.Node.Pad(100f);
             var group = Root.Node.Child("Group").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
-            group.GroupOpacity.Value = true;
+            group.CompositeGroup.Value = true;
             group.Opacity.Value = 0.5f;
             var box = group.Box(Color.white);
             box.ShadowColor.Value = Color.black;
@@ -100,6 +102,7 @@ namespace TimboJimboTests.UINext
             Root.Node.Pad(100f);
             var card = Root.Node.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
             card.Box(Color.white);
+            card.CompositeGroup.Value = true;
             Frame();
             Assert.AreEqual(0, Compositor.Groups.Count, "sharp, it is drawn as usual");
             card.Blur.Value = 8f;
@@ -109,6 +112,20 @@ namespace TimboJimboTests.UINext
             var region = Compositor.Groups[0].Region;
             Assert.LessOrEqual(region.xMin, 84f, "room past it for the blur to spread into");
             Assert.GreaterOrEqual(region.xMax, 216f);
+        }
+
+        [Test]
+        public void BlurAndMasksApplyOnlyToACompositeGroup()
+        {
+            var card = Root.Node.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(60f));
+            card.Box(Color.white);
+            LogAssert.Expect(LogType.Warning, new Regex("composite group"));
+            card.Blur.Value = 8f;
+            Frame();
+            Assert.AreEqual(0, Compositor.Groups.Count, "not a composite group, it is drawn as usual, unblurred");
+            card.CompositeGroup.Value = true;
+            Frame();
+            Assert.AreEqual(1, Compositor.Groups.Count, "a composite group, it is blurred");
         }
 
         [Test]
@@ -132,6 +149,7 @@ namespace TimboJimboTests.UINext
         {
             var card = Root.Node.Child("Card").Sized(Sizing.Fixed(100f), Sizing.Fixed(60f));
             card.Box(Color.white);
+            card.CompositeGroup.Value = true;
             Frame();
             Assert.AreEqual(0, Compositor.Groups.Count);
             var mask = new Texture2D(4, 4);

@@ -613,6 +613,7 @@ namespace TimboJimboEditor.UINext.Demos
             var masks = Case(body, "Masks (a texture's alpha cuts it)").Row(16f).Align(AlignX.Left, AlignY.Center);
             var faded = masks.Child("Faded edges").Row(10f).Sized(Sizing.Grow(), Sizing.Fixed(90f));
             faded.Scroll(ScrollAxis.Horizontal);
+            faded.CompositeGroup.Value = true;
             faded.Mask.Value = MaskTexture("Edge Fade", 256, 4, (x, y) => Mathf.Clamp01(Mathf.Min(x, 1f - x) / 0.15f));
             for (int i = 0; i < 12; i++)
             {
@@ -622,6 +623,7 @@ namespace TimboJimboEditor.UINext.Demos
             }
             var star = masks.Child("Star").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));
             star.Add<ScenePhoto>().Show(1);
+            star.CompositeGroup.Value = true;
             star.Mask.Value = MaskTexture("Star", 256, 256, Star);
 
             var stack = Case(body, "ZIndex (tap a card)");
@@ -636,12 +638,12 @@ namespace TimboJimboEditor.UINext.Demos
                 cards.Add(card.Pressable());
             }
 
-            var fading = Panel(Case(body, "Fading as one image (group opacity)").Row(24f), 16f);
+            var fading = Panel(Case(body, "Fading as one image (composite group)").Row(24f), 16f);
             foreach (var (title, group) in new[] { ("Each part", false), ("As one", true) })
             {
                 var pair = fading.Child(title).Sized(Sizing.Fixed(140f), Sizing.Fixed(130f));
                 pair.Opacity.Value = 0.5f;
-                pair.GroupOpacity.Value = group;
+                pair.CompositeGroup.Value = group;
                 pair.Child("Back").Sized(Sizing.Fixed(90f), Sizing.Fixed(90f)).Box(Palette[1], 16f);
                 var front = pair.Child("Front").Sized(Sizing.Fixed(90f), Sizing.Fixed(90f))
                     .Float(AttachPoint.LeftTop, AttachPoint.LeftTop, new Vector2(45f, 40f)).Center();
@@ -658,6 +660,7 @@ namespace TimboJimboEditor.UINext.Demos
             blurred.Child("Title").Label("In and out of focus", 20f, Color.white, bold: true);
             blurred.Child("Body").Label("Everything inside it blurs with it.", 15f, Color.white);
             blurred.Pressable();
+            blurred.CompositeGroup.Value = true;
             blurred.Add<BlurToggle>().Setup(blurred, 10f);
 
             var lockCase = Panel(Case(body, "Locked: grey and dim (tap them)").Row(14f), 16f);

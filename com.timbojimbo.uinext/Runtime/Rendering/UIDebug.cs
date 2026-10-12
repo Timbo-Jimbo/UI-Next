@@ -26,7 +26,7 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Layer bounds: an outline where each layer's image lies (a node drawn to an image of its own first), coloured
-        /// by why it is one: cyan fading as one (group opacity), magenta blurred, yellow masked, green one end of a
+        /// by why it is one: cyan fading as one (a composite group, or what a transition fades), magenta blurred, yellow masked, green one end of a
         /// matched flight.
         /// </summary>
         public static bool LayerBounds

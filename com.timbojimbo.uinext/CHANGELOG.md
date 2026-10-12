@@ -4,9 +4,10 @@
 
 - A scroll view's `ClearMargin` is the one room it keeps at its edges, as UIKit's content inset: what it holds starts that far in and scrolls that far past its end, and whatever brings something into view (`ScrollIntoView`, focus) lands that far in. `ScrollPadding` is gone; set the margin instead. Focus still keeps room for its ring where the margin is less.
 - Clear insets (the nodes listed for an edge, and the margin) count only on the edges a scroll view scrolls along: top and bottom for a vertical one, left and right for a horizontal one. Across, what it holds is laid out to its size, and a margin there pushed it out past its edge.
+- `UINode.GroupOpacity` is `CompositeGroup`, as SwiftUI's `compositingGroup`: a node and what is inside it drawn as one image first, so its opacity, blur and mask apply to that image as a whole. Scenes and prefabs keep the old field's value.
+  - Blur and masks apply only to a composite group, rather than silently making a node one: without it they do nothing, are greyed out in the inspector (with a note when set anyway), and are warned of once at run time.
+  - The inspector's Effects section is two: Compositing (composite group, blur, mask) and Colour (saturation, brightness).
 - Editor: the state bar is the *UI States* toolbar among the Scene view's overlays, one dropdown lit with how many states are previewed, opening a popup that says what it previews on, labels its groups Interaction, Modes and States, tells two of a name apart by their folder, and has Clear preview. Its icon is Unity's own unless States.png is in the package's Editor/Icons folder.
-
-  Its icons are Unity's own, unless a PNG of the same name is in the package's Editor/Icons folder.
 
 ### Removed
 

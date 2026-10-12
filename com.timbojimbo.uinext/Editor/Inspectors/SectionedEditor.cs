@@ -31,7 +31,7 @@ namespace TimboJimboEditor.UINext
                 {
                     var property = serializedObject.FindProperty(field);
                     if (property == null) continue;
-                    EditorGUILayout.PropertyField(property, true);
+                    DrawField(property);
                     s_drawn.Add(field);
                 }
             }
@@ -45,10 +45,13 @@ namespace TimboJimboEditor.UINext
                     Header("Other", first);
                     other = true;
                 }
-                EditorGUILayout.PropertyField(iterator, true);
+                DrawField(iterator);
             }
             serializedObject.ApplyModifiedProperties();
         }
+
+        /// <summary>Draws one field: its property drawer, unless an editor draws it some other way.</summary>
+        protected virtual void DrawField(SerializedProperty property) => EditorGUILayout.PropertyField(property, true);
 
         private static void Header(string text, bool first)
         {
@@ -64,12 +67,35 @@ namespace TimboJimboEditor.UINext
         {
             ("Layout", new[] { "_width", "_height", "_padding", "_gap", "_direction", "_wrap", "_alignX", "_alignY", "_aspectRatio", "_floating", "_display", "_ignoresSafeArea" }),
             ("Drawn", new[] { "_opacity", "_offset", "_scale", "_rotation", "_zIndex" }),
-            ("Effects", new[] { "_groupOpacity", "_blur", "_saturation", "_brightness", "_mask" }),
+            ("Compositing", new[] { "_compositeGroup", "_blur", "_mask" }),
+            ("Colour", new[] { "_saturation", "_brightness" }),
             ("Clipping", new[] { "_clips", "_clipRadii", "_topLayer" }),
             ("Input", new[] { "_hitTestable", "_avoidsKeyboard" }),
             ("Focus", new[] { "_focusable", "_focusScope", "_focusEntry", "_prefersFocus", "_focusRing" }),
             ("Matching", new[] { "_matchName", "_matchId", "_matchAnchor" }),
         };
+
+        // Blur and masks apply only to a composite group: greyed out without one, saying so when one is set anyway.
+        protected override void DrawField(SerializedProperty property)
+        {
+            bool blur = property.name == "_blur";
+            if (!blur && property.name != "_mask")
+            {
+                base.DrawField(property);
+                return;
+            }
+            bool composite = true, set = false;
+            foreach (var item in targets)
+            {
+                var node = (UINode)item;
+                composite &= node.CompositeGroup.Peek;
+                set |= blur ? node.Blur.Peek > 0.01f : node.Mask.Peek != null;
+            }
+            if (!composite && set)
+                EditorGUILayout.HelpBox((blur ? "Blur" : "A mask") + " applies only to a composite group.", MessageType.Warning);
+            using (new EditorGUI.DisabledScope(!composite))
+                base.DrawField(property);
+        }
     }
 
     [CustomEditor(typeof(Box)), CanEditMultipleObjects]

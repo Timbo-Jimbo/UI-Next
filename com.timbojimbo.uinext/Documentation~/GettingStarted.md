@@ -57,6 +57,10 @@ header.Child("Title").Label("**Inbox**  3 new", 20f);
 
 For drawing of your own, subclass `UIDrawable` and add primitives through the `Painter` it is given.
 
+A node's `Opacity` fades each part inside it on its own, so where parts overlap they show through each other. Turn on
+its `CompositeGroup` and it is drawn as one image first, which fades as a whole; `Blur` and `Mask` blur and cut that
+image, so they apply only to a composite group.
+
 ## 5. Values and state
 
 Every property is a `UIValue<T>`: a literal, a token or a binding, with variants for states.

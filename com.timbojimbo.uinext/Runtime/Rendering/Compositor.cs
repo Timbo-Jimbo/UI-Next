@@ -454,7 +454,7 @@ namespace TimboJimbo.UINext
                 Target = target,
                 Region = region,
                 Blur = blur * scale,
-                Mask = node.Mask.Peek,
+                Mask = node.CompositeGroup.Peek ? node.Mask.Peek : null,
                 MaskSize = tree.Slots[node.Index].SizeOpacity,
                 MaskInverse = tree.World[node.Index].Inverse,
             });
