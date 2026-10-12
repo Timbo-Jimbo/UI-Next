@@ -755,13 +755,13 @@ namespace TimboJimboEditor.UINext.Demos
             return prefab;
         }
 
-        // An emoji of the showcase's own, made once as a sprite beside its scene: a shape in one colour, `inside` saying
-        // whether a point is in it (0 to 1 each way, y up), smoothed by sampling each pixel sixteen times.
+        // An emoji of the showcase's own, made once as a sprite beside its scene ("Emoji Heart.png"): a shape in one colour,
+        // `inside` saying whether a point is in it (0 to 1 each way, y up), smoothed by sampling each pixel sixteen times.
+        // Whatever is at its path already is kept, a sprite or not.
         private static Sprite Emoji(string name, Color colour, System.Func<float, float, bool> inside)
         {
-            string path = Folder + "/" + name + ".png";
-            var existing = AssetDatabase.LoadAssetAtPath<Sprite>(path);
-            if (existing != null) return existing;
+            string path = Folder + "/Emoji " + name + ".png";
+            if (AssetDatabase.LoadMainAssetAtPath(path) != null) return AssetDatabase.LoadAssetAtPath<Sprite>(path);
             const int size = 64, samples = 4;
             var pixels = new Color32[size * size];
             Color32 fill = colour;
