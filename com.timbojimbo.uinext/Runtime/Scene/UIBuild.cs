@@ -136,6 +136,15 @@ namespace TimboJimbo.UINext
             return image;
         }
 
+        /// <summary>An image loaded from <paramref name="url"/>: the node fits it once it arrives unless sized otherwise.</summary>
+        public static Image Image(this UINode node, string url, ImageFit fit = ImageFit.Cover)
+        {
+            var image = node.gameObject.AddComponent<Image>();
+            image.Url.Value = url;
+            image.Fit.Value = fit;
+            return image;
+        }
+
         /// <summary>Makes the node a button, raising <paramref name="tapped"/> when tapped.</summary>
         public static Pressable Pressable(this UINode node, Action tapped = null)
         {

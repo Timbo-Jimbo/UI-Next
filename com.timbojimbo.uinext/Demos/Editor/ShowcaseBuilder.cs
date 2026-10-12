@@ -22,6 +22,14 @@ namespace TimboJimboEditor.UINext.Demos
         private static readonly Color Text = new Color32(0x12, 0x12, 0x16, 0xFF);
         private static readonly Color Secondary = new Color32(0x6E, 0x6E, 0x78, 0xFF);
         private static readonly Color Accent = new Color32(0x34, 0x78, 0xF6, 0xFF);
+
+        // Photos on a CDN, for the Images page.
+        private static readonly string[] WebPhotos =
+        {
+            "https://cdn.staticshiftracing.com/build-share-dev/0b0ec06f-bdae-4576-b2f2-a1f160a965cc.jpeg",
+            "https://cdn.staticshiftracing.com/build-share-dev/e182026f-c3e8-4d0c-aaec-31b56eb608fa.jpeg",
+            "https://cdn.staticshiftracing.com/build-share-dev/f84c08c0-d8bd-46ab-b3c2-720c3c72301a.jpeg",
+        };
         private static readonly Color Pressed = new(0.5f, 0.5f, 0.55f, 0.18f);
         private static readonly Color[] Palette =
         {
@@ -494,13 +502,25 @@ namespace TimboJimboEditor.UINext.Demos
         }
 #endif
 
-        // Images: one small sprite nine-sliced to sizes of every shape, its corners kept as it stretches.
+        // Images: one small sprite nine-sliced to sizes of every shape, its corners kept as it stretches, and photos loaded
+        // from the web, saying so while they load.
         private static void ImagesPage(UINode page, UINode body)
         {
             var frame = SlicedSprite("Frame", 48, 16, Frame);
             var sliced = Panel(Case(body, "One sprite, sliced to any size").Row(10f), 14f);
             foreach (var (name, width, height) in new[] { ("Small", Sizing.Fixed(48f), 48f), ("Wide", Sizing.Fixed(120f), 48f), ("Large", Sizing.Grow(), 110f) })
                 sliced.Child(name).Sized(width, Sizing.Fixed(height)).Image(frame, ImageFit.Sliced).Tint.Value = Accent;
+
+            var web = Panel(Case(body, "From the web, fading in as they arrive").Row(10f), 14f);
+            for (int i = 0; i < WebPhotos.Length; i++)
+            {
+                var photo = web.Child("Photo " + (i + 1)).Sized(Sizing.Grow(), Sizing.Fixed(110f)).Center();
+                photo.Box(Background, 12f);
+                photo.Image(WebPhotos[i]).CornerRadii.Value = 12f;
+                var loading = photo.Child("Loading").Label("Loading…", 12f, Secondary);
+                loading.Node.Opacity.Value = 0f;
+                loading.Node.Opacity.When(UIStates.Loading, 1f);
+            }
         }
 
         private static void ScrollPage(UINode page, UINode body)
