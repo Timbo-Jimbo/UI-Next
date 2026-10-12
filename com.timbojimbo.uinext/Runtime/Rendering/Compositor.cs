@@ -269,13 +269,13 @@ namespace TimboJimbo.UINext
         // What had focus when the focus path was last drawn.
         private static UINode s_debugFocused;
 
-        private static readonly Color DebugFocused = Color.white;
-        private static readonly Color DebugSection = new(0.2f, 0.85f, 0.75f, 1f);
-        private static readonly Color DebugGroup = new(1f, 0.6f, 0.15f, 1f);
-        private static readonly Color DebugFading = new(0.25f, 0.85f, 1f, 1f);
-        private static readonly Color DebugBlurred = new(1f, 0.3f, 0.9f, 1f);
-        private static readonly Color DebugMasked = new(1f, 0.9f, 0.2f, 1f);
-        private static readonly Color DebugFlight = new(0.4f, 1f, 0.4f, 1f);
+        internal static readonly Color DebugFocused = Color.white;
+        internal static readonly Color DebugSection = new(0.2f, 0.85f, 0.75f, 1f);
+        internal static readonly Color DebugGroup = new(1f, 0.6f, 0.15f, 1f);
+        internal static readonly Color DebugFading = new(0.25f, 0.85f, 1f, 1f);
+        internal static readonly Color DebugBlurred = new(1f, 0.3f, 0.9f, 1f);
+        internal static readonly Color DebugMasked = new(1f, 0.9f, 0.2f, 1f);
+        internal static readonly Color DebugFlight = new(0.4f, 1f, 0.4f, 1f);
 
         // Under a tree's UI in the overdraw view: its root darkened, so the heat reads over whatever is behind.
         private static void EmitOverdrawBackdrop(UITree tree)

@@ -14,9 +14,8 @@ namespace TimboJimboEditor.UINext
     /// in the project, in those groups, lit while it is active for the selection; a press turns one on or off. Two with
     /// the same name are told apart by their folder. Clear preview takes back everything the preview turned on.
     /// </summary>
-    internal sealed class StatesPopup : PopupWindowContent
+    internal sealed class StatesPopup : ToolbarPopup
     {
-        private const float Width = 330f;
 
         private static readonly (string Name, InteractionStates State)[] s_interaction =
         {
@@ -28,29 +27,15 @@ namespace TimboJimboEditor.UINext
             ("Disabled", InteractionStates.Disabled),
         };
 
-        internal static readonly Color Lit = new(0.17f, 0.36f, 0.53f);
-
-        private VisualElement _content;
         private Label _target;
         private Button _clear;
-        private float _height = 200f;
         private readonly List<(Button Button, System.Func<UINode, bool> Active)> _buttons = new();
 
-        // Sized to what it holds, measured once it is laid out.
-        public override Vector2 GetWindowSize() => new(Width, _height);
-
-        public override void OnGUI(Rect rect) { }
+        protected override float Width => 330f;
 
         public override void OnOpen()
         {
-            _content = new VisualElement { style = { paddingLeft = 8, paddingRight = 8, paddingTop = 6, paddingBottom = 8 } };
-            _content.RegisterCallback<GeometryChangedEvent>(e =>
-            {
-                _height = Mathf.Ceil(e.newRect.height);
-                editorWindow.Repaint();
-            });
-            editorWindow.rootVisualElement.Add(_content);
-            Build();
+            base.OnOpen();
             Selection.selectionChanged += Refresh;
             UIStatePreview.Changed += Refresh;
         }
@@ -62,14 +47,14 @@ namespace TimboJimboEditor.UINext
         }
 
         // What it previews on, then the interaction states, the modes and the states of your own, each a group.
-        private void Build()
+        protected override void Build()
         {
             var header = new VisualElement { style = { flexDirection = FlexDirection.Row, alignItems = Align.Center, marginBottom = 4 } };
             _target = new Label { style = { flexGrow = 1, flexShrink = 1, unityFontStyleAndWeight = FontStyle.Bold } };
             header.Add(_target);
             _clear = new Button(UIStatePreview.Clear) { text = "Clear preview", tooltip = "Take back every state the preview turned on." };
             header.Add(_clear);
-            _content.Add(header);
+            Content.Add(header);
 
             var row = Group("Interaction", "States a button gives what is inside it as it is used.");
             foreach (var (name, state) in s_interaction)
@@ -93,16 +78,16 @@ namespace TimboJimboEditor.UINext
             {
                 style = { marginTop = 6, opacity = 0.6f, whiteSpace = WhiteSpace.Normal, fontSize = 10 },
             };
-            _content.Add(note);
+            Content.Add(note);
             Refresh();
         }
 
         // A group's heading, and the row its buttons wrap in.
         private VisualElement Group(string title, string tip)
         {
-            _content.Add(new Label(title) { tooltip = tip, style = { marginTop = 6, marginBottom = 1, opacity = 0.75f, fontSize = 10 } });
+            Content.Add(new Label(title) { tooltip = tip, style = { marginTop = 6, marginBottom = 1, opacity = 0.75f, fontSize = 10 } });
             var row = new VisualElement { style = { flexDirection = FlexDirection.Row, flexWrap = UnityEngine.UIElements.Wrap.Wrap } };
-            _content.Add(row);
+            Content.Add(row);
             return row;
         }
 
@@ -142,7 +127,7 @@ namespace TimboJimboEditor.UINext
         // What it previews on, and the buttons of what is active for it lit.
         private void Refresh()
         {
-            if (_content == null) return;
+            if (Content == null) return;
             var node = Selected();
             _target.text = node != null ? "Previewing on: " + node.name : "Select a UI node to preview states on it";
             _clear.SetEnabled(UIStatePreview.IsPreviewing);
@@ -150,7 +135,7 @@ namespace TimboJimboEditor.UINext
             {
                 button.SetEnabled(node != null);
                 bool lit = node != null && active(node);
-                button.style.backgroundColor = lit ? new StyleColor(Lit) : new StyleColor(StyleKeyword.Null);
+                button.style.backgroundColor = lit ? new StyleColor(UINextToolbar.Lit) : new StyleColor(StyleKeyword.Null);
             }
         }
 
