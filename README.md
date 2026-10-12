@@ -4,6 +4,8 @@ A UI stack owned end to end, as the design in `Design/UIStack.md` lays it out: l
 
 Requires Unity 6000.5 or newer, URP 17.5 (render graph), the Input System, and the Core and UI Text packages. Text fields also need UI Text Input; without it they are left out and the rest works.
 
+New to it? [Getting started](com.timbojimbo.uinext/Documentation~/GettingStarted.md) walks through a first screen: a root, layout, drawing, values and states, animation, input, presentations, focus and the tools.
+
 ## How it works
 
 - **Reactive core.** `Observable<T>` and computations in three phases, model, layout and draw, run earliest first. Every value read while laying out or drawing is tracked, so a frame where nothing changed runs nothing.
