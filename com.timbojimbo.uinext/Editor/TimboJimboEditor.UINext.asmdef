@@ -6,6 +6,7 @@
         "Unity.InputSystem",
         "TimboJimbo.UI.Text.Runtime",
         "TimboJimbo.Core.Runtime",
+        "TimboJimboEditor.Core",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime"
     ],

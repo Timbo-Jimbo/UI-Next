@@ -166,7 +166,9 @@ The focus ring's look is on the root: `FocusRingColor`, `FocusRingWidth`, `Focus
 
 ## 10. Tools
 
-- **Inspectors** in sections, small choices as buttons, and a link at the end of any value that can take a token.
+- **Inspectors** in sections that fold away (a closed one says how many of its fields are set), small choices as
+  buttons, and a link at the end of any value that can take a token. A node's size, float and drawn transform are
+  always shown first, with a 3×3 grid beside Width and Height of the common sizes: fit, fixed or grow on each axis.
 - **UI States** (a toolbar among the Scene view's overlays) previews interaction states, modes and states of your own
   on the selected node, in the Scene and Game views; nothing is saved, and Clear preview takes it all back.
 - **The Rendering Debugger's UI Next panel** (**Window → Analysis → Rendering Debugger**, and in a development build its

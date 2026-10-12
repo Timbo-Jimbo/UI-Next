@@ -28,6 +28,63 @@ namespace TimboJimboEditor.UINext
 
         private static readonly Dictionary<Type, GUIContent[]> s_contents = new();
         private static readonly Dictionary<Type, (GUIContent Content, int Bit)[]> s_flags = new();
+        private static GUIContent[] s_pointTips;
+
+        private const float GridGap = 2f;
+
+        /// <summary>
+        /// Nine lit buttons in three rows of three, read left to right and top to bottom, the chosen one lit (none for
+        /// -1), each drawn over by <paramref name="drawCell"/> (its rect, its index, whether it is lit): the one clicked,
+        /// or <paramref name="chosen"/>.
+        /// </summary>
+        public static int Grid(Rect rect, int chosen, GUIContent[] tips, Action<Rect, int, bool> drawCell)
+        {
+            float width = (rect.width - 2f * GridGap) / 3f;
+            float height = (rect.height - 2f * GridGap) / 3f;
+            int picked = chosen;
+            for (int i = 0; i < 9; i++)
+            {
+                var cell = new Rect(Mathf.Round(rect.x + i % 3 * (width + GridGap)), Mathf.Round(rect.y + i / 3 * (height + GridGap)),
+                    Mathf.Round(width), Mathf.Round(height));
+                bool on = i == chosen;
+                if (GUI.Toggle(cell, on, tips[i], EditorStyles.miniButton) != on)
+                    picked = i;
+                if (Event.current.type == EventType.Repaint)
+                    drawCell(cell, i, on);
+            }
+            return picked;
+        }
+
+        /// <summary>The nine points of a rect, top left to bottom right, as tooltips for a <see cref="Grid"/> picking one.</summary>
+        public static GUIContent[] PointTips
+        {
+            get
+            {
+                if (s_pointTips != null) return s_pointTips;
+                string[] across = { "left", "centre", "right" };
+                string[] down = { "Top", "Middle", "Bottom" };
+                s_pointTips = new GUIContent[9];
+                for (int i = 0; i < 9; i++)
+                    s_pointTips[i] = new GUIContent("", down[i / 3] + " " + across[i % 3]);
+                return s_pointTips;
+            }
+        }
+
+        /// <summary>A point in a grid's cell, bigger lit: a <see cref="Grid"/> of them picks one of a rect's points.</summary>
+        public static void Dot(Rect cell, int index, bool on)
+        {
+            float size = on ? 4f : 2f;
+            EditorGUI.DrawRect(new Rect(Mathf.Round(cell.center.x - size * 0.5f), Mathf.Round(cell.center.y - size * 0.5f), size, size),
+                Ink(on, on ? 1f : 0.6f));
+        }
+
+        /// <summary>What to draw with on a lit button or an unlit one: its text colour, at this opacity.</summary>
+        public static Color Ink(bool on, float alpha)
+        {
+            var colour = on ? EditorStyles.miniButton.onNormal.textColor : EditorStyles.miniButton.normal.textColor;
+            colour.a *= alpha;
+            return colour;
+        }
 
         /// <summary>Whether an enum is drawn as buttons: a handful of values, none of them flags.</summary>
         public static bool Suits(Type type) => type != null && type.IsEnum && !IsFlags(type) && System.Enum.GetValues(type).Length <= 4;

@@ -34,14 +34,17 @@ namespace TimboJimboEditor.UINext
             var variants = property.FindPropertyRelative("_variants");
             if (variants == null || property.FindPropertyRelative("_value") == null) return;
             var copy = property.Copy();
-            menu.AddItem(new GUIContent("Add Variant"), false, () =>
-            {
-                var list = copy.FindPropertyRelative("_variants");
-                list.arraySize++;
-                list.isExpanded = true;
-                copy.serializedObject.ApplyModifiedProperties();
-            });
+            menu.AddItem(new GUIContent("Add Variant"), false, () => AddVariant(copy));
         };
+
+        /// <summary>Adds a variant to a value, opening its list.</summary>
+        internal static void AddVariant(SerializedProperty value)
+        {
+            var list = value.FindPropertyRelative("_variants");
+            list.arraySize++;
+            list.isExpanded = true;
+            value.serializedObject.ApplyModifiedProperties();
+        }
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
         {
@@ -193,7 +196,10 @@ namespace TimboJimboEditor.UINext
         }
     }
 
-    /// <summary>A size on one line: how it is sized, as lit buttons, and the number that goes with it (fixed or percent); min and max under the foldout.</summary>
+    /// <summary>
+    /// A size on one line: how it is sized, as lit buttons, and the number that goes with it (fixed or percent); min and
+    /// max, which bound every size but a fixed one, under the foldout.
+    /// </summary>
     [CustomPropertyDrawer(typeof(Sizing))]
     internal sealed class SizingDrawer : PropertyDrawer
     {
@@ -203,7 +209,37 @@ namespace TimboJimboEditor.UINext
         };
 
         public override float GetPropertyHeight(SerializedProperty property, GUIContent label) =>
-            EditorGUIUtility.singleLineHeight * (property.isExpanded ? 2f : 1f) + (property.isExpanded ? EditorGUIUtility.standardVerticalSpacing : 0f);
+            Bounded(property) ? EditorGUIUtility.singleLineHeight * 2f + EditorGUIUtility.standardVerticalSpacing : EditorGUIUtility.singleLineHeight;
+
+        // Whether its min and max are shown: opened, and not fixed.
+        private static bool Bounded(SerializedProperty property) =>
+            property.isExpanded && (SizingMode)property.FindPropertyRelative("Mode").intValue != SizingMode.Fixed;
+
+        /// <summary>
+        /// Sets how a size is given, starting its number where it shows the same size: a fixed size at what it is laid out
+        /// at now (<paramref name="laidOut"/>, when that is known), a percentage at all of its parent unless it is a part
+        /// already.
+        /// </summary>
+        public static void SetMode(SerializedProperty sizing, SizingMode to, float laidOut)
+        {
+            var mode = sizing.FindPropertyRelative("Mode");
+            if (!mode.hasMultipleDifferentValues && (SizingMode)mode.intValue == to) return;
+            var value = sizing.FindPropertyRelative("Value");
+            if (to == SizingMode.Fixed)
+                value.floatValue = laidOut > 0f ? Mathf.Round(laidOut) : value.floatValue > 1f ? value.floatValue : 100f;
+            else if (to == SizingMode.Percent && (value.floatValue <= 0f || value.floatValue > 1f))
+                value.floatValue = 1f;
+            mode.intValue = (int)to;
+        }
+
+        // The size a node is laid out at now along the axis of its width or height, which this is (or a variant of); 0
+        // for anything else.
+        private static float LaidOut(SerializedProperty sizing)
+        {
+            if (sizing.serializedObject.targetObject is not UINode node) return 0f;
+            string path = sizing.propertyPath;
+            return path.StartsWith("_width") ? node.Size.x : path.StartsWith("_height") ? node.Size.y : 0f;
+        }
 
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
@@ -214,19 +250,20 @@ namespace TimboJimboEditor.UINext
             var min = property.FindPropertyRelative("Min");
             var max = property.FindPropertyRelative("Max");
             var first = new Rect(position.x, position.y, position.width, line);
-            property.isExpanded = EditorGUI.Foldout(new Rect(first.x, first.y, EditorGUIUtility.labelWidth, line), property.isExpanded, GUIContent.none, true);
+            var sizing = (SizingMode)mode.intValue;
+            if (sizing != SizingMode.Fixed)
+                property.isExpanded = EditorGUI.Foldout(new Rect(first.x, first.y, EditorGUIUtility.labelWidth, line), property.isExpanded, GUIContent.none, true);
             var field = EditorGUI.PrefixLabel(first, label);
             int indent = EditorGUI.indentLevel;
             EditorGUI.indentLevel = 0;
-            var sizing = (SizingMode)mode.enumValueIndex;
             bool hasValue = sizing is SizingMode.Fixed or SizingMode.Percent;
             float modeWidth = hasValue ? Mathf.Max(field.width * 0.6f, field.width - 70f) : field.width;
             int chosen = GUI.Toolbar(new Rect(field.x, field.y, modeWidth, line), Mathf.Clamp(mode.enumValueIndex, 0, Modes.Length - 1), Modes, EditorStyles.miniButton);
             if (chosen != mode.enumValueIndex)
-                mode.enumValueIndex = chosen;
+                SetMode(property, (SizingMode)chosen, LaidOut(property));
             if (hasValue)
                 EditorGUI.PropertyField(new Rect(field.x + modeWidth + 2f, field.y, field.width - modeWidth - 2f, line), value, GUIContent.none);
-            if (property.isExpanded)
+            if (Bounded(property))
             {
                 var second = new Rect(field.x, field.y + line + EditorGUIUtility.standardVerticalSpacing, field.width, line);
                 float half = (second.width - 4f) * 0.5f;
@@ -271,6 +308,78 @@ namespace TimboJimboEditor.UINext
                 EditorGUI.PropertyField(new Rect(field.x + modeWidth + 2f, field.y, field.width - modeWidth - 2f, field.height), number, GUIContent.none);
             EditorGUI.indentLevel = indent;
             EditorGUI.EndProperty();
+        }
+    }
+
+    /// <summary>
+    /// Floating as one line of lit buttons, what it is attached to; floating, under it: the element (attached to one),
+    /// which of its points goes on which of that one's, as two 3×3 grids, and the offset from there.
+    /// </summary>
+    [CustomPropertyDrawer(typeof(Floating))]
+    internal sealed class FloatingDrawer : PropertyDrawer
+    {
+        private const float GridWidth = 44f;
+        private const float GridHeight = 38f;
+        private const float Gap = 6f;
+
+        private static readonly GUIContent PointLabel = new("Point", "Which of its points goes on which point of what it is attached to.");
+
+        public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
+        {
+            float line = EditorGUIUtility.singleLineHeight;
+            float space = EditorGUIUtility.standardVerticalSpacing;
+            var attach = (FloatingAttach)property.FindPropertyRelative("AttachTo").intValue;
+            if (attach == FloatingAttach.None) return line;
+            float height = line + space + GridHeight + space + EditorGUI.GetPropertyHeight(property.FindPropertyRelative("Offset"));
+            return attach == FloatingAttach.Element ? height + space + line : height;
+        }
+
+        public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
+        {
+            EditorGUI.BeginProperty(position, label, property);
+            float line = EditorGUIUtility.singleLineHeight;
+            float space = EditorGUIUtility.standardVerticalSpacing;
+            var attachTo = property.FindPropertyRelative("AttachTo");
+            var row = new Rect(position.x, position.y, position.width, line);
+            var field = EditorGUI.PrefixLabel(row, label);
+            int indent = EditorGUI.indentLevel;
+            EditorGUI.indentLevel = 0;
+            LitButtons.Choice(field, attachTo, typeof(FloatingAttach));
+            EditorGUI.indentLevel = indent;
+
+            var attach = (FloatingAttach)attachTo.intValue;
+            if (attach != FloatingAttach.None)
+            {
+                EditorGUI.indentLevel = indent + 1;
+                float y = row.yMax + space;
+                if (attach == FloatingAttach.Element)
+                {
+                    EditorGUI.PropertyField(new Rect(position.x, y, position.width, line), property.FindPropertyRelative("Element"));
+                    y += line + space;
+                }
+
+                var points = EditorGUI.PrefixLabel(new Rect(position.x, y, position.width, GridHeight), PointLabel);
+                Pick(new Rect(points.x, points.y, GridWidth, GridHeight), property.FindPropertyRelative("Point"));
+                var on = new GUIContent(attach == FloatingAttach.Parent ? "on its parent's" : attach == FloatingAttach.Root ? "on the root's" : "on the element's");
+                var onRect = new Rect(points.x + GridWidth + Gap, points.y + (GridHeight - line) * 0.5f, EditorStyles.miniLabel.CalcSize(on).x, line);
+                GUI.Label(onRect, on, EditorStyles.miniLabel);
+                Pick(new Rect(onRect.xMax + Gap, points.y, GridWidth, GridHeight), property.FindPropertyRelative("TargetPoint"));
+                y += GridHeight + space;
+
+                var offset = property.FindPropertyRelative("Offset");
+                EditorGUI.PropertyField(new Rect(position.x, y, position.width, EditorGUI.GetPropertyHeight(offset)), offset);
+                EditorGUI.indentLevel = indent;
+            }
+            EditorGUI.EndProperty();
+        }
+
+        // An attach point as a 3×3 grid of points, the one it is lit.
+        private static void Pick(Rect rect, SerializedProperty point)
+        {
+            int chosen = point.hasMultipleDifferentValues ? -1 : point.intValue;
+            int picked = LitButtons.Grid(rect, chosen, LitButtons.PointTips, LitButtons.Dot);
+            if (picked != chosen)
+                point.intValue = picked;
         }
     }
 
