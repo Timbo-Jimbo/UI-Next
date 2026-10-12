@@ -7,6 +7,7 @@
 - `UINode.GroupOpacity` is `CompositeGroup`, as SwiftUI's `compositingGroup`: a node and what is inside it drawn as one image first, so its opacity, blur and mask apply to that image as a whole. Scenes and prefabs keep the old field's value.
   - Blur and masks apply only to a composite group, rather than silently making a node one: without it they do nothing, are greyed out in the inspector (with a note when set anyway), and are warned of once at run time.
   - The inspector's Effects section is two: Compositing (composite group, blur, mask) and Colour (saturation, brightness).
+- A floating node grows to fill, or takes a percentage of, the rect it is placed against: its parent's whole rect, padding and all (the root's safe rect, for one floating against the root), as Clay's floating elements and CSS's absolutely positioned boxes are. It was sized to the parent's content box, inside its padding, while placed against the whole rect, so a background that grew both ways came up short, and off-centre with uneven padding. To keep one inside the padding, put it in an inner node, or pad it as its parent is for what it holds.
 - Editor: the state bar is the *UI States* toolbar among the Scene view's overlays, one dropdown lit with how many states are previewed, opening a popup that says what it previews on, labels its groups Interaction, Modes and States, tells two of a name apart by their folder, and has Clear preview. Its icon is Unity's own unless States.png is in the package's Editor/Icons folder.
 
 ### Removed

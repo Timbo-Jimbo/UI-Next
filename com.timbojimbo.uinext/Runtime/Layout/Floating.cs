@@ -6,8 +6,10 @@ namespace TimboJimbo.UINext
     /// <summary>
     /// Floats a node out of its parent's flow, as Clay's floating elements: it takes no space there, and is placed so
     /// that its <see cref="Point"/> meets <see cref="TargetPoint"/> on what it is attached to (its parent, its root, or
-    /// an <see cref="Element"/>), moved by <see cref="Offset"/>. It is still sized as any node is, a percentage of what
-    /// it is attached to or growing to it.
+    /// an <see cref="Element"/>), moved by <see cref="Offset"/>. It is still sized as any node is, growing to fill what
+    /// it is attached to or a percentage of it: of its whole rect, padding and all (the root's safe rect, for one
+    /// attached to the root), as Clay's floating elements and CSS's absolutely positioned boxes are, so a background
+    /// that grows both ways reaches its parent's edges.
     /// </summary>
     [Serializable]
     public struct Floating

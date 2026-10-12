@@ -42,6 +42,8 @@ var badge = card.Child("Badge").Float(AttachPoint.RightTop, AttachPoint.RightTop
 ```
 
 `Float` takes a node out of the flow and pins one of its points to its parent's (or to another node, `FloatOn`).
+Grown or sized in percent, it is measured against the whole of what it floats on, padding and all, so a background
+that grows both ways fills its parent to the edges.
 
 ## 4. Drawing
 

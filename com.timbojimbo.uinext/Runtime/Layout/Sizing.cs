@@ -13,7 +13,7 @@ namespace TimboJimbo.UINext
     {
         public SizingMode Mode;
 
-        [Tooltip("Fixed: the size. Percent: the part (0 to 1) of the parent's size inside its padding (along the parent's direction, of what its padding and gaps leave; along the way a scroll container scrolls, of what it shows).")]
+        [Tooltip("Fixed: the size. Percent: the part (0 to 1) of the parent's size inside its padding (along the parent's direction, of what its padding and gaps leave; along the way a scroll container scrolls, of what it shows; floating, of the whole of what it is attached to, padding and all).")]
         public float Value;
 
         [Tooltip("The smallest it is sized to (fit, grow and percent).")]

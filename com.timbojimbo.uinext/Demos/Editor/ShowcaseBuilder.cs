@@ -287,8 +287,8 @@ namespace TimboJimboEditor.UINext.Demos
                 speedCase.Child(name).Label(name, 13f, Secondary);
                 var track = speedCase.Child(name + " Slider").Sized(Sizing.Grow(), Sizing.Fixed(36f)).Pad(4f).Align(AlignX.Left, AlignY.Center);
                 track.Box(Card, 18f);
-                // Five steps, marked where the knob's middle comes to rest.
-                var marks = track.Child("Steps").Row().Float(AttachPoint.LeftTop, AttachPoint.LeftTop);
+                // Five steps, marked where the knob's middle comes to rest: over the whole track, padded as it is.
+                var marks = track.Child("Steps").Row().Pad(4f).Float(AttachPoint.LeftTop, AttachPoint.LeftTop);
                 marks.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
                 for (int i = 0; i < 5; i++)
                 {

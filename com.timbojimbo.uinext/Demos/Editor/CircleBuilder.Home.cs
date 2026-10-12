@@ -378,7 +378,6 @@ namespace TimboJimboEditor.UINext.Demos
 
             // The middle: a tap on its left side steps back a story and on its right on (clear buttons over it, which take
             // no focus); with keys it is one stop, which left and right step.
-            // Unpadded, so its sides, floating against it, meet in its middle.
             var middle = story.Child("Middle").Sized(Sizing.Grow(), Sizing.Grow()).Center();
             middle.Focusable.Value = Focusability.Always;
             middle.PrefersFocus.Value = true;

@@ -134,9 +134,8 @@ namespace TimboJimbo.UINext
         /// <remarks>
         /// Follows Clay's Clay__SizeContainersAlongAxis and Clay__CalculateFinalLayout, with these differences: content
         /// is measured through <see cref="IMeasurable"/> (unwrapped for the fit width, then wrapped to the final
-        /// width for the height, which is also the least a content node's height can be shrunk to); floating nodes
-        /// attached to their parent or the root grow or take a percentage of its content box (inside its padding)
-        /// rather than its whole rect, while one attached to an element takes the element's whole rect; the passes
+        /// width for the height, which is also the least a content node's height can be shrunk to); a floating node
+        /// attached to the root grows to or takes a percentage of its safe rect, which it is placed against; the passes
         /// that size and place go parents first but put a node attached to an element after the element, wherever it
         /// is in the tree; and a run that overflows its parent starts at the padding whatever the alignment. As in
         /// Clay, percent children along a parent's direction take their part of what its padding and the gaps between
@@ -556,7 +555,7 @@ namespace TimboJimbo.UINext
         // parent that wraps its children shares its size out line by line (DistributeWrapped).
         private static void DistributeAxis(SolverNode[] nodes, int axis)
         {
-            float rootContent = nodes[0].Size[axis] - PaddingOf(nodes[0], axis);
+            float rootSafe = WholeOf(nodes[0], axis);
 
             for (int p = 0; p >= 0; p = nodes[p].Next)
             {
@@ -566,10 +565,11 @@ namespace TimboJimbo.UINext
                 if (parent.FirstChild < 0) continue;
 
                 float content = parent.Size[axis] - PaddingOf(parent, axis);
+                float whole = WholeOf(parent, axis);
                 var wrap = WrapOf(parent);
                 if (wrap != LayoutWrapMode.None)
                 {
-                    DistributeWrapped(nodes, ref parent, axis, wrap, content, rootContent);
+                    DistributeWrapped(nodes, ref parent, axis, wrap, content, whole, rootSafe);
                     continue;
                 }
 
@@ -589,7 +589,7 @@ namespace TimboJimbo.UINext
 
                     if (child.Floating.IsFloating)
                     {
-                        SizeFloatingChild(ref child, sizing, axis, followsWidth, content, rootContent);
+                        SizeFloatingChild(ref child, sizing, axis, followsWidth, whole, rootSafe);
                         continue;
                     }
 
@@ -654,7 +654,7 @@ namespace TimboJimbo.UINext
         // as its thickest child, which its grow children fill, and percent children are a part of all of it. Floating
         // children are sized as DistributeAxis sizes them.
         private static void DistributeWrapped(SolverNode[] nodes, ref SolverNode parent, int axis, LayoutWrapMode wrap, float content,
-            float rootContent)
+            float whole, float rootSafe)
         {
             bool along = IsAlong(parent, axis);
             bool cells = along && wrap != LayoutWrapMode.Lines;
@@ -673,7 +673,7 @@ namespace TimboJimbo.UINext
                 bool followsWidth = axis == 1 && child.AspectRatio > 0f;
                 if (child.Floating.IsFloating)
                 {
-                    SizeFloatingChild(ref child, sizing, axis, followsWidth, content, rootContent);
+                    SizeFloatingChild(ref child, sizing, axis, followsWidth, whole, rootSafe);
                     continue;
                 }
                 if (followsWidth) continue;
@@ -779,18 +779,21 @@ namespace TimboJimbo.UINext
         }
 
         // A floating child, but for one attached to an element (sized in its own turn) or whose height follows its
-        // width, sized against its parent's content box, or the root's when it floats against the root (SizeFloating).
-        private static void SizeFloatingChild(ref SolverNode child, Sizing sizing, int axis, bool followsWidth, float content,
-            float rootContent)
+        // width, sized against its parent's whole rect, or the root's safe rect when it floats against the root
+        // (SizeFloating).
+        private static void SizeFloatingChild(ref SolverNode child, Sizing sizing, int axis, bool followsWidth, float whole,
+            float rootSafe)
         {
             if (!followsWidth && child.Floating.AttachTo != FloatingAttach.Element)
-                SizeFloating(ref child, sizing, axis, child.Floating.AttachTo == FloatingAttach.Root ? rootContent : content);
+                SizeFloating(ref child, sizing, axis, child.Floating.AttachTo == FloatingAttach.Root ? rootSafe : whole);
         }
 
-        // A floating child, sized against the content box of what it is attached to (the whole rect of an element, so
-        // a highlight that grows both ways fills the tab it is behind) as a child across that node's direction is: grow
-        // fills it and percent is a part of it. A fitted one keeps its own size even when wider (a tooltip may be wider
-        // than its button), as Clay's floating elements do.
+        // A floating child, sized against the rect it is placed against, as Clay's floating elements are and CSS's
+        // absolutely positioned boxes are (to their parent's padding box): its parent's whole rect, padding and all (as
+        // laid out, before it reaches out past the safe area), the root's safe rect, or an element's whole rect. Grow
+        // fills it, so a background that grows both ways reaches its parent's edges, and percent is a part of it. A
+        // fitted one keeps its own size even when wider (a tooltip may be wider than its button), as Clay's floating
+        // elements do.
         private static void SizeFloating(ref SolverNode child, Sizing sizing, int axis, float against)
         {
             if (sizing.Mode == SizingMode.Percent)
@@ -1207,6 +1210,11 @@ namespace TimboJimbo.UINext
         private static Sizing SizingOf(in SolverNode node, int axis) => axis == 0 ? node.Width : node.Height;
 
         private static float PaddingOf(in SolverNode node, int axis) => axis == 0 ? node.Padding.Horizontal : node.Padding.Vertical;
+
+        // Its size as laid out, before it reaches out past the safe area (for the root, its safe rect's): what a floating
+        // child is placed and sized against.
+        private static float WholeOf(in SolverNode node, int axis) =>
+            node.Size[axis] - (axis == 0 ? node.Reach.Horizontal : node.Reach.Vertical);
 
         // Whether the axis is the one the node lays its children out along.
         private static bool IsAlong(in SolverNode node, int axis) => (node.Direction == LayoutDirection.LeftToRight) == (axis == 0);
