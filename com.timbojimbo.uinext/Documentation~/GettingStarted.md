@@ -48,7 +48,7 @@ that grows both ways fills its parent to the edges.
 ## 4. Drawing
 
 Drawables draw in their node: `Box` (a rounded rect with a fill, border and shadow, each a colour or a gradient),
-`Label` (rich text, wrapped, with an optional outline and hard shadow) and `ImageView` (a sprite or texture). A label
+`Label` (rich text, wrapped, with an optional outline and hard shadow) and `Image` (a sprite or texture). A label
 reads its text with its `Markup` (a Markup asset, else the project's default, else the built-in Markdown): handlers
 in order, each finding text by its trigger and showing it as a span in a style of its own or as a node made from a
 prefab, an element in its line (a chip) or a block across the width (a code block), laid out with the text. A tap on

@@ -177,7 +177,7 @@ namespace TimboJimbo.UINext
         private static GameObject MakeImage()
         {
             var node = Template("Image");
-            node.Add<ImageView>().Fit.Value = ImageFit.Contain;
+            node.Add<Image>().Fit.Value = ImageFit.Contain;
             node.Add<TextImage>();
             return Made(node);
         }

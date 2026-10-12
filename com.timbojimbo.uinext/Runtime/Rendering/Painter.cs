@@ -136,6 +136,31 @@ namespace TimboJimbo.UINext
             }, texture);
         }
 
+        /// <summary>
+        /// A texture filling the node (inset by <paramref name="inset"/>) as a nine-slice: its <paramref name="uv"/> rect, an
+        /// image <paramref name="size"/> points big, keeps its <paramref name="border"/> (points in from each of its edges)
+        /// at that size while the edges between stretch along and the middle both ways, tinted by <paramref name="tint"/>
+        /// and cut to <paramref name="radii"/>. Borders the node is too small for shrink together to fit. It is sliced as it
+        /// is drawn, so it follows the node's drawn size as it springs.
+        /// </summary>
+        public void SlicedImageNode(Texture texture, Rect uv, Vector2 size, Insets border, Color tint, CornerRadii radii, Insets inset = default)
+        {
+            Add(new PrimitiveInstance
+            {
+                Rect = new Vector4(inset.Left, inset.Top, inset.Right, inset.Bottom),
+                Radii = radii.ToVector(),
+                Color = tint,
+                Color2 = new Vector4(Share(border.Left, size.x), Share(border.Top, size.y), Share(border.Right, size.x), Share(border.Bottom, size.y)),
+                Params = new Vector4(border.Left, border.Top, border.Right, border.Bottom),
+                Uv = new Vector4(uv.x, uv.y, uv.width, uv.height),
+                Type = (uint)PrimitiveType.Image,
+                Flags = (uint)(PrimitiveFlags.RelativeToNode | PrimitiveFlags.Sliced),
+            }, texture);
+        }
+
+        // How much of an image `size` long a border `border` long is.
+        private static float Share(float border, float size) => size > 0f ? Mathf.Clamp01(border / size) : 0f;
+
         /// <summary>A texture at <paramref name="rect"/> in the node's space.</summary>
         public void Image(Rect rect, Texture texture, Rect uv, Color tint, CornerRadii radii = default)
         {

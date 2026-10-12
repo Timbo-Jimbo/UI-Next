@@ -70,6 +70,7 @@ namespace TimboJimboEditor.UINext.Demos
             Add("🎨", "Tokens and themes", TokensPage);
             Add("🔤", "Text", TextPage);
             Add("📝", "Rich text", RichTextPage);
+            Add("🖼️", "Images", ImagesPage);
             Add("📜", "Scrolling", ScrollPage);
             Add("🪟", "Presentations", PresentPage);
             Add("✂️", "Clips and order", OrderPage);
@@ -493,6 +494,15 @@ namespace TimboJimboEditor.UINext.Demos
         }
 #endif
 
+        // Images: one small sprite nine-sliced to sizes of every shape, its corners kept as it stretches.
+        private static void ImagesPage(UINode page, UINode body)
+        {
+            var frame = SlicedSprite("Frame", 48, 16, Frame);
+            var sliced = Panel(Case(body, "One sprite, sliced to any size").Row(10f), 14f);
+            foreach (var (name, width, height) in new[] { ("Small", Sizing.Fixed(48f), 48f), ("Wide", Sizing.Fixed(120f), 48f), ("Large", Sizing.Grow(), 110f) })
+                sliced.Child(name).Sized(width, Sizing.Fixed(height)).Image(frame, ImageFit.Sliced).Tint.Value = Accent;
+        }
+
         private static void ScrollPage(UINode page, UINode body)
         {
             var pagesDemo = Case(body, "Paging (swipe)");
@@ -800,6 +810,53 @@ namespace TimboJimboEditor.UINext.Demos
             float x = (u - 0.5f) * 2.6f, y = (v - 0.42f) * 2.6f;
             float a = x * x + y * y - 1f;
             return a * a * a - x * x * y * y * y <= 0f;
+        }
+
+        // A sprite for the showcase to nine-slice, made once as a PNG beside its scene: white (tinted where it is drawn),
+        // `size` pixels square, its alpha from `alpha` (0 to 1 each way, y up) averaged over sixteen points a pixel, and
+        // `border` pixels in from each edge kept at their size as it stretches.
+        private static Sprite SlicedSprite(string name, int size, int border, System.Func<float, float, float> alpha)
+        {
+            string path = Folder + "/" + name + ".png";
+            if (AssetDatabase.LoadMainAssetAtPath(path) != null) return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            const int samples = 4;
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float sum = 0f;
+                    for (int sy = 0; sy < samples; sy++)
+                        for (int sx = 0; sx < samples; sx++)
+                            sum += Mathf.Clamp01(alpha((x + (sx + 0.5f) / samples) / size, (y + (sy + 0.5f) / samples) / size));
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(255f * sum / (samples * samples)));
+                }
+            }
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            System.IO.File.WriteAllBytes(FileUtil.GetPhysicalPath(path), texture.EncodeToPNG());
+            Object.DestroyImmediate(texture);
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.textureType = TextureImporterType.Sprite;
+            importer.spriteImportMode = SpriteImportMode.Single;
+            importer.spriteBorder = Vector4.one * border;
+            importer.alphaIsTransparency = true;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Sprite>(path);
+        }
+
+        // The Images page's frame (0 to 1 each way): a square with corners 14 of its 48 pixels round, a ring 3 pixels wide
+        // round its edge, and a faint fill inside.
+        private static float Frame(float u, float v)
+        {
+            const float size = 48f, radius = 14f, ring = 3f;
+            var q = new Vector2(Mathf.Abs(u - 0.5f), Mathf.Abs(v - 0.5f)) * size - Vector2.one * (size * 0.5f - radius);
+            float distance = Mathf.Min(Mathf.Max(q.x, q.y), 0f) + Vector2.Max(q, Vector2.zero).magnitude - radius;
+            return distance > 0f ? 0f : distance > -ring ? 1f : 0.2f;
         }
 
         // A mask texture for the showcase, made once as a PNG beside its scene: white, its alpha from `alpha` at each

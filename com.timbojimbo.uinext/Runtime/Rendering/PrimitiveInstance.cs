@@ -48,6 +48,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>Drawn by a debug view (<see cref="UIDebug"/>): drawn as it is in the overdraw view, not counted.</summary>
         Debug = 8,
+
+        /// <summary>An image drawn as a nine-slice: its borders in points in Params and as shares of its image in Color2 (each left, top, right, bottom).</summary>
+        Sliced = 16,
     }
 
     /// <summary>
@@ -62,7 +65,7 @@ namespace TimboJimbo.UINext
         public Vector4 Color;
         public Vector4 Color2;
 
-        // Shape: x border width, z gradient angle. Shadow: y blur. Image: (unused). Glyph SDF: y synthetic bold's
+        // Shape: x border width, z gradient angle. Shadow: y blur. Image: a nine-slice's borders. Glyph SDF: y synthetic bold's
         // widening and w an outline's width, as shares of the field (the outline in Color2), z italic's skew.
         public Vector4 Params;
 

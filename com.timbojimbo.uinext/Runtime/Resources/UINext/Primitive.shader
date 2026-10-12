@@ -117,6 +117,41 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 return min(max(q.x, q.y), 0) + length(max(q, 0)) - r;
             }
 
+            // One axis of a nine-slice: where a point `p` along a rect `size` long samples, as a share of its image from that
+            // axis's start, with borders `head` and `tail` long (points) that are `headShare` and `tailShare` of the image;
+            // `rate` is how fast that share moves per point. Borders longer together than the rect shrink alike to fit it.
+            float SliceAxis(float p, float size, float head, float tail, float headShare, float tailShare, out float rate)
+            {
+                float fit = min(1, size / max(head + tail, 1e-5));
+                head *= fit;
+                tail *= fit;
+                if (p < head)
+                {
+                    rate = headShare / max(head, 1e-5);
+                    return p * rate;
+                }
+                if (p > size - tail)
+                {
+                    rate = tailShare / max(tail, 1e-5);
+                    return 1 - (size - p) * rate;
+                }
+                rate = (1 - headShare - tailShare) / max(size - head - tail, 1e-5);
+                return headShare + (p - head) * rate;
+            }
+
+            // Where a point `p` in a nine-sliced image's rect (from its top-left corner, y down) samples its `uvRect`, and how
+            // fast that moves per point each way: `border` holds its borders in points and `share` the same as shares of its
+            // image, each left, top, right, bottom.
+            float2 SliceUv(float2 p, float2 size, float4 border, float4 share, float4 uvRect, out float2 rate)
+            {
+                float rateX, rateY;
+                float x = SliceAxis(p.x, size.x, border.x, border.z, share.x, share.z, rateX);
+                float y = SliceAxis(p.y, size.y, border.y, border.w, share.y, share.w, rateY);
+                // Textures run up from their bottom; this space runs down.
+                rate = float2(rateX * uvRect.z, -rateY * uvRect.w);
+                return float2(uvRect.x + x * uvRect.z, uvRect.y + (1 - y) * uvRect.w);
+            }
+
             Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
             {
                 Varyings o;
@@ -162,12 +197,22 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
                 float aa = max(max(localPixel.x, localPixel.y), 1e-5);
                 float2 rootPixel = fwidth(i.root);
                 float rootAA = max(max(rootPixel.x, rootPixel.y), 1e-5);
+                float2 localDx = ddx(i.local), localDy = ddy(i.local);
                 // Kept inside its own part of the texture: an image's crop or a glyph's cell in its atlas.
                 float2 uvMin = min(inst.uv.xy, inst.uv.xy + inst.uv.zw);
                 float2 uvMax = max(inst.uv.xy, inst.uv.xy + inst.uv.zw);
                 // Gradients taken before choosing the texture, so the choice is free to branch.
                 float2 uvDx = ddx(i.uv), uvDy = ddy(i.uv);
-                float2 uv = clamp(i.uv, uvMin, uvMax);
+                float2 uv = i.uv;
+                if ((inst.flags & 16u) != 0u)
+                {
+                    // A nine-slice samples by where the point is in its rect, its gradients following each part's stretch.
+                    float2 rate;
+                    uv = SliceUv(i.local + i.halfSize, i.halfSize * 2, inst.params, inst.color2, inst.uv, rate);
+                    uvDx = localDx * rate;
+                    uvDy = localDy * rate;
+                }
+                uv = clamp(uv, uvMin, uvMax);
                 float4 tex = SampleTexture(inst.textureIndex & 15u, uv, uvDx, uvDy);
                 float fieldPixel = max(fwidth(tex.a), 1e-4);
 

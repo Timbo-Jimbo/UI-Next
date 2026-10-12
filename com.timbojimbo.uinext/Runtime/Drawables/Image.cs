@@ -13,14 +13,21 @@ namespace TimboJimbo.UINext
 
         /// <summary>Covering the rect, keeping its aspect, the rest cropped.</summary>
         Cover,
+
+        /// <summary>
+        /// Stretched to the node's rect as a nine-slice: its sprite's borders (set in the Sprite Editor) keep their size in
+        /// points, shrinking together only where the node is smaller than they are, while the edges between them stretch
+        /// along and the middle both ways. An image with no borders is stretched whole.
+        /// </summary>
+        Sliced,
     }
 
     /// <summary>
-    /// A sprite or texture drawn in its node, cut to rounded corners (a circle for an avatar). Its node fits to its
-    /// native size, in points, when nothing else sizes it.
+    /// A sprite or texture drawn in its node, cut to rounded corners (a circle for an avatar), or a sprite nine-sliced to
+    /// any size (<see cref="ImageFit.Sliced"/>). Its node fits to its native size, in points, when nothing else sizes it.
     /// </summary>
-    [AddComponentMenu("Timbo Jimbo/UI Next/Image View")]
-    public sealed class ImageView : UIDrawable, IMeasurable
+    [AddComponentMenu("Timbo Jimbo/UI Next/Image")]
+    public sealed class Image : UIDrawable, IMeasurable
     {
         [SerializeField] private UIValue<Sprite> _sprite = new UIValue<Sprite>();
         [SerializeField] private UIValue<Texture> _texture = new UIValue<Texture>();
@@ -84,7 +91,15 @@ namespace TimboJimbo.UINext
             var fit = _fit.Value;
             var radii = _cornerRadii.Value;
             var tint = _tint.Value;
-            if (fit == ImageFit.Fill || native.x <= 0f || native.y <= 0f || size.x <= 0f || size.y <= 0f)
+            if (fit == ImageFit.Sliced && sprite != null && sprite.border != Vector4.zero)
+            {
+                // The sprite's borders (left, bottom, right, top, in its pixels) in points, as its size is measured.
+                float points = 100f / Mathf.Max(1f, sprite.pixelsPerUnit);
+                var border = sprite.border * points;
+                painter.SlicedImageNode(texture, uv, sprite.rect.size * points, new Insets(border.x, border.z, border.w, border.y), tint, radii);
+                return;
+            }
+            if (fit == ImageFit.Fill || fit == ImageFit.Sliced || native.x <= 0f || native.y <= 0f || size.x <= 0f || size.y <= 0f)
             {
                 painter.ImageNode(texture, uv, tint, radii);
                 return;

@@ -488,8 +488,8 @@ namespace TimboJimboEditor.UINext
         protected override Section[] Sections => s_sections;
     }
 
-    [CustomEditor(typeof(ImageView)), CanEditMultipleObjects]
-    internal sealed class ImageViewEditor : SectionedEditor
+    [CustomEditor(typeof(Image)), CanEditMultipleObjects]
+    internal sealed class ImageEditor : SectionedEditor
     {
         private static readonly Section[] s_sections =
         {

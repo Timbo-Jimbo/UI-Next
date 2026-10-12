@@ -1,3 +1,15 @@
+## [Unreleased]
+
+### Added
+
+- `ImageFit.Sliced`: a sprite nine-sliced, its borders (set in the Sprite Editor) keeping their size in points while the edges between them stretch along and the middle both ways. It is sliced as it is drawn, in one quad, so it follows its node's size as that springs. `Painter.SlicedImageNode` draws one.
+- `node.Image(sprite, fit)` adds an image, as `node.Box` and `node.Label` add theirs.
+- The Showcase has an Images page: one sprite, sliced to three sizes.
+
+### Changed
+
+- `ImageView` is `Image`, as `Box` and `Label` are; scenes keep their images.
+
 ## [0.4.0] - 13/10/2026
 
 ### Added
