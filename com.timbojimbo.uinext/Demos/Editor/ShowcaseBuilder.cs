@@ -503,7 +503,8 @@ namespace TimboJimboEditor.UINext.Demos
 #endif
 
         // Images: one small sprite nine-sliced to sizes of every shape, its corners kept as it stretches, and photos loaded
-        // from the web, saying so while they load.
+        // from the web as small copies, saying so while they load; a tap opens one full screen, where a larger copy loads
+        // over it (ImagesDemo).
         private static void ImagesPage(UINode page, UINode body)
         {
             var frame = SlicedSprite("Frame", 48, 16, Frame);
@@ -511,16 +512,62 @@ namespace TimboJimboEditor.UINext.Demos
             foreach (var (name, width, height) in new[] { ("Small", Sizing.Fixed(48f), 48f), ("Wide", Sizing.Fixed(120f), 48f), ("Large", Sizing.Grow(), 110f) })
                 sliced.Child(name).Sized(width, Sizing.Fixed(height)).Image(frame, ImageFit.Sliced).Tint.Value = Accent;
 
-            var web = Panel(Case(body, "From the web, fading in as they arrive").Row(10f), 14f);
+            var web = Panel(Case(body, "From the web (tap one)").Column(12f), 14f);
+            var row = web.Child("Photos").Row(10f);
+            row.Width.Value = Sizing.Grow();
+            var photos = new List<Pressable>();
             for (int i = 0; i < WebPhotos.Length; i++)
             {
-                var photo = web.Child("Photo " + (i + 1)).Sized(Sizing.Grow(), Sizing.Fixed(110f)).Center();
-                photo.Box(Background, 12f);
-                photo.Image(WebPhotos[i]).CornerRadii.Value = 12f;
-                var loading = photo.Child("Loading").Label("Loading…", 12f, Secondary);
-                loading.Node.Opacity.Value = 0f;
-                loading.Node.Opacity.When(UIStates.Loading, 1f);
+                var photo = row.Child("Photo " + (i + 1)).Center();
+                photo.Width.Value = Sizing.Grow();
+                photo.AspectRatio.Value = 4f / 3f;
+                photo.MatchName.Value = "Web photo";
+                photo.MatchId.Value = i.ToString();
+                photo.Box(Background, 10f);
+                photo.Image(ImagesDemo.Small(WebPhotos[i])).CornerRadii.Value = 10f;
+                LoadingNote(photo);
+                photos.Add(photo.Pressable());
+                photo.Scale.When(InteractionStates.Pressed, 0.96f);
             }
+            var clear = Button(web, "Clear the cache", Accent, Color.white);
+
+            // Full screen: the photo across the width over a black backdrop, its small copy at once and a large one loading
+            // over it, closed by a tap or back.
+            var app = page.transform.parent.GetComponent<UINode>();
+            var host = app.Child("Photo Viewer").Column().Center();
+            var viewer = host.Add<Presentation>();
+            viewer.Transition = PresentationTransition.None;
+            viewer.Dim.Value = Color.clear;
+            viewer.DismissOnBackdrop = false;
+            var backdrop = host.Child("Backdrop").Float(AttachPoint.LeftTop, AttachPoint.LeftTop);
+            backdrop.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
+            backdrop.IgnoresSafeArea.Value = Edges.All;
+            backdrop.Box(Color.black);
+            backdrop.Opacity.Value = 0f;
+            backdrop.Focusable.Value = Focusability.Never;
+            backdrop.Pressable();
+            var shown = host.Child("Photo");
+            shown.Width.Value = Sizing.Grow();
+            shown.AspectRatio.Value = 4f / 3f;
+            shown.MatchName.Value = "Web photo";
+            var small = shown.Image("");
+            var large = shown.Child("Large").Float(AttachPoint.LeftTop, AttachPoint.LeftTop).Center();
+            large.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
+            var largeImage = large.Image("");
+            LoadingNote(large);
+            shown.Pressable();
+
+            page.Add<ImagesDemo>().Setup(photos, new List<string>(WebPhotos), clear, viewer, backdrop, shown, small, largeImage);
+        }
+
+        // A "Loading…" pill in the middle of an image's node, there only while its image loads.
+        private static void LoadingNote(UINode node)
+        {
+            var note = node.Child("Loading").Pad(10f, 4f).Center();
+            note.Box(new Color(0f, 0f, 0f, 0.45f), 999f);
+            note.Child("Text").Label("Loading…", 12f, Color.white);
+            note.Opacity.Value = 0f;
+            note.Opacity.When(UIStates.Loading, 1f);
         }
 
         private static void ScrollPage(UINode page, UINode body)

@@ -4,8 +4,8 @@
 
 - `ImageFit.Sliced`: a sprite nine-sliced, its borders (set in the Sprite Editor) keeping their size in points while the edges between them stretch along and the middle both ways. It is sliced as it is drawn, in one quad, so it follows its node's size as that springs. `Painter.SlicedImageNode` draws one.
 - `node.Image(sprite, fit)` adds an image, as `node.Box` and `node.Label` add theirs.
-- `Image.Url`: an image loaded from the web, downloaded once and shared by every image showing it, kept while anything shows it and after that while it fits the cache (64 MB of images nothing shows, the longest unseen going first). Downloads run six at a time, and one nothing wants any more is called off. It fades in as it arrives; until then its node is in `UIStates.Loading` (`UIStates.Failed` if it could not be loaded), states shipped as assets for variants to name. `node.Image(url)` adds one.
-- The Showcase has an Images page: one sprite, sliced to three sizes, and three photos loaded from the web.
+- `Image.Url`: an image loaded from the web, downloaded once and shared by every image showing it, kept while anything shows it and after that while it fits the cache (64 MB of images nothing shows, the longest unseen going first). Downloads run six at a time, and one nothing wants any more is called off. It fades in as it arrives; until then its node is in `UIStates.Loading` (`UIStates.Failed` if it could not be loaded), states shipped as assets for variants to name. `node.Image(url)` adds one, and `Image.ClearCache()` forgets every image loaded, those on screen loading again.
+- The Showcase has an Images page: one sprite, sliced to three sizes, and three photos loaded from the web as small copies, which a tap opens full screen as a larger copy loads, with a button clearing the cache.
 
 ### Changed
 

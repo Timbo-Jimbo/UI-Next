@@ -56,6 +56,11 @@ namespace TimboJimbo.UINext
         /// </summary>
         public UIValue<string> Url => _url;
 
+        /// <summary>
+        /// Forgets every image loaded from a URL: those nothing shows go now, and images showing one load it again.
+        /// </summary>
+        public static void ClearCache() => RemoteImages.Clear();
+
         public UIValue<Color> Tint => _tint;
         public UIValue<ImageFit> Fit => _fit;
         public UIValue<CornerRadii> CornerRadii => _cornerRadii;
@@ -185,6 +190,7 @@ namespace TimboJimbo.UINext
             LetGo();
             if (url == null) return;
             _entry = RemoteImages.Acquire(url);
+            _entry.Dropped += Reload;
             if (_entry.Loading)
             {
                 _entry.Done += Arrived;
@@ -203,10 +209,19 @@ namespace TimboJimbo.UINext
             UI.Animate(UIAnimation.Smooth, () => Show(entry.Texture, loading: false, failed: entry.Texture == null));
         }
 
+        // Its image forgotten (the cache cleared): it loads it again.
+        private void Reload(RemoteImages.Entry entry)
+        {
+            if (entry != _entry) return;
+            LetGo();
+            _loader?.Invalidate();
+        }
+
         private void LetGo()
         {
             if (_entry == null) return;
             _entry.Done -= Arrived;
+            _entry.Dropped -= Reload;
             RemoteImages.Release(_entry);
             _entry = null;
             Show(null, loading: false, failed: false);

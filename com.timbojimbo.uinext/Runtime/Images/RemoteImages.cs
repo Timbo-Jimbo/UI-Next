@@ -42,7 +42,12 @@ namespace TimboJimbo.UINext
             /// <summary>Raised once, as it loads or fails to.</summary>
             public event Action<Entry> Done;
 
+            /// <summary>Raised if it is forgotten while something shows it (the cache cleared), for that to load it again.</summary>
+            public event Action<Entry> Dropped;
+
             public Entry(string url) => Url = url;
+
+            internal void Drop() => Dropped?.Invoke(this);
 
             internal void Finish()
             {
@@ -82,15 +87,18 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Lets go of an image: one nothing else shows is kept while it fits in the cache, and one still loading that
-        /// nothing else wants is called off (as one that failed is forgotten), so that asking for it again starts over.
+        /// nothing else wants is called off (as one that failed, or was forgotten, goes), so that asking for it again
+        /// starts over.
         /// </summary>
         public static void Release(Entry entry)
         {
             if (--entry.Users > 0) return;
-            if (entry.Texture == null)
+            if (entry.Texture == null || !Known(entry))
             {
                 Forget(entry);
                 entry.Request?.Abort();
+                Destroy(entry.Texture);
+                entry.Texture = null;
                 return;
             }
             entry.Unused = s_unused.AddLast(entry);
@@ -113,9 +121,36 @@ namespace TimboJimbo.UINext
             }
         }
 
+        /// <summary>
+        /// Forgets every image: those nothing shows go now, and those shown go as what shows them lets go of them to load
+        /// them again (<see cref="Entry.Dropped"/>).
+        /// </summary>
+        public static void Clear()
+        {
+            var shown = new List<Entry>();
+            foreach (var entry in s_entries.Values)
+            {
+                if (entry.Users > 0)
+                {
+                    shown.Add(entry);
+                    continue;
+                }
+                entry.Unused = null;
+                Destroy(entry.Texture);
+                entry.Texture = null;
+            }
+            s_entries.Clear();
+            s_unused.Clear();
+            s_unusedBytes = 0;
+            foreach (var entry in shown)
+                entry.Drop();
+        }
+
+        private static bool Known(Entry entry) => s_entries.TryGetValue(entry.Url, out var known) && known == entry;
+
         private static void Forget(Entry entry)
         {
-            if (s_entries.TryGetValue(entry.Url, out var known) && known == entry)
+            if (Known(entry))
                 s_entries.Remove(entry.Url);
         }
 
