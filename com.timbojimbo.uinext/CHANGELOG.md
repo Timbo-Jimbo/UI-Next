@@ -14,6 +14,7 @@
 - The Showcase has an Images page: one sprite, sliced to three sizes, and three photos loaded from the web through a loader of the page's own (Bunny's optimizer: copies as wide as they are drawn, in their shape, and a blurred preview), which a tap opens full screen, where a wider copy loads with the page's standing in, and a button clearing the cache.
 - `UIDebug.Repeat`: the UI drawn that many times over each frame, which keeps a phone's GPU at its full clock, so what one drawing costs shows in the GPU's time (a GPU with little to do slows down, which hides it).
 - `UIDebug.VerifyLayout`: each layout pass that solves only what can have moved is checked against solving every node, and each node laid out anywhere else logged as an error: for testing layout.
+- Two demo scenes for measuring: Compare (**Tools > UI Next > Demos > Build Compare**) builds one screen, a feed of cards under a header, in UI Next or in UGUI with TextMeshPro, and plays use cases over it measured as the benchmark measures them; Counters (**Build Counters**) changes labels every frame (counts, clocks and prices), for profiling what a change of text costs, with an Android player built for deep profiling.
 
 ### Changed
 
