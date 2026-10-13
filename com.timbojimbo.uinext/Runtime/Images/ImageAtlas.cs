@@ -8,11 +8,12 @@ namespace TimboJimbo.UINext
     /// <summary>
     /// Pages the small images loaded from URLs are copied onto, so that images drawn together sample one texture and draw
     /// in one call: a batch takes eight textures, and a feed of photos each its own would take a call for every few. An
-    /// image up to 512 pixels a side is copied onto a page of its format, on the GPU, along a shelf of its height (in steps
-    /// of 16 pixels), with its edge pixels copied once more round it so that sampling at its edge never reaches its
-    /// neighbour. An image let go of leaves its room for another; free shelves at the top of a page give their height back,
-    /// and a page with nothing on it goes. Pages are 2048 pixels square, at most four of a format; past that, or where the
-    /// GPU can't copy textures, an image keeps its own texture.
+    /// image up to 512 pixels a side is copied onto a page on the GPU, along a shelf of its height (in steps of 16 pixels),
+    /// with its edge pixels copied once more round it so that sampling at its edge never reaches its neighbour. Pages are
+    /// 8-bit RGBA, which every GPU samples and draws to; an image in another format (a decoded JPEG has no alpha, and few
+    /// GPUs sample three-channel textures) is drawn into a render texture of theirs first. An image let go of leaves its
+    /// room for another; free shelves at the top of a page give their height back, and a page with nothing on it goes.
+    /// Pages are 2048 pixels square, four at most; past that, or where the GPU can't copy textures, an image keeps its own.
     /// </summary>
     internal static class ImageAtlas
     {
@@ -42,7 +43,6 @@ namespace TimboJimbo.UINext
         internal sealed class Page
         {
             public Texture2D Texture;
-            public GraphicsFormat Format;
             public readonly List<Shelf> Shelves = new();
             // The height its shelves take, from its bottom; and how many images are on it.
             public int Top, Used;
@@ -56,30 +56,35 @@ namespace TimboJimbo.UINext
         }
 
         private static readonly List<Page> s_pages = new();
+        private static GraphicsFormat s_format = GraphicsFormat.None;
+
+        // What pages are: 8-bit RGBA, in the project's colour space.
+        private static GraphicsFormat PageFormat => s_format != GraphicsFormat.None
+            ? s_format
+            : s_format = GraphicsFormatUtility.GetGraphicsFormat(RenderTextureFormat.ARGB32, RenderTextureReadWrite.Default);
 
         /// <summary>Copies an image onto a page if it is small enough and there is room; where it went, or null.</summary>
         public static Slot Add(Texture2D image)
         {
             if (image == null || image.width > MaxSize || image.height > MaxSize) return null;
-            if ((SystemInfo.copyTextureSupport & CopyTextureSupport.Basic) == 0) return null;
+            var support = SystemInfo.copyTextureSupport;
+            if ((support & CopyTextureSupport.Basic) == 0) return null;
+            bool converts = image.graphicsFormat != PageFormat;
+            if (converts && (support & CopyTextureSupport.RTToTexture) == 0) return null;
             int width = image.width + 2, height = image.height + 2;
             int shelfHeight = (height + ShelfStep - 1) / ShelfStep * ShelfStep;
-            var format = image.graphicsFormat;
             Slot slot = null;
-            int pages = 0;
             foreach (var page in s_pages)
             {
-                if (page.Format != format) continue;
-                pages++;
                 slot = Place(page, width, shelfHeight);
                 if (slot != null) break;
             }
             if (slot == null)
             {
-                if (pages >= MaxPages) return null;
-                slot = Place(NewPage(format), width, shelfHeight);
+                if (s_pages.Count >= MaxPages) return null;
+                slot = Place(NewPage(), width, shelfHeight);
             }
-            Copy(image, slot);
+            Copy(image, slot, converts);
             return slot;
         }
 
@@ -172,9 +177,9 @@ namespace TimboJimbo.UINext
         }
 
         // A page on the GPU alone: its pixels aren't kept in memory, and where nothing was copied is never sampled.
-        private static Page NewPage(GraphicsFormat format)
+        private static Page NewPage()
         {
-            var texture = new Texture2D(PageSize, PageSize, format, TextureCreationFlags.DontInitializePixels)
+            var texture = new Texture2D(PageSize, PageSize, PageFormat, TextureCreationFlags.DontInitializePixels)
             {
                 name = "UI Next image atlas",
                 hideFlags = Transient,
@@ -182,26 +187,37 @@ namespace TimboJimbo.UINext
                 filterMode = FilterMode.Bilinear,
             };
             texture.Apply(false, true);
-            var page = new Page { Texture = texture, Format = format };
+            var page = new Page { Texture = texture };
             s_pages.Add(page);
             return page;
         }
 
         // Onto its slot on the GPU, its edge pixels copied once more round it (the image is a pixel in from the slot's
-        // corner, its shelf's y counting up from the page's bottom, as textures do).
-        private static void Copy(Texture2D image, Slot slot)
+        // corner, its shelf's y counting up from the page's bottom, as textures do); one in another format drawn into a
+        // render texture of the page's first.
+        private static void Copy(Texture2D image, Slot slot, bool converts)
         {
-            var page = slot.Page.Texture;
             int w = image.width, h = image.height, x = slot.X + 1, y = slot.Shelf.Y + 1;
-            Graphics.CopyTexture(image, 0, 0, 0, 0, w, h, page, 0, 0, x, y);
-            Graphics.CopyTexture(image, 0, 0, 0, 0, 1, h, page, 0, 0, x - 1, y);
-            Graphics.CopyTexture(image, 0, 0, w - 1, 0, 1, h, page, 0, 0, x + w, y);
-            Graphics.CopyTexture(image, 0, 0, 0, 0, w, 1, page, 0, 0, x, y - 1);
-            Graphics.CopyTexture(image, 0, 0, 0, h - 1, w, 1, page, 0, 0, x, y + h);
-            Graphics.CopyTexture(image, 0, 0, 0, 0, 1, 1, page, 0, 0, x - 1, y - 1);
-            Graphics.CopyTexture(image, 0, 0, w - 1, 0, 1, 1, page, 0, 0, x + w, y - 1);
-            Graphics.CopyTexture(image, 0, 0, 0, h - 1, 1, 1, page, 0, 0, x - 1, y + h);
-            Graphics.CopyTexture(image, 0, 0, w - 1, h - 1, 1, 1, page, 0, 0, x + w, y + h);
+            Texture source = image;
+            RenderTexture converted = null;
+            if (converts)
+            {
+                converted = RenderTexture.GetTemporary(new RenderTextureDescriptor(w, h, PageFormat, 0));
+                Graphics.Blit(image, converted);
+                source = converted;
+            }
+            var page = slot.Page.Texture;
+            Graphics.CopyTexture(source, 0, 0, 0, 0, w, h, page, 0, 0, x, y);
+            Graphics.CopyTexture(source, 0, 0, 0, 0, 1, h, page, 0, 0, x - 1, y);
+            Graphics.CopyTexture(source, 0, 0, w - 1, 0, 1, h, page, 0, 0, x + w, y);
+            Graphics.CopyTexture(source, 0, 0, 0, 0, w, 1, page, 0, 0, x, y - 1);
+            Graphics.CopyTexture(source, 0, 0, 0, h - 1, w, 1, page, 0, 0, x, y + h);
+            Graphics.CopyTexture(source, 0, 0, 0, 0, 1, 1, page, 0, 0, x - 1, y - 1);
+            Graphics.CopyTexture(source, 0, 0, w - 1, 0, 1, 1, page, 0, 0, x + w, y - 1);
+            Graphics.CopyTexture(source, 0, 0, 0, h - 1, 1, 1, page, 0, 0, x - 1, y + h);
+            Graphics.CopyTexture(source, 0, 0, w - 1, h - 1, 1, 1, page, 0, 0, x + w, y + h);
+            if (converted != null)
+                RenderTexture.ReleaseTemporary(converted);
             slot.Uv = new Rect((float)x / PageSize, (float)y / PageSize, (float)w / PageSize, (float)h / PageSize);
         }
 
