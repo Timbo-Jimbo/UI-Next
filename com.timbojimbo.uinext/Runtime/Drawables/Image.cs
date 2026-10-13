@@ -119,8 +119,6 @@ namespace TimboJimbo.UINext
             ContentChanged();
         }
 
-        public float MinWidth => 0f;
-
         protected internal override void Draw(Painter painter)
         {
             var texture = Source(out var sprite, out var uv, out var native);

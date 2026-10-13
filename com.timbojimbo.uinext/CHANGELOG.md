@@ -21,6 +21,12 @@
 - Layout solves only what can have moved: a node whose values or content changed, the nodes up from it to its root and their children, each child holding no change taken whole, as it was last fitted.
 - In the game view the UI's render pass has a depth buffer of its own (cleared, never stored, so a tiled GPU keeps it on the chip): what an opaque shape covers is not shaded, and nothing a clip cuts away is shaded either.
 - Measuring (`IMeasurable`) is no longer tracked by layout, since a layout that does not reach a node would let go of what its measuring read: a drawable that measures says when what it measures changes (`UIDrawable.ContentChanged`), as `Label`, `Image` and `TextFieldText` do.
+- A label measures its text with the layout it draws it with, so a text that changes is shaped once (the text engine keeps what it worked out for the layout that follows), and a text that fits its width unwrapped is not measured again at that width. It reads its text with no allocations, its markup's rules kept from one reading to the next.
+- Squeezed, a node fitted to content (a text, an image) gives way down to its padding, its text wrapping or cut short, as a label in a UIKit stack does, where a text stopped at its longest word. Layout no longer lays text out to find that word, which cost as much as measuring it.
+
+### Removed
+
+- `IMeasurable.MinWidth` and `IContentHost.Narrowest`, which layout no longer asks for.
 
 ### Fixed
 

@@ -472,22 +472,13 @@ namespace TimboJimbo.UINext
                     {
                         if (axis == 0)
                         {
-                            // As wide as it is unwrapped, and no narrower than its longest word (which can be no wider
-                            // than the whole of it).
-                            float measured, narrowest;
-                            if (node.Content is IContentHost host)
-                            {
-                                var hosted = new HostedChildren(nodes, i);
-                                measured = host.Measure(-1f, in hosted).x;
-                                narrowest = host.Narrowest(in hosted);
-                            }
-                            else
-                            {
-                                measured = node.Content.Measure(-1f).x;
-                                narrowest = node.Content.MinWidth;
-                            }
+                            // As wide as it is unwrapped. Squeezed, it gives way to nothing but its padding, wrapping or
+                            // cut short, as a label in a UIKit stack does.
+                            float measured = node.Content is IContentHost host
+                                ? host.Measure(-1f, new HostedChildren(nodes, i)).x
+                                : node.Content.Measure(-1f).x;
                             size = measured + padding;
-                            min = Mathf.Min(narrowest, measured) + padding;
+                            min = padding;
                         }
                         else
                         {

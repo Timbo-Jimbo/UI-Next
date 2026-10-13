@@ -91,14 +91,11 @@ namespace TimboJimbo.UINext
         private int _shapeReading = -1;
 
         // Each element's and block's size by match, as layout gave it: while widths are shared out, before heights are
-        // known; the same with each block as narrow as it can be (what the narrowest the label can be is measured with); and
-        // once heights are known too. Each counts its changes: kept apart, none changes from one layout pass to the next
-        // when nothing does, so what was laid out from it is kept.
+        // known; and once heights are known too. Each counts its changes: kept apart, neither changes from one layout pass
+        // to the next when nothing does, so what was laid out from it is kept.
         private readonly List<Vector2> _widthSizes = new();
-        private readonly List<Vector2> _narrowest = new();
         private readonly List<Vector2> _sizes = new();
         private int _widthVersion;
-        private int _narrowestVersion;
         private int _sizesVersion;
 
         // How many lines each span with a background is on, by match, and the elements and blocks the text was cut short
@@ -125,16 +122,13 @@ namespace TimboJimbo.UINext
         private int _rectsStamp = -1;
 
         // Measures, kept until what they were measured from changes (its shape, by its version, and its inline content's
-        // sizes): unwrapped, at the last width asked for, and narrowest.
+        // sizes): unwrapped, and at the last width asked for.
         private int _measuredVersion = -1;
         private int _unwrappedSizes = -1;
         private int _wrappedSizes = -1;
         private Vector2 _unwrapped;
         private float _measuredWidth = -1f;
         private Vector2 _measured;
-        private int _narrowestForVersion = -1;
-        private int _narrowestForSizes = -1;
-        private float _minWidth = -1f;
 
         // Its inline content: a node for each element and block, and one for each line of a span with a background, in
         // text order; and spares, hidden, kept to be used again as a list keeps its rows, rather than destroyed.
@@ -157,6 +151,8 @@ namespace TimboJimbo.UINext
 
         private readonly List<Inline> _inlines = new();
         private readonly Dictionary<UINode, int> _inlineIndex = new();
+        // How many of them are elements and blocks, which the text is laid out round at the sizes layout gives them.
+        private int _objects;
         private readonly List<(GameObject Prefab, UINode Node)> _spares = new();
 
         // A tappable span or element pressed, and the pointer pressing it.
@@ -164,7 +160,10 @@ namespace TimboJimbo.UINext
         private int _pressed = -1;
 
         private static readonly HashSet<Label> s_enabled = new();
+        // The rules of the markup last read with, while the text settings stay the same: labels mostly share one markup.
         private static readonly List<TextRule> s_rules = new();
+        private static TextRuleSet s_rulesOf;
+        private static int s_rulesSettings = -1;
         private static readonly List<ITextContent> s_contents = new();
         private static readonly List<int> s_around = new();
         private static bool s_listening;
@@ -260,68 +259,57 @@ namespace TimboJimbo.UINext
         // ── Measuring ────────────────────────────────────────────────────────────
 
         // Measured from its shape as last read (ReadText reads it, and asks for its tree to be laid out again when it
-        // changes), so measuring reads none of its values.
+        // changes), so measuring reads none of its values. It is measured with the layout it draws, which keeps the text's
+        // shaping for measuring it again and for laying it out to draw it: a text that changes is shaped once.
         public Vector2 Measure(float availableWidth)
         {
-            // With no limit, widths are being shared out, before heights are known: its objects at the sizes they have then.
-            bool widths = availableWidth < 0f;
             if (_measuredVersion != _shapeVersion)
             {
                 _measuredVersion = _shapeVersion;
                 _unwrappedSizes = _wrappedSizes = -1;
             }
-            if (widths)
-            {
-                if (_unwrappedSizes != _widthVersion)
-                {
-                    _unwrappedSizes = _widthVersion;
-                    var unwrapped = Shaped(-1f, _widthSizes);
-                    _unwrapped = TextLayout.Measure(in unwrapped);
-                }
+            if (availableWidth < 0f)
+                return Unwrapped();
+            // A text with no objects in it is laid out at any width it fits in unwrapped as it is unwrapped.
+            if (_objects == 0 && (!_shape.WordWrap || Fits(availableWidth, Unwrapped().x)))
                 return _unwrapped;
-            }
             if (_wrappedSizes != _sizesVersion || !Mathf.Approximately(_measuredWidth, availableWidth))
             {
                 _wrappedSizes = _sizesVersion;
                 _measuredWidth = availableWidth;
-                var wrapped = Shaped(_shape.WordWrap ? availableWidth : -1f, _sizes);
-                _measured = TextLayout.Measure(in wrapped);
+                _measured = MeasureAhead(Shaped(_shape.WordWrap ? availableWidth : -1f, _sizes));
             }
             return _measured;
         }
 
-        public float MinWidth
+        // Its size with no limit, as widths are shared out, before heights are known: its objects at the sizes they have then.
+        private Vector2 Unwrapped()
         {
-            get
+            if (_unwrappedSizes != _widthVersion)
             {
-                if (_narrowestForVersion != _shapeVersion || _narrowestForSizes != _narrowestVersion)
-                {
-                    _narrowestForVersion = _shapeVersion;
-                    _narrowestForSizes = _narrowestVersion;
-                    _minWidth = -1f;
-                }
-                if (_minWidth < 0f)
-                {
-                    var narrowest = Shaped(-1f, _narrowest);
-                    // A text with nowhere to break (a number, a word) is as narrow as it is unwrapped, which measuring
-                    // found already: not laid out again to find its longest word.
-                    _minWidth = narrowest.WordWrap && (_inlines.Count > 0 || Breaks(narrowest.Text))
-                        ? TextLayout.LongestWord(in narrowest)
-                        : Measure(-1f).x;
-                }
-                return _minWidth;
+                _unwrappedSizes = _widthVersion;
+                _unwrapped = MeasureAhead(Shaped(-1f, _widthSizes));
             }
+            return _unwrapped;
         }
 
-        // Whether a text has anywhere a line could break: a space of any kind.
-        private static bool Breaks(string text)
+        // Measures with the layout it draws, which keeps what the engine worked out of the text, and forgets that layout:
+        // it is laid out again before it is drawn or asked anything, and one it drew is drawn again, so that taps find
+        // what is on screen.
+        private Vector2 MeasureAhead(in TextLayoutInput input)
         {
-            if (text == null) return false;
-            foreach (char c in text)
-                if (char.IsWhiteSpace(c))
-                    return true;
-            return false;
+            _layout ??= new TextLayout();
+            if (_valid)
+            {
+                _valid = false;
+                Node.DrawComputation?.Invalidate();
+            }
+            return _layout.MeasureAhead(in input);
         }
+
+        // Whether a text that wide unwrapped fits a width: the engine lays text out in 64ths of a pixel, so a width less than
+        // half of one short of it is as wide.
+        private static bool Fits(float width, float textWidth) => width >= textWidth - 1f / 128f;
 
         // Its shape in a box `width` wide (negative: unwrapped), its elements and blocks at `sizes`.
         private TextLayoutInput Shaped(float width, List<Vector2> sizes)
@@ -336,7 +324,7 @@ namespace TimboJimbo.UINext
         // Forgets the measures and the layout, for what they were made from that they do not see change.
         private void Forget()
         {
-            _measuredVersion = _narrowestForVersion = -1;
+            _measuredVersion = -1;
             _valid = false;
         }
 
@@ -349,12 +337,6 @@ namespace TimboJimbo.UINext
             else
                 TakeSizes(in children, _sizes, ref _sizesVersion);
             return Measure(availableWidth);
-        }
-
-        float IContentHost.Narrowest(in HostedChildren children)
-        {
-            TakeSizes(in children, _narrowest, ref _narrowestVersion, narrowest: true);
-            return MinWidth;
         }
 
         // A block is as wide as the text; a background as big as its piece of its span's line, reaching above and below it.
@@ -408,17 +390,14 @@ namespace TimboJimbo.UINext
             return true;
         }
 
-        // Takes up into `sizes` the sizes layout has given its elements and blocks so far, each block as narrow as it can be
-        // for the narrowest, counting a change.
-        private void TakeSizes(in HostedChildren children, List<Vector2> sizes, ref int version, bool narrowest = false)
+        // Takes up into `sizes` the sizes layout has given its elements and blocks so far, counting a change.
+        private void TakeSizes(in HostedChildren children, List<Vector2> sizes, ref int version)
         {
             bool changed = false;
             foreach (var inline in _inlines)
             {
                 if (inline.Kind == InlineKind.Background || inline.Node == null || inline.Match >= sizes.Count) continue;
-                if (!children.TryGetSize(inline.Node, out var size, out var min)) continue;
-                if (narrowest && inline.Kind == InlineKind.Block)
-                    size.x = Mathf.Min(min.x, size.x);
+                if (!children.TryGetSize(inline.Node, out var size)) continue;
                 if (sizes[inline.Match] == size) continue;
                 sizes[inline.Match] = size;
                 changed = true;
@@ -593,11 +572,18 @@ namespace TimboJimbo.UINext
             shape.CharacterSpacingPx = _characterSpacing.Value;
             // Room round every glyph for its edge's anti-aliasing, and for its outline.
             shape.AntiAliasMarginPx = 1f + Mathf.Max(0f, _outlineWidth.Value);
-            Computation.Untracked(() =>
+            // Untracked: what it reads is its own.
+            var tracking = Computation.Current;
+            Computation.Current = null;
+            try
             {
                 Read(text, rich, markup);
                 Reconcile();
-            });
+            }
+            finally
+            {
+                Computation.Current = tracking;
+            }
             shape.Text = _readText;
             shape.Markup = _readMarkup;
             shape.Document = _readMarkup != null ? _document : null;
@@ -618,12 +604,7 @@ namespace TimboJimbo.UINext
             _readMarkup = rules;
             _readSettings = s_settings;
             if (rules != null)
-            {
-                s_rules.Clear();
-                rules.GetRules(s_rules);
-                _document.Parse(text, s_rules);
-                s_rules.Clear();
-            }
+                _document.Parse(text, RulesOf(rules));
             else
             {
                 _document.SetPlain(text);
@@ -631,13 +612,25 @@ namespace TimboJimbo.UINext
             _version++;
             int count = _document.Matches.Count;
             Fill(_widthSizes, count, Vector2.zero);
-            Fill(_narrowest, count, Vector2.zero);
             Fill(_sizes, count, Vector2.zero);
             Fill(_pieces, count, 1);
             _widthVersion++;
-            _narrowestVersion++;
             _sizesVersion++;
             _cut.Clear();
+        }
+
+        // The rules a markup holds, in order, kept while the text settings stay the same (a rule or markup changed tells
+        // them) and none of them is destroyed.
+        private static List<TextRule> RulesOf(TextRuleSet markup)
+        {
+            if (markup != s_rulesOf || s_rulesSettings != s_settings || (s_rules.Count > 0 && s_rules[0] == null))
+            {
+                s_rulesOf = markup;
+                s_rulesSettings = s_settings;
+                s_rules.Clear();
+                markup.GetRules(s_rules);
+            }
+            return s_rules;
         }
 
         private static void Fill<T>(List<T> list, int count, T value)
@@ -679,8 +672,13 @@ namespace TimboJimbo.UINext
                 _inlines.RemoveAt(i);
             }
             _inlineIndex.Clear();
+            _objects = 0;
             for (int i = 0; i < _inlines.Count; i++)
+            {
                 _inlineIndex[_inlines[i].Node] = i;
+                if (_inlines[i].Kind != InlineKind.Background)
+                    _objects++;
+            }
         }
 
         private void Use(ref int used, GameObject prefab, InlineKind kind, int match, int piece)
