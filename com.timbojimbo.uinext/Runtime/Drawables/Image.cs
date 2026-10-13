@@ -92,16 +92,31 @@ namespace TimboJimbo.UINext
         /// </summary>
         public Vector2 Measure(float availableWidth)
         {
-            var texture = Source(out var sprite, out _, out var pixels);
-            Vector2 native;
-            if (sprite != null)
-                native = sprite.rect.size * (100f / Mathf.Max(1f, sprite.pixelsPerUnit));
-            else
-                native = texture != null ? pixels : Vector2.zero;
-            bool scales = native.x > availableWidth || (_sourceLoader != null && texture != null && sprite == null);
+            var native = _native;
+            bool scales = native.x > availableWidth || _scalesToWidth;
             if (availableWidth >= 0f && native.x > 0f && scales)
                 native *= availableWidth / native.x;
             return native;
+        }
+
+        // What it measures, as its watch last read it: its native size in points, and whether it is scaled to the width
+        // it is given whatever its size (a copy its loader asked for). Measuring reads none of its values.
+        [System.NonSerialized] private Vector2 _native;
+        [System.NonSerialized] private bool _scalesToWidth;
+        [System.NonSerialized] private Effect _watch;
+
+        // Reads what it shows again whenever that changes, as values resolve, before layout: when its size changes, its
+        // node is laid out again (ContentChanged).
+        private void WatchSize()
+        {
+            var texture = Source(out var sprite, out _, out var pixels);
+            var native = sprite != null ? sprite.rect.size * (100f / Mathf.Max(1f, sprite.pixelsPerUnit))
+                : texture != null ? pixels : Vector2.zero;
+            bool scales = _sourceLoader != null && texture != null && sprite == null;
+            if (native == _native && scales == _scalesToWidth) return;
+            _native = native;
+            _scalesToWidth = scales;
+            ContentChanged();
         }
 
         public float MinWidth => 0f;
@@ -199,6 +214,8 @@ namespace TimboJimbo.UINext
         protected override void OnEnable()
         {
             base.OnEnable();
+            _watch = new Effect(WatchSize);
+            _watch.Invalidate();
             // After layout, to know how wide it is drawn.
             _load = new Effect(Load, Phase.Draw);
             _load.Invalidate();
@@ -206,6 +223,10 @@ namespace TimboJimbo.UINext
 
         protected override void OnDisable()
         {
+            _watch?.Dispose();
+            _watch = null;
+            _native = Vector2.zero;
+            _scalesToWidth = false;
             _load?.Dispose();
             _load = null;
             LetGo();

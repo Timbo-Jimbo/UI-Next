@@ -43,6 +43,15 @@ namespace TimboJimbo.UINext
         public IMeasurable Content;
         // The node it is, for content that hosts its floating children (IContentHost) to know them by.
         public UINode Node;
+        // Whether it is taken whole: what is inside it is not in the array, and its fit is given in Fitted (the size its
+        // content asks for and the least it can be squeezed to, x then y), as a solve that had what is inside it found
+        // them at the width it is given again. It sizes and places nothing inside it.
+        public bool Collapsed;
+
+        // In, for a node taken whole: its fit, as above. Out, for every other node but the root: its fit as the passes
+        // work it out (the size it is fitted to along each axis and the least it can be squeezed to, x then y), its
+        // height's at the width it ends up with.
+        public Vector4 Fitted;
 
         // Out: where it goes, relative to its parent's top-left corner, x right and y down, in its parent's units (the
         // root's is its own rect, at 0, 0).
@@ -157,6 +166,17 @@ namespace TimboJimbo.UINext
         /// </remarks>
         public static void Solve(SolverNode[] nodes, int count, Vector2 rootSize, Insets safeArea)
         {
+            SolveWidths(nodes, count, rootSize, safeArea);
+            SolveHeights(nodes, count, rootSize, safeArea);
+        }
+
+        /// <summary>
+        /// The first half of <see cref="Solve"/>: everything up to and including the widths. Every node's width
+        /// (<see cref="SolverNode.Size"/>.x) is final after it, so a node taken whole (<see cref="SolverNode.Collapsed"/>)
+        /// can be checked against the width its fit was found at before its height is fitted from it.
+        /// </summary>
+        public static void SolveWidths(SolverNode[] nodes, int count, Vector2 rootSize, Insets safeArea)
+        {
             if (count <= 0) return;
 
             // The root keeps what it lays out clear of the safe area: its padding grows by it, its rect staying as given.
@@ -185,6 +205,12 @@ namespace TimboJimbo.UINext
                 nodes[0].Size.x = rootSize.x;
                 DistributeAxis(nodes, 0);
             }
+        }
+
+        /// <summary>The second half of <see cref="Solve"/>, after <see cref="SolveWidths"/>: heights, then positions.</summary>
+        public static void SolveHeights(SolverNode[] nodes, int count, Vector2 rootSize, Insets safeArea)
+        {
+            if (count <= 0) return;
 
             // Content wrapped to the widths it got, then heights the same way as widths.
             using (UIProfiling.SolveWrap.Auto())
@@ -409,8 +435,8 @@ namespace TimboJimbo.UINext
         // ── Sizing ───────────────────────────────────────────────────────────────
 
         // Clay's fit sizing (which Clay does as each element closes): every node, children before parents, gets the
-        // size its content asks for along the axis, and the smallest it could be squeezed to. The root is skipped: it
-        // is given its size.
+        // size its content asks for along the axis, and the smallest it could be squeezed to (kept in Fitted too). The
+        // root is skipped: it is given its size. A node taken whole is fitted as it was found with what is inside it.
         private static void FitAxis(SolverNode[] nodes, int count, int axis)
         {
             // Pre-order puts every node after its parent, so going backwards reaches children before their parents.
@@ -424,6 +450,11 @@ namespace TimboJimbo.UINext
                 {
                     // Its height follows its final width, and nothing grows or shrinks it.
                     size = min = node.Size.x / node.AspectRatio;
+                }
+                else if (node.Collapsed)
+                {
+                    size = node.Fitted[axis * 2];
+                    min = node.Fitted[axis * 2 + 1];
                 }
                 else if (sizing.Mode == SizingMode.Fixed)
                 {
@@ -516,6 +547,8 @@ namespace TimboJimbo.UINext
 
                 node.Size[axis] = size;
                 node.MinSize[axis] = min;
+                node.Fitted[axis * 2] = size;
+                node.Fitted[axis * 2 + 1] = min;
             }
         }
 
@@ -964,7 +997,7 @@ namespace TimboJimbo.UINext
             for (int i = 1; i < count; i++)
             {
                 ref var node = ref nodes[i];
-                if (node.Content == null || node.FlowCount > 0 || node.AspectRatio > 0f) continue;
+                if (node.Content == null || node.FlowCount > 0 || node.AspectRatio > 0f || node.Collapsed) continue;
                 if (node.Height.Mode != SizingMode.Fit && node.Height.Mode != SizingMode.Grow) continue;
                 // Measured as heights are fitted, once the children it holds have theirs (FitAxis).
                 if (node.Content is IContentHost) continue;

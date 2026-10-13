@@ -30,7 +30,11 @@ namespace TimboJimbo.UINext
             new(Category, "UINext.Model"), new(Category, "UINext.Layout"), new(Category, "UINext.Draw"),
         };
 
-        /// <summary>A layout's steps: its nodes' values gathered, the solve (its widths, text wrapped, heights, then places), its results put on the nodes.</summary>
+        /// <summary>
+        /// A layout's steps: the layout inputs of nodes whose values changed read again, the solver's nodes gathered from
+        /// every node's, the solve (its widths, text wrapped, heights, then places), its results put on the nodes.
+        /// </summary>
+        public static readonly ProfilerMarker LayoutInputs = new(Category, "UINext.Layout.Inputs");
         public static readonly ProfilerMarker Gather = new(Category, "UINext.Layout.Gather");
         public static readonly ProfilerMarker Solve = new(Category, "UINext.Layout.Solve");
         public static readonly ProfilerMarker SolveWidths = new(Category, "UINext.Layout.Widths");
@@ -125,6 +129,8 @@ namespace TimboJimbo.UINext
         internal const string UploadedName = "Uploaded (KB)";
         internal const string CompositedName = "Nodes Composited";
         internal const string InputsReadName = "Composite Inputs Read";
+        internal const string LayoutInputsReadName = "Layout Inputs Read";
+        internal const string LaidOutName = "Nodes Laid Out";
 
         public static readonly ProfilerCounterValue<int> DrawCalls = Count(DrawCallsName);
         public static readonly ProfilerCounterValue<int> Primitives = Count(PrimitivesName);
@@ -142,6 +148,13 @@ namespace TimboJimbo.UINext
         /// <summary>Compositing's work each frame: nodes composited again, and nodes whose values were read again for it.</summary>
         public static readonly ProfilerCounterValue<int> Composited = Count(CompositedName, perFrame: true);
         public static readonly ProfilerCounterValue<int> InputsRead = Count(InputsReadName, perFrame: true);
+
+        /// <summary>
+        /// Layout's work each frame: nodes whose layout values were read again for it, and nodes the solver was given
+        /// (each node taken whole counting as one).
+        /// </summary>
+        public static readonly ProfilerCounterValue<int> LayoutInputsRead = Count(LayoutInputsReadName, perFrame: true);
+        public static readonly ProfilerCounterValue<int> LaidOut = Count(LaidOutName, perFrame: true);
 
         private static readonly double s_nanosecondsPerTick = 1e9 / Stopwatch.Frequency;
 

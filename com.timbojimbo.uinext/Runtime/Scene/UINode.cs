@@ -306,6 +306,13 @@ namespace TimboJimbo.UINext
         [NonSerialized] internal CompositeInputs Composited;
         [NonSerialized] internal NodeComposite CompositeComputation;
 
+        // What layout works from, as its layout computation last read it (which its tree runs as it lays itself out); and
+        // the rect its RectTransform was last given, so a rect laid out the same is not written to it again.
+        [NonSerialized] internal LayoutInputs LaidOutFrom;
+        [NonSerialized] internal NodeLayout LayoutComputation;
+        [NonSerialized] internal Rect WrittenRect;
+        [NonSerialized] internal bool RectWritten;
+
         // Its scroll container behaviour, if any, which offsets what is inside it.
         [NonSerialized] internal ScrollView Scroller;
 
@@ -321,9 +328,16 @@ namespace TimboJimbo.UINext
         // no pointers, until the transition is over.
         [NonSerialized] internal readonly Observable<bool> Leaving = new();
 
-        // The layout pass it was last laid out in: a node laid out in the pass before carries on from where it is drawn;
-        // one coming back into layout (or laid out for the first time) lands where it goes at once.
-        [NonSerialized] internal int LayoutPass = -1;
+        // Whether it is in layout: a node laid out again carries on from where it is drawn; one coming back into layout
+        // (or laid out for the first time) lands where it goes at once.
+        [NonSerialized] internal bool InLayout;
+
+        // Its fit, as the last solve that had what is inside it found it (x then y, each the size its content asks for
+        // and the least it can be squeezed to, its height's at LayoutFitWidth): what a solve that takes it whole fits it
+        // to. Valid while it stays in layout.
+        [NonSerialized] internal Vector4 LayoutFit;
+        [NonSerialized] internal float LayoutFitWidth;
+        [NonSerialized] internal bool LayoutFitValid;
 
         // Whether it is always where layout puts it at once, never springing there inside a change: a label's inline
         // content, which its text puts, as its glyphs are, so the two never part.
@@ -667,6 +681,9 @@ namespace TimboJimbo.UINext
             DrawComputation.Invalidate();
             CompositeComputation ??= new NodeComposite(this);
             CompositeComputation.Invalidate();
+            LayoutComputation ??= new NodeLayout(this);
+            LayoutComputation.Invalidate();
+            RectWritten = false;
             UITree.NodeChanged(this);
         }
 
@@ -678,6 +695,8 @@ namespace TimboJimbo.UINext
             DrawComputation = null;
             CompositeComputation?.Dispose();
             CompositeComputation = null;
+            LayoutComputation?.Dispose();
+            LayoutComputation = null;
             Frame.Settle();
             UITree.NodeChanged(this);
             Tree?.Remove(this);
@@ -706,7 +725,7 @@ namespace TimboJimbo.UINext
             Drawables.Add(drawable);
             SortDrawables();
             DrawComputation?.Invalidate();
-            Tree?.InvalidateLayout();
+            Tree?.ContentChanged(this);
         }
 
         internal void UnregisterDrawable(UIDrawable drawable)
@@ -714,7 +733,7 @@ namespace TimboJimbo.UINext
             if (!Drawables.Remove(drawable)) return;
             SortDrawables();
             DrawComputation?.Invalidate();
-            Tree?.InvalidateLayout();
+            Tree?.ContentChanged(this);
         }
 
         // Drawables draw in component order; the first that measures is the content layout fits to.

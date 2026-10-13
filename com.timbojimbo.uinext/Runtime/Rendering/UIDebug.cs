@@ -15,8 +15,9 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// Overdraw: what is behind the UI is darkened, and every pixel the GPU shades for it adds heat, brighter the more
-        /// often it is drawn over (a quad's clear corners and what clips cut away count too: they are shaded all the
-        /// same). What is drawn into a layer's image shows through the layer's quad.
+        /// often it is drawn over (a quad's clear corners count too: they are shaded all the same; what clips cut away
+        /// and what an opaque shape covers mostly are not). What is drawn into a layer's image shows through the layer's
+        /// quad.
         /// </summary>
         public static bool Overdraw
         {
@@ -58,6 +59,12 @@ namespace TimboJimbo.UINext
         }
 
         private static int s_repeat = 1;
+
+        /// <summary>
+        /// Checks every layout pass that solves only what can have moved against solving every node again, logging an
+        /// error for each node laid out anywhere else: for testing layout. Every such pass is solved twice over.
+        /// </summary>
+        public static bool VerifyLayout { get; set; }
 
         private static void Set(ref bool field, bool value)
         {

@@ -385,8 +385,8 @@ namespace TimboJimbo.UINext
         {
             base.OnEnable();
             Node.Scroller = this;
-            Node.Tree?.InvalidateLayout();
-            // It clips and moves what its node holds.
+            // Its node scrolls (a layout input), and clips and moves what it holds.
+            Node.LayoutComputation?.Invalidate();
             Node.CompositeComputation?.Invalidate();
         }
 
@@ -400,7 +400,7 @@ namespace TimboJimbo.UINext
             if (Node.Scroller == this)
             {
                 Node.Scroller = null;
-                Node.Tree?.InvalidateLayout();
+                Node.LayoutComputation?.Invalidate();
                 Node.CompositeComputation?.Invalidate();
             }
         }

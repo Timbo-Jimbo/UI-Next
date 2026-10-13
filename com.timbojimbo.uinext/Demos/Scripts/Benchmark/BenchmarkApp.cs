@@ -17,7 +17,8 @@ namespace TimboJimbo.UINext.Demos.Benchmark
     /// device. Its arguments come from the command line (on Android, the "unity" extra): -scenarios scroll,ticker,
     /// -rounds 3, -warmup 1 and -measure 4 (seconds), -cards 40, -pages 6, -stay to stay open once done, and -repeat 6
     /// to draw the UI six times over each frame (<see cref="UIDebug.Repeat"/>), keeping the GPU at its full clock so what
-    /// the UI costs it shows in the GPU's time.
+    /// the UI costs it shows in the GPU's time, and -verifylayout to check each layout pass against solving every node
+    /// (<see cref="UIDebug.VerifyLayout"/>), which logs an error for each node laid out anywhere else.
     /// </summary>
     public sealed class BenchmarkApp : MonoBehaviour
     {
@@ -146,6 +147,7 @@ namespace TimboJimbo.UINext.Demos.Benchmark
                     case "-pages" when next != null: int.TryParse(next, out _pages); break;
                     case "-stay": _stay = true; break;
                     case "-repeat" when next != null && int.TryParse(next, out int repeat): UIDebug.Repeat = repeat; break;
+                    case "-verifylayout": UIDebug.VerifyLayout = true; break;
                 }
             }
             if (_scenarios.Count == 0)

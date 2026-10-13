@@ -63,6 +63,38 @@ namespace TimboJimbo.UINext
         internal int ChangedClipsFrom = int.MaxValue, ChangedClipsTo;
         internal int CopiedSlotBase = -1, CopiedClipBase = -1, CopiedSlots = -1, CopiedClips = -1;
 
+        // Nodes whose layout inputs changed since layout last ran, and nodes whose content (what they measure) did; whether
+        // layout was asked to run again for another reason (the tree's nodes changed, or something it read did), when every
+        // node is solved again; and whether a node it was asked by is asking now, telling it why.
+        private readonly List<UINode> _layoutChanged = new();
+        private readonly List<UINode> _contentChanged = new();
+        private bool _layoutAll = true;
+        private bool _telling;
+
+        // The root's size and safe area as last laid out; and per node, the layout pass that found it (or something
+        // inside it) changed, and one that found its fit unusable at the width it was given (see Gather).
+        private Vector2 _laidOutSize;
+        private Insets _laidOutSafeArea;
+        private int[] _holdsChangePass = new int[32];
+        private int[] _expandPass = new int[32];
+
+        // Per node, whether it is, or holds, a node whose place hangs on something outside it, or something outside on it,
+        // which the solver cannot take whole; the presented nodes (each solved on its own) and those avoiding the keyboard;
+        // and whether these need finding again (FindReaching).
+        private bool[] _reaching = new bool[32];
+        private readonly List<int> _presented = new();
+        private readonly List<int> _avoiding = new();
+        private bool _reachingDirty = true;
+
+        // The nodes a solve took whole that came out a different size, whose insides are laid out again on their own.
+        private readonly List<int> _within = new();
+
+        // How many nodes the last layout pass gave the solver (one taken whole counting as one).
+        internal int LaidOutLastPass;
+
+        // Every node before the tree's nodes were collected again, to tell which went out of it.
+        private readonly List<UINode> _collected = new();
+
         // Nodes whose compositing inputs changed since compositing last ran; per node, whether they did; whether every node
         // is composited next (the tree's nodes changed); and the root's size and scale as last composited.
         private readonly List<UINode> _changed = new();
@@ -153,13 +185,46 @@ namespace TimboJimbo.UINext
             Compositor.MarkOrderDirty();
         }
 
-        public void InvalidateLayout() => _layout.Invalidate();
+        /// <summary>Lays every node out again, the next time layout runs.</summary>
+        public void InvalidateLayout()
+        {
+            _layoutAll = true;
+            _layout.Invalidate();
+        }
 
         /// <summary>Composites every node again.</summary>
         public void InvalidateComposite()
         {
             _compositeAll = true;
             _composite.Invalidate();
+        }
+
+        /// <summary>
+        /// <paramref name="node"/>'s layout inputs may have changed (a value it reads for them did): the tree is laid out
+        /// again, reading them again first.
+        /// </summary>
+        public void LayoutChanged(UINode node)
+        {
+            _layoutChanged.Add(node);
+            Tell();
+        }
+
+        /// <summary>
+        /// <paramref name="node"/>'s content (what it measures) changed: the tree is laid out again, the node measured
+        /// again.
+        /// </summary>
+        public void ContentChanged(UINode node)
+        {
+            _contentChanged.Add(node);
+            Tell();
+        }
+
+        // Asks for layout to run, saying why (LayoutComputation.Invalidated).
+        private void Tell()
+        {
+            _telling = true;
+            _layout.Invalidate();
+            _telling = false;
         }
 
         /// <summary>
@@ -192,6 +257,8 @@ namespace TimboJimbo.UINext
                 node.Tree = null;
                 node.ParentNode = null;
                 node.Index = -1;
+                node.InLayout = false;
+                node.LayoutFitValid = false;
             }
             Nodes.Clear();
         }
@@ -203,6 +270,8 @@ namespace TimboJimbo.UINext
         private void Rebuild()
         {
             _structureDirty = false;
+            _collected.Clear();
+            _collected.AddRange(Nodes);
             foreach (var node in Nodes)
             {
                 if (node != null && node.Tree == this)
@@ -215,11 +284,21 @@ namespace TimboJimbo.UINext
             Nodes.Clear();
             SubtreeEnd.Clear();
             Release(ref _tracker);
-            if (RootNode == null || !RootNode.isActiveAndEnabled) return;
-            Add(RootNode, null);
-            Collect(RootNode.transform, RootNode);
-            SubtreeEnd[0] = Nodes.Count;
-            Compositor.MarkOrderDirty();
+            if (RootNode != null && RootNode.isActiveAndEnabled)
+            {
+                Add(RootNode, null);
+                Collect(RootNode.transform, RootNode);
+                SubtreeEnd[0] = Nodes.Count;
+                Compositor.MarkOrderDirty();
+            }
+            // A node no longer in any tree is out of layout: back in, it lands where it goes at once.
+            foreach (var node in _collected)
+            {
+                if (node == null || node.Tree != null) continue;
+                node.InLayout = false;
+                node.LayoutFitValid = false;
+            }
+            _collected.Clear();
         }
 
         private void Collect(Transform parent, UINode parentNode)
@@ -363,27 +442,169 @@ namespace TimboJimbo.UINext
 
         // ── Layout ───────────────────────────────────────────────────────────────
 
+        // Lays the tree out: the layout inputs of the nodes whose values changed read again first (once the tree's nodes
+        // changed, of any not read yet), then the tree solved, and every presented node in it on its own.
+        //
+        // Only what can have moved is solved again. A node whose inputs or content changed is solved with every node on
+        // the way up to its root (or to the presented node it is in) and their children; each of those children that holds
+        // no change is taken whole, fitted as the last solve that had what is inside it found it, and what is inside it
+        // stays as it was unless it comes out a different size (then that is laid out again at its new size, on its own).
+        // So a label counting up in a header solves the header and the nodes up from it, each with its children, not the
+        // feed beside it. Every node is solved again when the tree's nodes, the root's size or safe area, or a node's
+        // presentation level changed, or layout was asked to run again by something it read rather than told why.
         private void LayOut()
         {
+            bool rebuilt = _structureDirty;
             if (_structureDirty)
                 Rebuild();
             int nodeCount = Nodes.Count;
-            if (nodeCount == 0) return;
             EnsureCapacity(nodeCount);
+            _pass++;
+            LaidOutLastPass = 0;
+            bool all = _layoutAll || rebuilt;
+            _layoutAll = false;
+            all |= ReadLayoutInputs(rebuilt);
+            for (int i = 0; i < _contentChanged.Count; i++)
+            {
+                var node = _contentChanged[i];
+                if (node != null && node.Tree == this)
+                    MarkChanged(node.Index);
+            }
+            _contentChanged.Clear();
+            if (nodeCount == 0) return;
 
             var rootSize = Root.SizeObservable.Value;
             var safeArea = Root.SafeAreaObservable.Value;
-            _keyboard = UIRoot.KeyboardObservable.Value / Root.PixelsPerPoint;
-            _pass++;
+            float keyboard = UIRoot.KeyboardObservable.Value / Root.PixelsPerPoint;
+            all |= rootSize != _laidOutSize || safeArea != _laidOutSafeArea;
+            _laidOutSize = rootSize;
+            _laidOutSafeArea = safeArea;
+            bool keyboardMoved = keyboard != _keyboard;
+            _keyboard = keyboard;
 
-            // The tree, then every presented node in it on its own: a presented screen is laid out as a root is,
-            // covering the root whatever its place in the hierarchy, its padding kept clear of the safe area.
-            Solve(0, rootSize, safeArea);
-            for (int i = 1; i < nodeCount; i++)
+            // The rest of what layout works from it is told of (a node's inputs, its content), and what it reads as it
+            // solves (what it measures, what laying a node out sets off) it does not track: a pass that does not reach a
+            // node would let go of what that node's measuring read.
+            var tracking = Computation.Current;
+            Computation.Current = null;
+            try
             {
+                if (all || _reachingDirty)
+                    FindReaching();
+                // A node avoiding the keyboard pads itself by where it was drawn against it, which moves as the keyboard
+                // does.
+                if (keyboardMoved || _keyboard > 0f)
+                {
+                    foreach (int i in _avoiding)
+                        MarkChanged(i);
+                }
+
+                // The tree, then every presented node in it on its own: a presented screen is laid out as a root is,
+                // covering the root whatever its place in the hierarchy, its padding kept clear of the safe area.
+                LayOutRegion(0, rootSize, safeArea, all);
+                foreach (int i in _presented)
+                {
+                    if (Nodes[i].LaidOutFrom.Display != DisplayMode.None)
+                        LayOutRegion(i, rootSize, safeArea, all);
+                    else
+                        LeaveLayout(i);
+                }
+                if (UIDebug.VerifyLayout && !all)
+                    Verify(rootSize, safeArea);
+            }
+            finally
+            {
+                Computation.Current = tracking;
+            }
+        }
+
+        // Reads again the layout inputs of the nodes whose values changed, which said so (LayoutChanged); or, once the
+        // tree's nodes changed, of every node whose inputs are not read since they changed (one just come into the tree).
+        // Whether a node's presentation level changed, which moves what is in it between the solves.
+        private bool ReadLayoutInputs(bool all)
+        {
+            using var read = UIProfiling.LayoutInputs.Auto();
+            int count = 0;
+            bool presentation = false;
+            if (all)
+            {
+                for (int i = 0; i < Nodes.Count; i++)
+                    count += Read(Nodes[i], ref presentation);
+            }
+            else
+            {
+                for (int i = 0; i < _layoutChanged.Count; i++)
+                {
+                    var node = _layoutChanged[i];
+                    if (node != null && node.Tree == this)
+                        count += Read(node, ref presentation);
+                }
+            }
+            _layoutChanged.Clear();
+            UIProfiling.LayoutInputsRead.Value += count;
+            return presentation;
+        }
+
+        // Reads a node's layout inputs again if they may have changed, marking it changed if they did; 1 if it read them.
+        private int Read(UINode node, ref bool presentation)
+        {
+            var computation = node.LayoutComputation;
+            if (computation == null || !computation.Dirty) return 0;
+            var before = node.LaidOutFrom;
+            computation.Run();
+            ref readonly var after = ref node.LaidOutFrom;
+            if (!LayoutInputs.Same(in before, in after))
+            {
+                MarkChanged(node.Index);
+                presentation |= before.PresentationLevel != after.PresentationLevel;
+                _reachingDirty |= !LayoutInputs.SameReach(in before, in after);
+            }
+            return 1;
+        }
+
+        // Marks node `index` and every node up from it to its solve's root (the root, or the presented node it is in) as
+        // holding a change this pass, so the solver goes down to it.
+        private void MarkChanged(int index)
+        {
+            for (int i = index; _holdsChangePass[i] != _pass;)
+            {
+                _holdsChangePass[i] = _pass;
                 var node = Nodes[i];
-                if (node.PresentationLevel.Value != 0 && node.Display.Value != DisplayMode.None)
-                    Solve(i, rootSize, safeArea);
+                if (i == 0 || node.LaidOutFrom.PresentationLevel != 0) break;
+                i = node.ParentNode.Index;
+            }
+        }
+
+        // Which nodes the solver cannot take whole (_reaching): any whose place, or the place of something inside it,
+        // hangs on something outside it, or the place of something outside on it: floating against the root or an
+        // element, the elements floated against, reaching out past the safe area, or avoiding the keyboard (its padding
+        // follows where it was drawn). And which nodes are presented (each solved on its own) and which avoid the keyboard.
+        private void FindReaching()
+        {
+            _reachingDirty = false;
+            _presented.Clear();
+            _avoiding.Clear();
+            int count = Nodes.Count;
+            Array.Clear(_reaching, 0, count);
+            for (int i = 0; i < count; i++)
+            {
+                ref readonly var inputs = ref Nodes[i].LaidOutFrom;
+                var floating = inputs.Floating;
+                if (i > 0 && inputs.PresentationLevel != 0)
+                    _presented.Add(i);
+                if (inputs.AvoidsKeyboard)
+                    _avoiding.Add(i);
+                if (floating.AttachTo == FloatingAttach.Element && floating.Element != null && floating.Element.Tree == this)
+                    _reaching[floating.Element.Index] = true;
+                if (inputs.Ignores != Edges.None || inputs.AvoidsKeyboard || floating.AttachTo == FloatingAttach.Root
+                    || floating.AttachTo == FloatingAttach.Element)
+                    _reaching[i] = true;
+            }
+            // Up the tree: pre-order puts every node after its parent, so going backwards reaches each before its parent.
+            for (int i = count - 1; i > 0; i--)
+            {
+                if (_reaching[i])
+                    _reaching[Nodes[i].ParentNode.Index] = true;
             }
         }
 
@@ -394,32 +615,87 @@ namespace TimboJimbo.UINext
         // keyboard reaches into it, by where its bottom was drawn last frame.
         private Insets AvoidKeyboard(UINode node, Insets padding)
         {
-            if (!node.AvoidsKeyboard.Value || _keyboard <= 0f) return padding;
+            if (!node.LaidOutFrom.AvoidsKeyboard || _keyboard <= 0f) return padding;
             float below = Mathf.Max(0f, Root.Size.y - node.DrawnRect.yMax);
             padding.Bottom = Mathf.Max(padding.Bottom, _keyboard - below);
             return padding;
         }
 
-        // Lays out the subtree under node `start` as a tree of its own over the root's rect, leaving out what is not
-        // laid out (Display None) and the presented nodes in it (laid out on their own).
-        private void Solve(int start, Vector2 rootSize, Insets safeArea)
+        // Lays out node `start` (the root, or a presented node) and what is inside it over the root's rect, as a tree of
+        // its own: every node in it, or only what can have moved (nothing at all when it holds no change), then what is
+        // inside each node taken whole that came out a different size, at its new size.
+        private void LayOutRegion(int start, Vector2 rootSize, Insets safeArea, bool all)
         {
+            if (!all && _holdsChangePass[start] != _pass)
+            {
+                // As it was; a presented node's RectTransform follows where it is in the hierarchy all the same.
+                if (start > 0)
+                    WriteRect(Nodes[start], new Rect(-RootPosition(Nodes[start].ParentNode), rootSize));
+                return;
+            }
+            Solve(start, rootSize, safeArea, all, own: true);
+            for (int w = 0; w < _within.Count; w++)
+            {
+                int index = _within[w];
+                Solve(index, Nodes[index].Frame.Model.size, default, all: false, own: false);
+            }
+            _within.Clear();
+        }
+
+        // Solves node `start` and what is inside it as a tree of its own `size` big, keeping its content clear of
+        // `safeArea`, and gives each node the solve laid out its rect: the region's root too when it is the solve's own
+        // (`own`), while a node laid out within has its rect from the solve that took it whole.
+        private void Solve(int start, Vector2 size, Insets safeArea, bool all, bool own)
+        {
+            int count;
+            while (true)
+            {
+                count = Gather(start, all);
+                using (UIProfiling.Solve.Auto())
+                    LayoutSolver.SolveWidths(_solver, count, size, safeArea);
+                // A node taken whole that came out a different width would be fitted in height at a width it was not
+                // found at: it is solved from inside instead, the widths again with it.
+                if (!ExpandResized(count)) break;
+            }
+            using (UIProfiling.Solve.Auto())
+                LayoutSolver.SolveHeights(_solver, count, size, safeArea);
+            Apply(start, count, size, own);
+        }
+
+        // Gathers node `start` and what is inside it into the solver's array, pre-order, leaving out what is not laid out
+        // (Display None, with everything inside it, which goes out of layout) and the presented nodes in it (laid out on
+        // their own). Unless every node is solved, a node with children that holds no change, whose fit is known (at the
+        // width it had, which ExpandResized holds it to), and whose place, and that of what is inside it, hangs on nothing
+        // outside it, goes in whole (Collapsed), without what is inside it. Returns how many went in.
+        private int Gather(int start, bool all)
+        {
+            using var gather = UIProfiling.Gather.Auto();
             int end = SubtreeEnd[start];
             int count = 0;
-            var gather = UIProfiling.Gather.Auto();
             for (int i = start; i < end; i++)
             {
                 var node = Nodes[i];
-                _solverIndex[i] = -1;
+                ref readonly var inputs = ref node.LaidOutFrom;
                 int parentIndex = -1;
                 if (i != start)
                 {
-                    var parent = node.ParentNode;
-                    parentIndex = parent != null ? _solverIndex[parent.Index] : -1;
-                    if (parentIndex < 0) continue;
-                    if (node.Display.Value == DisplayMode.None || node.PresentationLevel.Value != 0) continue;
+                    // What is skipped is skipped whole, so the parent of every node reached went in.
+                    parentIndex = _solverIndex[node.ParentNode.Index];
+                    if (inputs.PresentationLevel != 0)
+                    {
+                        i = SubtreeEnd[i] - 1;
+                        continue;
+                    }
+                    if (inputs.Display == DisplayMode.None)
+                    {
+                        LeaveLayout(i);
+                        i = SubtreeEnd[i] - 1;
+                        continue;
+                    }
                 }
 
+                bool whole = !all && i != start && SubtreeEnd[i] > i + 1 && node.LayoutFitValid && _holdsChangePass[i] != _pass
+                    && _expandPass[i] != _pass && !_reaching[i];
                 _solverIndex[i] = count;
                 _solverToNode[count] = i;
                 _lastChild[count] = -1;
@@ -429,21 +705,23 @@ namespace TimboJimbo.UINext
                     Parent = parentIndex,
                     FirstChild = -1,
                     NextSibling = -1,
-                    Width = node.Width.Value,
-                    Height = node.Height.Value,
-                    Padding = AvoidKeyboard(node, node.Padding.Value),
-                    ChildGap = node.Gap.Value,
-                    Direction = node.Direction.Value,
-                    Wrap = node.Wrap.Value,
-                    AlignX = node.AlignX.Value,
-                    AlignY = node.AlignY.Value,
-                    AspectRatio = node.AspectRatio.Value,
-                    Floating = i == start ? default : node.Floating.Value,
+                    Width = inputs.Width,
+                    Height = inputs.Height,
+                    Padding = AvoidKeyboard(node, inputs.Padding),
+                    ChildGap = inputs.Gap,
+                    Direction = inputs.Direction,
+                    Wrap = inputs.Wrap,
+                    AlignX = inputs.AlignX,
+                    AlignY = inputs.AlignY,
+                    AspectRatio = inputs.AspectRatio,
+                    Floating = i == start ? default : inputs.Floating,
                     Element = -1,
-                    Ignores = node.IgnoresSafeArea.Value,
-                    Scroll = node.Scroller != null && node.Scroller.isActiveAndEnabled ? node.Scroller.Axis.Value : ScrollAxis.None,
+                    Ignores = inputs.Ignores,
+                    Scroll = inputs.Scroll,
                     Content = node.Content,
                     Node = node,
+                    Collapsed = whole,
+                    Fitted = whole ? node.LayoutFit : default,
                 };
                 if (parentIndex >= 0)
                 {
@@ -453,36 +731,92 @@ namespace TimboJimbo.UINext
                     _lastChild[parentIndex] = count;
                 }
                 count++;
+                if (whole)
+                    i = SubtreeEnd[i] - 1;
             }
 
-            // Floating against an element: the element's solver index, or against the parent when it is not laid out
-            // in this solve.
+            // Floating against an element: the element's solver index, or against the parent when it is not laid out in
+            // this solve.
             for (int k = 1; k < count; k++)
             {
                 ref var s = ref _solver[k];
                 if (s.Floating.AttachTo != FloatingAttach.Element) continue;
-                var element = s.Floating.Element;
-                if (element != null && element.Tree == this && element.Index >= start && element.Index < end && _solverIndex[element.Index] >= 0)
-                    s.Element = _solverIndex[element.Index];
+                int element = InSolve(s.Floating.Element, start, count);
+                if (element >= 0)
+                    s.Element = element;
                 else
                     s.Floating.AttachTo = FloatingAttach.Parent;
             }
-            gather.Dispose();
+            return count;
+        }
 
-            using (UIProfiling.Solve.Auto())
-                LayoutSolver.Solve(_solver, count, rootSize, safeArea);
+        // Where a node is in the solve of the `count` nodes from `start` just gathered, or -1 when it is not in it (a
+        // skipped node's index in the solver is a solve before's).
+        private int InSolve(UINode node, int start, int count)
+        {
+            if (node == null || node.Tree != this || node.Index < start || node.Index >= SubtreeEnd[start]) return -1;
+            int k = _solverIndex[node.Index];
+            return k >= 0 && k < count && _solverToNode[k] == node.Index ? k : -1;
+        }
 
+        // Node `i` went out of layout (Display None), with everything inside it but what is presented (in layout on its
+        // own): back in, each lands where it goes at once. Once it is out, so is all that.
+        private void LeaveLayout(int i)
+        {
+            if (!Nodes[i].InLayout) return;
+            int end = SubtreeEnd[i];
+            for (int j = i; j < end; j++)
+            {
+                var node = Nodes[j];
+                if (j > i && node.LaidOutFrom.PresentationLevel != 0)
+                {
+                    j = SubtreeEnd[j] - 1;
+                    continue;
+                }
+                node.InLayout = false;
+                node.LayoutFitValid = false;
+            }
+        }
+
+        // Marks each node taken whole that came out a different width from the one its fit was found at to be solved from
+        // inside: whether any was.
+        private bool ExpandResized(int count)
+        {
+            bool any = false;
+            for (int k = 1; k < count; k++)
+            {
+                ref var s = ref _solver[k];
+                if (!s.Collapsed || s.Size.x == s.Node.LayoutFitWidth) continue;
+                _expandPass[_solverToNode[k]] = _pass;
+                any = true;
+            }
+            return any;
+        }
+
+        // Gives each node the solve laid out its rect, and keeps its fit for a solve that takes it whole. A node taken
+        // whole keeps what is inside it as it was, unless it came out a different size (_within).
+        private void Apply(int start, int count, Vector2 size, bool own)
+        {
             using var apply = UIProfiling.Apply.Auto();
+            UIProfiling.LaidOut.Value += count;
+            LaidOutLastPass += count;
             for (int k = 0; k < count; k++)
             {
                 var node = Nodes[_solverToNode[k]];
                 ref var s = ref _solver[k];
-                var rect = k == 0 ? new Rect(0f, 0f, rootSize.x, rootSize.y) : s.Rect;
-                // Laid out in the pass before, it carries on from where it is drawn (springing inside a change), unless it
-                // lands at once; coming back into layout, it is where it goes at once, and whatever brings it in starts
-                // from there.
-                bool carriesOn = node.LayoutPass == _pass - 1 || node.LayoutPass == _pass;
-                node.LayoutPass = _pass;
+                if (k == 0 && !own)
+                {
+                    // Laid out within: what it holds runs as far as this solve says.
+                    if (node.Scroller != null)
+                        node.Scroller.SetExtent(size, s.ContentSize, default);
+                    continue;
+                }
+                var rect = k == 0 ? new Rect(0f, 0f, size.x, size.y) : s.Rect;
+                var was = node.Frame.Model.size;
+                // In layout before, it carries on from where it is drawn (springing inside a change), unless it lands at
+                // once; coming into layout, it is where it goes at once, and whatever brings it in starts from there.
+                bool carriesOn = node.InLayout;
+                node.InLayout = true;
                 if (carriesOn && !node.LandsAtOnce)
                 {
                     node.Frame.SetModel(rect, null);
@@ -494,11 +828,57 @@ namespace TimboJimbo.UINext
                         node.EnteredLayout?.Invoke(rect);
                 }
                 if (k > 0)
-                    WriteRectTransform(node.RectTransform, rect);
+                    WriteRect(node, rect);
                 else if (start > 0)
-                    WriteRectTransform(node.RectTransform, new Rect(-RootPosition(node.ParentNode), rootSize));
+                    WriteRect(node, new Rect(-RootPosition(node.ParentNode), size));
+                if (s.Collapsed)
+                {
+                    if (rect.size != was)
+                        _within.Add(_solverToNode[k]);
+                    continue;
+                }
+                if (k > 0)
+                {
+                    node.LayoutFit = s.Fitted;
+                    node.LayoutFitWidth = s.Size.x - s.Reach.Horizontal;
+                    node.LayoutFitValid = true;
+                }
                 if (node.Scroller != null)
                     node.Scroller.SetExtent(s.Rect.size, s.ContentSize, s.Reach);
+            }
+        }
+
+        /// <summary>
+        /// Nodes a pass that solved only what can have moved laid out somewhere other than solving every node puts them,
+        /// since the tree was made (counted while <see cref="UIDebug.VerifyLayout"/> is on).
+        /// </summary>
+        internal static int LayoutMismatches;
+
+        // Checks the pass against solving every node again, giving no node anything: each node in layout must already be
+        // where that puts it.
+        private void Verify(Vector2 rootSize, Insets safeArea)
+        {
+            VerifyRegion(0, rootSize, safeArea);
+            foreach (int i in _presented)
+            {
+                if (Nodes[i].LaidOutFrom.Display != DisplayMode.None)
+                    VerifyRegion(i, rootSize, safeArea);
+            }
+        }
+
+        private void VerifyRegion(int start, Vector2 rootSize, Insets safeArea)
+        {
+            int count = Gather(start, all: true);
+            LayoutSolver.Solve(_solver, count, rootSize, safeArea);
+            for (int k = 1; k < count; k++)
+            {
+                var node = Nodes[_solverToNode[k]];
+                Rect laidOut = node.Frame.Model, solved = _solver[k].Rect;
+                if (node.InLayout && Mathf.Abs(laidOut.x - solved.x) < 1e-3f && Mathf.Abs(laidOut.y - solved.y) < 1e-3f
+                    && Mathf.Abs(laidOut.width - solved.width) < 1e-3f && Mathf.Abs(laidOut.height - solved.height) < 1e-3f)
+                    continue;
+                if (++LayoutMismatches <= 20)
+                    Debug.LogError($"UI Next: {node.name} is laid out at {laidOut}{(node.InLayout ? "" : ", out of layout")}, where solving every node puts it at {solved}.", node);
             }
         }
 
@@ -512,6 +892,15 @@ namespace TimboJimbo.UINext
                 position += node.Frame.Peek.position;
             }
             return position;
+        }
+
+        // The model on a node's RectTransform, unless it has it already: asking a RectTransform is a call into the engine.
+        private static void WriteRect(UINode node, Rect rect)
+        {
+            if (node.RectWritten && node.WrittenRect == rect) return;
+            node.RectWritten = true;
+            node.WrittenRect = rect;
+            WriteRectTransform(node.RectTransform, rect);
         }
 
         // The model, for the scene view and for code reading transforms: anchored and pivoted at the parent's top-left.
@@ -785,6 +1174,9 @@ namespace TimboJimbo.UINext
             Array.Resize(ref _lifted, size);
             Array.Resize(ref _clipIndex, size);
             Array.Resize(ref _inputsChanged, size);
+            Array.Resize(ref _holdsChangePass, size);
+            Array.Resize(ref _expandPass, size);
+            Array.Resize(ref _reaching, size);
         }
 
         private sealed class LayoutComputation : Computation
@@ -794,6 +1186,15 @@ namespace TimboJimbo.UINext
             public LayoutComputation(UITree tree) : base(Phase.Layout) => _tree = tree;
 
             protected override string ProfilerName => "Tree.LayOut";
+
+            // Asked to run again by something it read (the root's size or safe area, the keyboard, anything else laying
+            // out read), rather than told why by a node (Tell): every node is laid out.
+            private protected override void Invalidated()
+            {
+                if (!_tree._telling)
+                    _tree._layoutAll = true;
+                base.Invalidated();
+            }
 
             protected override void Execute() => _tree.LayOut();
         }

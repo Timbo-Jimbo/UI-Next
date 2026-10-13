@@ -48,15 +48,18 @@ namespace TimboJimboEditor.UINext
     }
 
     /// <summary>
-    /// The Profiler's UI Next Updates module: what each frame did again to bring the UI up to date: nodes composited again
-    /// and those whose values were read for it, draw orders made again, primitives patched where they were, and what went
-    /// to the GPU. (A module charts ten counters at most, so these are a module of their own.)
+    /// The Profiler's UI Next Updates module: what each frame did again to bring the UI up to date: nodes whose layout
+    /// values were read again and nodes laid out again, nodes composited again and those whose values were read for it,
+    /// draw orders made again, primitives patched where they were, and what went to the GPU. (A module charts ten
+    /// counters at most, so these are a module of their own.)
     /// </summary>
     [Serializable, ProfilerModuleMetadata("UI Next Updates")]
     public sealed class UIProfilerUpdatesModule : ProfilerModule
     {
         private static readonly ProfilerCounterDescriptor[] s_counters =
         {
+            new(UIProfiling.LayoutInputsReadName, UIProfiling.CategoryName),
+            new(UIProfiling.LaidOutName, UIProfiling.CategoryName),
             new(UIProfiling.CompositedName, UIProfiling.CategoryName),
             new(UIProfiling.InputsReadName, UIProfiling.CategoryName),
             new(UIProfiling.OrderRebuildsName, UIProfiling.CategoryName),

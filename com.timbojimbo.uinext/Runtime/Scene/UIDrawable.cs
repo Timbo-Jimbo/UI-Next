@@ -77,7 +77,7 @@ namespace TimboJimbo.UINext
             if (_node == null) return;
             _node.DrawComputation?.Invalidate();
             if (this is IMeasurable)
-                _node.Tree?.InvalidateLayout();
+                _node.Tree?.ContentChanged(_node);
         }
 
         // Its UIValue fields, found once per type.

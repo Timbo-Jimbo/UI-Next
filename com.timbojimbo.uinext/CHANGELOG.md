@@ -2,7 +2,7 @@
 
 ### Added
 
-- In the Profiler, a UI Next module, which stacks where each frame's UI Next time goes (input, Model, layout, drawing, motion, the compositor, images), a UI Next Counts module (draw calls, primitives, and images loading, arriving and in use, the memory cache's size, atlas pages), and a UI Next Updates module (what each frame did again to bring the UI up to date: nodes composited and those whose values were read for it, draw orders made again, primitives patched, what went to the GPU). Their counters come from Unity's Profiling Core package, which UI Next now depends on, and they and UI Next's markers are in a category of their own, "UI Next".
+- In the Profiler, a UI Next module, which stacks where each frame's UI Next time goes (input, Model, layout, drawing, motion, the compositor, images), a UI Next Counts module (draw calls, primitives, and images loading, arriving and in use, the memory cache's size, atlas pages), and a UI Next Updates module (what each frame did again to bring the UI up to date: nodes whose layout values were read and nodes laid out, nodes composited and those whose values were read for it, draw orders made again, primitives patched, what went to the GPU). Their counters come from Unity's Profiling Core package, which UI Next now depends on, and they and UI Next's markers are in a category of their own, "UI Next".
 - Profiler markers, all named `UINext.*`: the frame and its steps, each stretch of a flush spent in one phase (`UINext.Model`, `UINext.Layout`, `UINext.Draw`), layout solves, the compositor's build, upload and render, input, labels reading their text, each computation's runs (`UINext.NodeDraw`, an effect by what it runs, `UINext.Effect.Image.Load`, `UINext.Value.Resolve`, `UINext.Tree.LayOut`), each drawable's drawing by its type (`UINext.Draw.Label`, `UINext.Draw.Box`, `UINext.Draw.Image`, your own) and a cross-fade's, and images loading (starting, made into textures, written to disk, put on atlas pages, evicted); the disk cache's work shows as a thread of its own, "UI Next / Image disk cache".
 - `ImageFit.Sliced`: a sprite nine-sliced, its borders (set in the Sprite Editor) keeping their size in points while the edges between them stretch along and the middle both ways. It is sliced as it is drawn, in one quad, so it follows its node's size as that springs. `Painter.SlicedImageNode` draws one.
 - `node.Image(sprite, fit)` adds an image, as `node.Box` and `node.Label` add theirs.
@@ -13,9 +13,13 @@
 - Project Settings > Timbo Jimbo > UI Next (`UISettings`): the default image loader, how much of the images nothing shows is kept in memory (64 MB unless set) and how much is kept on disk (256 MB).
 - The Showcase has an Images page: one sprite, sliced to three sizes, and three photos loaded from the web through a loader of the page's own (Bunny's optimizer: copies as wide as they are drawn, in their shape, and a blurred preview), which a tap opens full screen, where a wider copy loads with the page's standing in, and a button clearing the cache.
 
+- `UIDebug.VerifyLayout`: each layout pass that solves only what can have moved is checked against solving every node, and each node laid out anywhere else logged as an error: for testing layout.
+
 ### Changed
 
 - `ImageView` is `Image`, as `Box` and `Label` are; scenes keep their images.
+- Layout solves only what can have moved: a node whose values or content changed, the nodes up from it to its root and their children, each child holding no change taken whole, as it was last fitted.
+- Measuring (`IMeasurable`) is no longer tracked by layout, since a layout that does not reach a node would let go of what its measuring read: a drawable that measures says when what it measures changes (`UIDrawable.ContentChanged`), as `Label`, `Image` and `TextFieldText` do.
 
 ### Fixed
 

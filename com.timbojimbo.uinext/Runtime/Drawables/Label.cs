@@ -84,6 +84,12 @@ namespace TimboJimbo.UINext
         private Effect _reader;
         private int _depth;
 
+        // What shapes it, as layout measures it (where its values are going), read with its text: its text as read and
+        // everything but its box and its inline content's sizes. Counts its changes, and the reading it was read with.
+        private TextLayoutInput _shape;
+        private int _shapeVersion;
+        private int _shapeReading = -1;
+
         // Each element's and block's size by match, as layout gave it: while widths are shared out, before heights are
         // known; the same with each block as narrow as it can be (what the narrowest the label can be is measured with); and
         // once heights are known too. Each counts its changes: kept apart, none changes from one layout pass to the next
@@ -118,15 +124,14 @@ namespace TimboJimbo.UINext
         private int _rectsMatch = -1;
         private int _rectsStamp = -1;
 
-        // Measures, kept until what they were measured from changes: unwrapped, at the last width asked for, and narrowest.
-        private TextLayoutInput _measuredFor;
+        // Measures, kept until what they were measured from changes (its shape, by its version, and its inline content's
+        // sizes): unwrapped, at the last width asked for, and narrowest.
         private int _measuredVersion = -1;
         private int _unwrappedSizes = -1;
         private int _wrappedSizes = -1;
         private Vector2 _unwrapped;
         private float _measuredWidth = -1f;
         private Vector2 _measured;
-        private TextLayoutInput _narrowestFor;
         private int _narrowestForVersion = -1;
         private int _narrowestForSizes = -1;
         private float _minWidth = -1f;
@@ -254,15 +259,15 @@ namespace TimboJimbo.UINext
 
         // ── Measuring ────────────────────────────────────────────────────────────
 
+        // Measured from its shape as last read (ReadText reads it, and asks for its tree to be laid out again when it
+        // changes), so measuring reads none of its values.
         public Vector2 Measure(float availableWidth)
         {
             // With no limit, widths are being shared out, before heights are known: its objects at the sizes they have then.
             bool widths = availableWidth < 0f;
-            var input = Input(availableWidth, -1f, widths ? _widthSizes : _sizes);
-            if (!SameShape(in input, in _measuredFor, ignoreBox: true) || _measuredVersion != _version)
+            if (_measuredVersion != _shapeVersion)
             {
-                _measuredFor = input;
-                _measuredVersion = _version;
+                _measuredVersion = _shapeVersion;
                 _unwrappedSizes = _wrappedSizes = -1;
             }
             if (widths)
@@ -270,17 +275,17 @@ namespace TimboJimbo.UINext
                 if (_unwrappedSizes != _widthVersion)
                 {
                     _unwrappedSizes = _widthVersion;
-                    _unwrapped = TextLayout.Measure(in input);
+                    var unwrapped = Shaped(-1f, _widthSizes);
+                    _unwrapped = TextLayout.Measure(in unwrapped);
                 }
                 return _unwrapped;
             }
-            if (!input.WordWrap)
-                input.WidthPx = -1f;
             if (_wrappedSizes != _sizesVersion || !Mathf.Approximately(_measuredWidth, availableWidth))
             {
                 _wrappedSizes = _sizesVersion;
                 _measuredWidth = availableWidth;
-                _measured = TextLayout.Measure(in input);
+                var wrapped = Shaped(_shape.WordWrap ? availableWidth : -1f, _sizes);
+                _measured = TextLayout.Measure(in wrapped);
             }
             return _measured;
         }
@@ -289,18 +294,43 @@ namespace TimboJimbo.UINext
         {
             get
             {
-                var input = Input(-1f, -1f, _narrowest);
-                if (!SameShape(in input, in _narrowestFor, ignoreBox: true) || _narrowestForVersion != _version || _narrowestForSizes != _narrowestVersion)
+                if (_narrowestForVersion != _shapeVersion || _narrowestForSizes != _narrowestVersion)
                 {
-                    _narrowestFor = input;
-                    _narrowestForVersion = _version;
+                    _narrowestForVersion = _shapeVersion;
                     _narrowestForSizes = _narrowestVersion;
                     _minWidth = -1f;
                 }
                 if (_minWidth < 0f)
-                    _minWidth = input.WordWrap ? TextLayout.LongestWord(in input) : Measure(-1f).x;
+                {
+                    var narrowest = Shaped(-1f, _narrowest);
+                    // A text with nowhere to break (a number, a word) is as narrow as it is unwrapped, which measuring
+                    // found already: not laid out again to find its longest word.
+                    _minWidth = narrowest.WordWrap && (_inlines.Count > 0 || Breaks(narrowest.Text))
+                        ? TextLayout.LongestWord(in narrowest)
+                        : Measure(-1f).x;
+                }
                 return _minWidth;
             }
+        }
+
+        // Whether a text has anywhere a line could break: a space of any kind.
+        private static bool Breaks(string text)
+        {
+            if (text == null) return false;
+            foreach (char c in text)
+                if (char.IsWhiteSpace(c))
+                    return true;
+            return false;
+        }
+
+        // Its shape in a box `width` wide (negative: unwrapped), its elements and blocks at `sizes`.
+        private TextLayoutInput Shaped(float width, List<Vector2> sizes)
+        {
+            var input = _shape;
+            input.WidthPx = width;
+            input.HeightPx = -1f;
+            input.ObjectSizes = sizes;
+            return input;
         }
 
         // Forgets the measures and the layout, for what they were made from that they do not see change.
@@ -542,18 +572,40 @@ namespace TimboJimbo.UINext
         }
 
         // Its reading, run as values resolve, before its tree is laid out: reads its text again when it, or what it is read
-        // with, changes, and makes the inline content for what it found.
+        // with, changes, and makes the inline content for what it found. It reads what shapes it too, where its values are
+        // going, for layout to measure it from: when that changes, its tree is laid out again and it is drawn again.
         private void ReadText()
         {
             using var read = UIProfiling.LabelRead.Auto();
             string text = _text.Value ?? "";
             bool rich = _richText.Value;
             var markup = _markup.Value;
+            var shape = TextLayoutInput.Default;
+            shape.Font = _font.Value;
+            shape.FontSizePx = Mathf.Max(1f, _fontSize.Value);
+            shape.WordWrap = _wrap.Value;
+            shape.Alignment = _alignment.Value;
+            shape.NaturalAlignment = true;
+            shape.Overflow = _overflow.Value;
+            shape.MaxLines = Mathf.Max(0, _maxLines.Value);
+            shape.Bold = _bold.Value;
+            shape.Italic = _italic.Value;
+            shape.CharacterSpacingPx = _characterSpacing.Value;
+            // Room round every glyph for its edge's anti-aliasing, and for its outline.
+            shape.AntiAliasMarginPx = 1f + Mathf.Max(0f, _outlineWidth.Value);
             Computation.Untracked(() =>
             {
                 Read(text, rich, markup);
                 Reconcile();
             });
+            shape.Text = _readText;
+            shape.Markup = _readMarkup;
+            shape.Document = _readMarkup != null ? _document : null;
+            if (_shapeReading == _version && SameShape(in shape, in _shape, ignoreBox: true)) return;
+            _shape = shape;
+            _shapeReading = _version;
+            _shapeVersion++;
+            ContentChanged();
         }
 
         // Reads the text again, if it or what it is read with has changed since it was last read.
