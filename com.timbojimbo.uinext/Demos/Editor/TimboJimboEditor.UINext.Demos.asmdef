@@ -23,6 +23,11 @@
             "name": "com.timbojimbo.uinext.textinput",
             "expression": "0.1.0",
             "define": "UINEXT_TEXTINPUT"
+        },
+        {
+            "name": "com.unity.ugui",
+            "expression": "2.0.0",
+            "define": "UINEXT_UGUI"
         }
     ],
     "noEngineReferences": false

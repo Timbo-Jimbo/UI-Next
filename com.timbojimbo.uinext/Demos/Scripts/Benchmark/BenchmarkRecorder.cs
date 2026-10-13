@@ -11,8 +11,9 @@ namespace TimboJimbo.UINext.Demos.Benchmark
     /// <summary>
     /// Measures frames for the benchmark: every marker and counter in UI Next's Profiler category (each marker's time and
     /// calls a frame), a few of the engine's own (the player loop, what a frame allocated), and the frame's timings (its
-    /// CPU time on the main and render threads, and the GPU's). Markers are recorded as they are when it is made, so it is
-    /// made once what is measured has run. Recording a marker needs a development player (or the editor).
+    /// CPU time on the main and render threads, and the GPU's), and any other marker <c>include</c> takes. Markers are
+    /// recorded as they are when it is made, so it is made once what is measured has run. Recording a marker needs a
+    /// development player (or the editor).
     /// </summary>
     internal sealed class BenchmarkRecorder : IDisposable
     {
@@ -35,14 +36,15 @@ namespace TimboJimbo.UINext.Demos.Benchmark
         private readonly List<double> _values = new();
         private readonly List<double> _calls = new();
 
-        public BenchmarkRecorder(int capacity)
+        public BenchmarkRecorder(int capacity, Func<string, bool> include = null)
         {
             var handles = new List<ProfilerRecorderHandle>();
             ProfilerRecorderHandle.GetAvailable(handles);
             foreach (var handle in handles)
             {
                 var description = ProfilerRecorderHandle.GetDescription(handle);
-                if (description.Category.Name != "UI Next" && Array.IndexOf(EngineMeasures, description.Name) < 0) continue;
+                if (description.Category.Name != "UI Next" && Array.IndexOf(EngineMeasures, description.Name) < 0
+                    && (include == null || !include(description.Name))) continue;
                 _measures.Add(new Measure
                 {
                     // Counters are told apart from markers by a # (UI Next's markers are all "UINext.").

@@ -5,7 +5,9 @@
         "TimboJimbo.UINext",
         "TimboJimbo.UINext.Text",
         "Unity.InputSystem",
-        "TimboJimbo.UINext.TextInput"
+        "TimboJimbo.UINext.TextInput",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -19,6 +21,11 @@
             "name": "com.timbojimbo.uinext.textinput",
             "expression": "0.1.0",
             "define": "UINEXT_TEXTINPUT"
+        },
+        {
+            "name": "com.unity.ugui",
+            "expression": "2.0.0",
+            "define": "UINEXT_UGUI"
         }
     ],
     "noEngineReferences": false

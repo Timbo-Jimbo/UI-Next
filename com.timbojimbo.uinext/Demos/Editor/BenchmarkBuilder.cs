@@ -48,22 +48,31 @@ namespace TimboJimboEditor.UINext.Demos
         {
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) == null)
                 Build(open: false);
+            return BuildAndroid(ScenePath, ApplicationId, ProductName, apk, scriptsOnly);
+        }
+
+        /// <summary>
+        /// Builds an Android development player of one scene to <paramref name="apk"/>, as an app of its own, with frame
+        /// timings on; the project's own app id, name and frame timing setting are put back (and saved) however it ends.
+        /// </summary>
+        internal static string BuildAndroid(string scenePath, string applicationId, string productName, string apk, bool scriptsOnly)
+        {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(apk)));
 
             var target = NamedBuildTarget.Android;
-            string applicationId = PlayerSettings.GetApplicationIdentifier(target);
-            string productName = PlayerSettings.productName;
+            string projectId = PlayerSettings.GetApplicationIdentifier(target);
+            string projectName = PlayerSettings.productName;
             bool frameTimings = PlayerSettings.enableFrameTimingStats;
             try
             {
-                PlayerSettings.SetApplicationIdentifier(target, ApplicationId);
-                PlayerSettings.productName = ProductName;
+                PlayerSettings.SetApplicationIdentifier(target, applicationId);
+                PlayerSettings.productName = productName;
                 PlayerSettings.enableFrameTimingStats = true;
                 var options = BuildOptions.Development;
                 if (scriptsOnly) options |= BuildOptions.BuildScriptsOnly;
                 var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {
-                    scenes = new[] { ScenePath },
+                    scenes = new[] { scenePath },
                     locationPathName = apk,
                     target = BuildTarget.Android,
                     targetGroup = BuildTargetGroup.Android,
@@ -74,8 +83,8 @@ namespace TimboJimboEditor.UINext.Demos
             }
             finally
             {
-                PlayerSettings.SetApplicationIdentifier(target, applicationId);
-                PlayerSettings.productName = productName;
+                PlayerSettings.SetApplicationIdentifier(target, projectId);
+                PlayerSettings.productName = projectName;
                 PlayerSettings.enableFrameTimingStats = frameTimings;
                 // The build saved the project's settings with the benchmark's in them: saved again, they are its own.
                 AssetDatabase.SaveAssets();
