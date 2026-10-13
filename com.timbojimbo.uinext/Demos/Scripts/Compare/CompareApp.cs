@@ -25,6 +25,8 @@ namespace TimboJimbo.UINext.Demos.Compare
     /// it usually is: one Screen Space Overlay canvas scaled as UI Next's root is (390 by 844 points, matched by width),
     /// layout groups and a content size fitter, a scroll rect clipped by a RectMask2D, TextMeshPro text in the font UI
     /// Next draws with (the OS's default), and rounded corners from nine-sliced sprites. Neither has shadows or photos.
+    /// With -ballast 2 it spins for 2 ms every frame, the same for both, which holds a phone's CPU clock up as one with
+    /// more to do would be, so that the two are measured at the same clock rather than the lighter at a lower one.
     /// </summary>
     public sealed class CompareApp : MonoBehaviour
     {
@@ -74,6 +76,7 @@ namespace TimboJimbo.UINext.Demos.Compare
         private float _warmup = 1f;
         private float _measure = 4f;
         private int _cards = 40;
+        private float _ballast;
         private bool _stay;
         private bool _running;
         private readonly StringBuilder _report = new();
@@ -116,10 +119,10 @@ namespace TimboJimbo.UINext.Demos.Compare
             // Fonts, glyphs, shaders and first layouts settle before anything is measured.
             yield return Wait(2f);
             Log(string.Format(CultureInfo.InvariantCulture,
-                "UINB|start|system={0}|device={1}|cpu={2}|gpu={3}|api={4}|screen={5}x{6}@{7:F0}|cards={8}|rounds={9}|warmup={10}|measure={11}|unity={12}|font={13}",
+                "UINB|start|system={0}|device={1}|cpu={2}|gpu={3}|api={4}|screen={5}x{6}@{7:F0}|cards={8}|rounds={9}|warmup={10}|measure={11}|unity={12}|font={13}|ballast={14}|development={15}",
                 _system, SystemInfo.deviceModel, SystemInfo.processorType, SystemInfo.graphicsDeviceName, SystemInfo.graphicsDeviceType,
                 Screen.width, Screen.height, Screen.currentResolution.refreshRateRatio.value, _cards, _rounds, _warmup, _measure,
-                Application.unityVersion, _font != null ? _font.faceInfo.familyName : "UI Next default"));
+                Application.unityVersion, _font != null ? _font.faceInfo.familyName : "UI Next default", _ballast, Debug.isDebugBuild));
 
             using var recorder = new BenchmarkRecorder(Mathf.CeilToInt(_measure * 200f) + 64, name => Array.IndexOf(UguiMarkers, name) >= 0);
             for (int round = 1; round <= _rounds; round++)
@@ -167,12 +170,21 @@ namespace TimboJimbo.UINext.Demos.Compare
                     case "-warmup" when next != null: float.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out _warmup); break;
                     case "-measure" when next != null: float.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out _measure); break;
                     case "-cards" when next != null: int.TryParse(next, out _cards); break;
+                    case "-ballast" when next != null: float.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out _ballast); break;
                     case "-stay": _stay = true; break;
                 }
             }
             if (_scenarios.Count == 0)
                 _scenarios.AddRange(Scenarios);
             _rounds = Mathf.Max(1, _rounds);
+        }
+
+        // The same work every frame whatever is measured, keeping the CPU's clock where work keeps it.
+        private void Update()
+        {
+            if (_ballast <= 0f) return;
+            double end = UnityEngine.Time.realtimeSinceStartupAsDouble + _ballast / 1000.0;
+            while (UnityEngine.Time.realtimeSinceStartupAsDouble < end) { }
         }
 
         private void Log(string line)

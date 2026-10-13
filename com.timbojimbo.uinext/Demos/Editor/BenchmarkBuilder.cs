@@ -52,10 +52,11 @@ namespace TimboJimboEditor.UINext.Demos
         }
 
         /// <summary>
-        /// Builds an Android development player of one scene to <paramref name="apk"/>, as an app of its own, with frame
-        /// timings on; the project's own app id, name and frame timing setting are put back (and saved) however it ends.
+        /// Builds an Android player of one scene to <paramref name="apk"/>, as an app of its own, with frame timings on: a
+        /// development player, whose markers can be recorded, unless <paramref name="development"/> is off. The project's
+        /// own app id, name and frame timing setting are put back (and saved) however it ends.
         /// </summary>
-        internal static string BuildAndroid(string scenePath, string applicationId, string productName, string apk, bool scriptsOnly)
+        internal static string BuildAndroid(string scenePath, string applicationId, string productName, string apk, bool scriptsOnly, bool development = true)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(apk)));
 
@@ -68,7 +69,7 @@ namespace TimboJimboEditor.UINext.Demos
                 PlayerSettings.SetApplicationIdentifier(target, applicationId);
                 PlayerSettings.productName = productName;
                 PlayerSettings.enableFrameTimingStats = true;
-                var options = BuildOptions.Development;
+                var options = development ? BuildOptions.Development : BuildOptions.None;
                 if (scriptsOnly) options |= BuildOptions.BuildScriptsOnly;
                 var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
                 {

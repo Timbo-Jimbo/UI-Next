@@ -31,12 +31,16 @@ namespace TimboJimboEditor.UINext.Demos
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        /// <summary>Builds its Android development player to <paramref name="apk"/>, its scene first if it has none.</summary>
-        public static string BuildPlayer(string apk, bool scriptsOnly = false)
+        /// <summary>
+        /// Builds its Android player to <paramref name="apk"/>, its scene first if it has none: a development player, whose
+        /// markers are recorded, or with <paramref name="development"/> off a release one, which records the frame's timings
+        /// alone, as the app would run.
+        /// </summary>
+        public static string BuildPlayer(string apk, bool scriptsOnly = false, bool development = true)
         {
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath) == null)
                 Build(open: false);
-            return BenchmarkBuilder.BuildAndroid(ScenePath, ApplicationId, ProductName, apk, scriptsOnly);
+            return BenchmarkBuilder.BuildAndroid(ScenePath, ApplicationId, ProductName, apk, scriptsOnly, development);
         }
     }
 }
