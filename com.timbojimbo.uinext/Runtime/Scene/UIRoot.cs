@@ -138,7 +138,7 @@ namespace TimboJimbo.UINext
             ((IUIValue)_focusRingWidth).Attach(Node);
             ((IUIValue)_focusRingOffset).Attach(Node);
             ((IUIValue)_focusRingRadius).Attach(Node);
-            _tracker.Add(this, Node.RectTransform, DrivenTransformProperties.Pivot | DrivenTransformProperties.SizeDelta);
+            UITree.Drive(ref _tracker, this, Node.RectTransform, DrivenTransformProperties.Pivot | DrivenTransformProperties.SizeDelta);
             Tree = new UITree(this);
             UITree.Register(Tree);
             UIFrame.EnsureHooked();
@@ -151,7 +151,7 @@ namespace TimboJimbo.UINext
             ((IUIValue)_focusRingWidth).Detach();
             ((IUIValue)_focusRingOffset).Detach();
             ((IUIValue)_focusRingRadius).Detach();
-            _tracker.Clear();
+            UITree.Release(ref _tracker);
             if (Tree != null)
             {
                 UITree.Unregister(Tree);

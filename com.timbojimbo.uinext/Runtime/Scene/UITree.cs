@@ -135,7 +135,7 @@ namespace TimboJimbo.UINext
         {
             _layout.Dispose();
             _composite.Dispose();
-            _tracker.Clear();
+            Release(ref _tracker);
             foreach (var node in Nodes)
             {
                 if (node == null || node.Tree != this) continue;
@@ -164,7 +164,7 @@ namespace TimboJimbo.UINext
             }
             Nodes.Clear();
             SubtreeEnd.Clear();
-            _tracker.Clear();
+            Release(ref _tracker);
             if (RootNode == null || !RootNode.isActiveAndEnabled) return;
             Add(RootNode, null);
             Collect(RootNode.transform, RootNode);
@@ -205,8 +205,41 @@ namespace TimboJimbo.UINext
             Nodes.Add(node);
             SubtreeEnd.Add(Nodes.Count);
             if (parent != null)
-                _tracker.Add(Root, node.RectTransform, DrivenTransformProperties.AnchoredPosition | DrivenTransformProperties.SizeDelta
+                Drive(ref _tracker, Root, node.RectTransform, DrivenTransformProperties.AnchoredPosition | DrivenTransformProperties.SizeDelta
                     | DrivenTransformProperties.Anchors | DrivenTransformProperties.Pivot);
+        }
+
+        /// <summary>
+        /// Tells a tracker it drives a RectTransform's <paramref name="properties"/>, recording nothing for undo. In the
+        /// editor a tracker records what it is told it drives, so the values layout then writes there would mark its
+        /// scene as changed (a script reload laying a scene out again would leave it unsaved); they are layout's, not
+        /// changes of the user's.
+        /// </summary>
+        internal static void Drive(ref DrivenRectTransformTracker tracker, UnityEngine.Object driver, RectTransform rect,
+            DrivenTransformProperties properties)
+        {
+            RecordUndo(false);
+            try { tracker.Add(driver, rect, properties); }
+            finally { RecordUndo(true); }
+        }
+
+        /// <summary>Lets go of all a tracker drives, recording nothing for undo (see <see cref="Drive"/>).</summary>
+        internal static void Release(ref DrivenRectTransformTracker tracker)
+        {
+            RecordUndo(false);
+            try { tracker.Clear(); }
+            finally { RecordUndo(true); }
+        }
+
+        // Whether trackers record what they drive for undo; undo is the editor's, so in a player there is nothing to stop.
+        private static void RecordUndo(bool record)
+        {
+#if UNITY_EDITOR
+            if (record)
+                DrivenRectTransformTracker.StartRecordingUndo();
+            else
+                DrivenRectTransformTracker.StopRecordingUndo();
+#endif
         }
 
         // ── Hit testing ──────────────────────────────────────────────────────────

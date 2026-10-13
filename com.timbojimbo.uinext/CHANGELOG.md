@@ -17,6 +17,10 @@
 
 - `ImageView` is `Image`, as `Box` and `Label` are; scenes keep their images.
 
+### Fixed
+
+- A script reload, or anything else laying a root out again in the editor, no longer leaves its scene with unsaved changes: the RectTransforms layout drives are no longer recorded for undo.
+
 ## [0.4.0] - 13/10/2026
 
 ### Added
