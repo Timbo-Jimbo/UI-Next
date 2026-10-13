@@ -138,10 +138,13 @@ namespace TimboJimbo.UINext
                 if (s_safeArea.HasValue)
                     safeArea = s_safeArea.Value;
             }
-            foreach (var tree in UITree.Trees)
+            // By index: a foreach through the read-only list boxes its enumerator, every frame.
+            var trees = UITree.Trees;
+            for (int i = 0; i < trees.Count; i++)
             {
-                if (tree.Root != null)
-                    tree.Root.UpdateMetrics(pixelSize, safeArea);
+                var root = trees[i].Root;
+                if (root != null)
+                    root.UpdateMetrics(pixelSize, safeArea);
             }
         }
 

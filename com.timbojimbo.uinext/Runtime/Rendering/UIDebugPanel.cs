@@ -124,12 +124,11 @@ namespace TimboJimbo.UINext
 
         private static object Nodes()
         {
-            int nodes = 0, roots = 0;
-            foreach (var tree in UITree.Trees)
-            {
-                roots++;
-                nodes += tree.Nodes.Count;
-            }
+            int nodes = 0;
+            var trees = UITree.Trees;
+            int roots = trees.Count;
+            for (int i = 0; i < roots; i++)
+                nodes += trees[i].Nodes.Count;
             return nodes + " in " + roots + (roots == 1 ? " root" : " roots");
         }
     }

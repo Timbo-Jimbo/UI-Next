@@ -32,6 +32,7 @@
 ### Fixed
 
 - A script reload, or anything else laying a root out again in the editor, no longer leaves its scene with unsaved changes: the RectTransforms layout drives are no longer recorded for undo.
+- A frame no longer allocates 40 bytes going through the roots (a foreach through the read-only list of trees boxed its enumerator).
 
 ## [0.4.0] - 13/10/2026
 
