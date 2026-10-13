@@ -104,7 +104,12 @@ namespace TimboJimbo.UINext
         }
     }
 
-    /// <summary>A node's drawing: runs its drawables into its primitive list, again whenever what they read changes.</summary>
+    /// <summary>
+    /// A node's drawing: runs its drawables into its primitive list, again whenever what they read changes. A node not
+    /// seen as compositing last found it (hidden, inside something hidden, or faded to nothing) is not drawn: its drawing
+    /// waits, watching nothing meanwhile, until compositing finds it seen again, which draws it then (a page not presented
+    /// costs nothing as what is in it changes).
+    /// </summary>
     internal sealed class NodeDraw : Computation
     {
         private readonly UINode _node;
@@ -113,6 +118,14 @@ namespace TimboJimbo.UINext
 
         protected override void Execute()
         {
+            var tree = _node.Tree;
+            int index = _node.Index;
+            if (tree != null && index >= 0 && index < tree.Nodes.Count && (!tree.Shown[index] || tree.Opacities[index] <= 0f))
+            {
+                _node.DrawWaiting = true;
+                return;
+            }
+            _node.DrawWaiting = false;
             _node.Instances.Clear();
             _node.InstanceTextures.Clear();
             _node.OverlayInstances.Clear();

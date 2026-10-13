@@ -647,6 +647,9 @@ namespace TimboJimbo.UINext
             Opacities[i] = opacities;
             GroupOpacities[i] = groupOpacity;
             Blurs[i] = blur;
+            // Seen, with its drawing waiting for that: it is drawn now, before the compositor builds.
+            if (node.DrawWaiting && shown && opacities > 0f)
+                node.DrawComputation?.Invalidate();
 
             // Its clips: its parent's, and its parent's own clip; none for a node in the top layer.
             var chain = new Vector4(-1f, -1f, -1f, -1f);

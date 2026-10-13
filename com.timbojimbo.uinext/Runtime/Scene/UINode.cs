@@ -353,6 +353,10 @@ namespace TimboJimbo.UINext
         // Whether it was drawn again since the compositor last built (it is in the compositor's list of those that were).
         [NonSerialized] internal bool Redrawn;
 
+        // Whether its drawing waits for it to be seen: its draw computation found it hidden or faded to nothing, and left
+        // its drawing as it was. Compositing finding it seen draws it.
+        [NonSerialized] internal bool DrawWaiting;
+
         // The flight it is drawn in while it flies to its place (a matched node shown), and the flight that took over from
         // it, whose picture of it flies instead (a matched node hidden).
         [NonSerialized] internal Flight FlightIn;
