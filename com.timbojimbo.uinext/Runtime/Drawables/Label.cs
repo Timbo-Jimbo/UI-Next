@@ -103,8 +103,9 @@ namespace TimboJimbo.UINext
         private readonly List<int> _pieces = new();
         private readonly HashSet<int> _cut = new();
 
-        // The layout in its content box (at a width alone while widths are shared out), what it was laid out from, and
-        // whether it drew anything. What it draws, places its inline content by and finds taps on.
+        // The layout in its content box (at a width alone while widths are shared out, and with no box as it is measured),
+        // what it was laid out from, whether it drew anything, and whether it was laid out for the box it is drawn in. What
+        // it measures, draws, places its inline content by and finds taps on.
         private TextLayout _layout;
         private TextLayoutInput _laidOut;
         private int _laidOutVersion;
@@ -112,6 +113,7 @@ namespace TimboJimbo.UINext
         private int _laidOutSizes;
         private bool _valid;
         private bool _drawn;
+        private bool _final;
         private int _stamp;
         private int _watched = -1;
         private Vector2 _origin;
@@ -230,7 +232,7 @@ namespace TimboJimbo.UINext
         public TextDocument Document => _document;
 
         /// <summary>The layout it last drew, for questions about where its characters are (null before it draws).</summary>
-        public TextLayout Layout => _valid && _drawn ? _layout : null;
+        public TextLayout Layout => _valid && _drawn && _final ? _layout : null;
 
         /// <summary>The rules its text is read with: its own markup, else the project's default, else the built-in Markdown.</summary>
         public TextRuleSet EffectiveMarkup => MarkupFor(_markup.Peek);
@@ -277,7 +279,7 @@ namespace TimboJimbo.UINext
             {
                 _wrappedSizes = _sizesVersion;
                 _measuredWidth = availableWidth;
-                _measured = MeasureAhead(Shaped(_shape.WordWrap ? availableWidth : -1f, _sizes));
+                _measured = MeasureAhead(Shaped(_shape.WordWrap ? availableWidth : -1f, _sizes), _sizesVersion);
             }
             return _measured;
         }
@@ -288,23 +290,30 @@ namespace TimboJimbo.UINext
             if (_unwrappedSizes != _widthVersion)
             {
                 _unwrappedSizes = _widthVersion;
-                _unwrapped = MeasureAhead(Shaped(-1f, _widthSizes));
+                _unwrapped = MeasureAhead(Shaped(-1f, _widthSizes), _widthVersion);
             }
             return _unwrapped;
         }
 
-        // Measures with the layout it draws, which keeps what the engine worked out of the text, and forgets that layout:
-        // it is laid out again before it is drawn or asked anything, and one it drew is drawn again, so that taps find
-        // what is on screen.
-        private Vector2 MeasureAhead(in TextLayoutInput input)
+        // Measures by laying the text out with the layout it draws, its objects at sizes counted by `version`: the layout is
+        // drawn as it is in a box it fits, and the engine keeps what it worked out of the text for laying it out again. A
+        // layout it drew is drawn again, so that taps find what is on screen.
+        private Vector2 MeasureAhead(in TextLayoutInput input, int version)
         {
             _layout ??= new TextLayout();
-            if (_valid)
-            {
-                _valid = false;
+            if (_valid && _final)
                 Node.DrawComputation?.Invalidate();
-            }
-            return _layout.MeasureAhead(in input);
+            var size = _layout.MeasureAhead(in input);
+            _drawn = _layout.HasContent;
+            _valid = true;
+            _final = false;
+            _laidOut = input;
+            _laidOut.HeightPx = -1f;
+            _laidOutVersion = _version;
+            _laidOutSizesList = (List<Vector2>)input.ObjectSizes;
+            _laidOutSizes = version;
+            _stamp++;
+            return size;
         }
 
         // Whether a text that wide unwrapped fits a width: the engine lays text out in 64ths of a pixel, so a width less than
@@ -379,7 +388,7 @@ namespace TimboJimbo.UINext
             TakeSizes(in children, _sizes, ref _sizesVersion);
             LayOut(contentSize, _sizes, _sizesVersion, final: true);
             var inline = _inlines[index];
-            var origin = new Vector2(0f, _layout.TopPx);
+            var origin = _layout.OriginPx;
             if (inline.Kind == InlineKind.Background)
                 topLeft = origin + PieceRect(in inline).position;
             else if (_layout.TryGetObjectRect(inline.Match, out var rect))
@@ -430,16 +439,19 @@ namespace TimboJimbo.UINext
         // ── Laying out and drawing ───────────────────────────────────────────────
 
         // Lays its text out in a content box, its elements and blocks at `sizes` (counting changes in `version`), unless it
-        // is laid out so already. A height that cannot change the layout is left out. The final layout, in the box it is
-        // drawn in, is watched (Watch).
+        // is laid out so already: the same text laid out for another box (as it was measured) is moved there where it fits
+        // it as it is (TextLayout.Reflow). A height that cannot change the layout is left out. The final layout, in the box
+        // it is drawn in, is watched (Watch).
         private void LayOut(Vector2 box, List<Vector2> sizes, int version, bool final)
         {
             var input = Input(box.x, HeightMatters ? box.y : -1f, sizes);
-            if (!_valid || !SameShape(in input, in _laidOut, ignoreBox: false) || _laidOutVersion != _version
-                || _laidOutSizesList != sizes || _laidOutSizes != version)
+            // With no objects in it, what sizes it was laid out with does not matter: they are all nothing.
+            bool sameText = _valid && _laidOutVersion == _version && SameShape(in input, in _laidOut, ignoreBox: true)
+                && (_objects == 0 || (_laidOutSizesList == sizes && _laidOutSizes == version));
+            if (!sameText || input.WidthPx != _laidOut.WidthPx || input.HeightPx != _laidOut.HeightPx)
             {
                 _layout ??= new TextLayout();
-                _drawn = _layout.Generate(in input);
+                _drawn = sameText ? _layout.Reflow(in input) : _layout.Generate(in input);
                 _valid = true;
                 _laidOut = input;
                 _laidOutVersion = _version;
@@ -447,6 +459,7 @@ namespace TimboJimbo.UINext
                 _laidOutSizes = version;
                 _stamp++;
             }
+            _final = final;
             if (final)
                 Watch();
         }
@@ -494,7 +507,7 @@ namespace TimboJimbo.UINext
             if (string.IsNullOrEmpty(_text.Value) || box.width <= 0f) return;
             LayOut(box.size, _sizes, _sizesVersion, final: true);
             if (!_drawn) return;
-            _origin = new Vector2(box.x, box.y + _layout.TopPx);
+            _origin = box.position + _layout.OriginPx;
 
             // Over its inline content: the backgrounds behind its spans are its children, drawn before its overlay.
             var over = painter.Overlay;
@@ -882,7 +895,7 @@ namespace TimboJimbo.UINext
 
         void IPointerHandler.OnPointerDown(in PointerEvent e)
         {
-            if (_pointer >= 0 || !_valid) return;
+            if (_pointer >= 0 || !_valid || !_final) return;
             int match = TappableAt(e.Position);
             if (match < 0 || !UIInput.TakeTap(this, e.PointerId)) return;
             _pointer = e.PointerId;
