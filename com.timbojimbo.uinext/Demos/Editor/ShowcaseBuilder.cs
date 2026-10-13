@@ -512,6 +512,7 @@ namespace TimboJimboEditor.UINext.Demos
             foreach (var (name, width, height) in new[] { ("Small", Sizing.Fixed(48f), 48f), ("Wide", Sizing.Fixed(120f), 48f), ("Large", Sizing.Grow(), 110f) })
                 sliced.Child(name).Sized(width, Sizing.Fixed(height)).Image(frame, ImageFit.Sliced).Tint.Value = Accent;
 
+            var loader = PhotoLoader();
             var web = Panel(Case(body, "From the web (tap one)").Column(12f), 14f);
             var row = web.Child("Photos").Row(10f);
             row.Width.Value = Sizing.Grow();
@@ -524,16 +525,16 @@ namespace TimboJimboEditor.UINext.Demos
                 photo.MatchName.Value = "Web photo";
                 photo.MatchId.Value = i.ToString();
                 photo.Box(Background, 10f);
-                photo.Image(ImagesDemo.Small(WebPhotos[i])).CornerRadii.Value = 10f;
+                photo.Image(WebPhotos[i], loader: loader).CornerRadii.Value = 10f;
                 LoadingNote(photo);
                 photos.Add(photo.Pressable());
                 photo.Scale.When(InteractionStates.Pressed, 0.96f);
             }
             var clear = Button(web, "Clear the cache", Accent, Color.white);
 
-            // Full screen: the photo across the width over a black backdrop, its small copy at once and a large one loading
-            // over it, closed by a tap or back, or thrown away any way by a drag anywhere in it, on the photo or the backdrop,
-            // as Circle's photo viewer is.
+            // Full screen: the photo across the width over a black backdrop, asking for a copy as wide as that (the page's
+            // copy standing in until it arrives), closed by a tap or back, or thrown away any way by a drag anywhere in it,
+            // on the photo or the backdrop, as Circle's photo viewer is.
             var app = page.transform.parent.GetComponent<UINode>();
             var host = app.Child("Photo Viewer").Column().Center();
             var viewer = host.Add<Presentation>();
@@ -547,21 +548,33 @@ namespace TimboJimboEditor.UINext.Demos
             backdrop.Opacity.Value = 0f;
             backdrop.Focusable.Value = Focusability.Never;
             backdrop.Pressable();
-            var shown = host.Child("Photo");
+            var shown = host.Child("Photo").Center();
             shown.Width.Value = Sizing.Grow();
             shown.AspectRatio.Value = 4f / 3f;
             shown.MatchName.Value = "Web photo";
-            var small = shown.Image("");
-            var large = shown.Child("Large").Float(AttachPoint.LeftTop, AttachPoint.LeftTop).Center();
-            large.Sized(Sizing.Percent(1f), Sizing.Percent(1f));
-            var largeImage = large.Image("");
-            LoadingNote(large);
+            var image = shown.Image("", loader: loader);
+            LoadingNote(shown);
             shown.Pressable();
             host.Add<Draggable>().Axis = ScrollAxis.Both;
             var swipe = host.Add<SwipeToDismiss>();
             swipe.Setup(viewer, SwipeDirections.Any, panel: shown);
 
-            page.Add<ImagesDemo>().Setup(photos, new List<string>(WebPhotos), clear, viewer, backdrop, shown, small, largeImage, swipe);
+            page.Add<ImagesDemo>().Setup(photos, new List<string>(WebPhotos), clear, viewer, backdrop, image, swipe);
+        }
+
+        // The Images page's loader, made once beside the scene: copies as wide as they are drawn, cropped to their node's
+        // shape (Bunny's optimizer crops to an aspect ratio, as CDNs generally crop to a width and height), and a small
+        // blurred preview.
+        private static ImageLoader PhotoLoader()
+        {
+            string path = Folder + "/Photo Loader.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<ImageLoader>(path);
+            if (existing != null) return existing;
+            var loader = ScriptableObject.CreateInstance<ImageLoader>();
+            loader.Template = "{url}?width={width}&aspect_ratio={width}:{height}";
+            loader.PreviewTemplate = "{url}?width=32&aspect_ratio={width}:{height}&blur=20";
+            AssetDatabase.CreateAsset(loader, path);
+            return loader;
         }
 
         // A "Loading…" pill in the middle of an image's node, there only while its image loads.

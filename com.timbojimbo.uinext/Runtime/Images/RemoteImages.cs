@@ -14,8 +14,16 @@ namespace TimboJimbo.UINext
     /// </summary>
     internal static class RemoteImages
     {
-        // How much of the images nothing shows is kept for the next time one is asked for, in bytes as drawn.
-        private const long CacheBytes = 64L * 1024 * 1024;
+        // How much of the images nothing shows is kept for the next time one is asked for, in bytes as drawn: the project's
+        // setting (Project Settings > Timbo Jimbo > UI Next), 64 MB without one.
+        private static long CacheBytes
+        {
+            get
+            {
+                var settings = UISettings.Instance;
+                return (settings != null ? settings.ImageCacheMegabytes : UISettings.DefaultImageCacheMegabytes) * 1024L * 1024L;
+            }
+        }
 
         // How many downloads run at once.
         private const int MaxDownloads = 6;
@@ -84,6 +92,9 @@ namespace TimboJimbo.UINext
             Pump();
             return entry;
         }
+
+        /// <summary>Whether the image at a URL is loaded, shown or in the cache.</summary>
+        public static bool IsLoaded(string url) => s_entries.TryGetValue(url, out var entry) && entry.Texture != null;
 
         /// <summary>
         /// Lets go of an image: one nothing else shows is kept while it fits in the cache, and one still loading that

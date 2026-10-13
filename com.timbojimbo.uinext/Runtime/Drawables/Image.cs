@@ -33,14 +33,25 @@ namespace TimboJimbo.UINext
         [SerializeField] private UIValue<Sprite> _sprite = new UIValue<Sprite>();
         [SerializeField] private UIValue<Texture> _texture = new UIValue<Texture>();
         [SerializeField] private UIValue<string> _url = new UIValue<string>();
+        [SerializeField] private UIValue<ImageLoader> _loader = new UIValue<ImageLoader>();
         [SerializeField] private UIValue<Color> _tint = Color.white;
         [SerializeField] private UIValue<ImageFit> _fit = ImageFit.Cover;
         [SerializeField] private UIValue<CornerRadii> _cornerRadii = new CornerRadii();
 
-        // The image loaded from its URL, once it has arrived: a value drawn from, so its arriving on an animation fades it in.
+        // What it draws of its URL's image: the copy it asked for, once that arrives, and until then one standing in for it
+        // (a narrower copy loaded already, or its loader's preview). A value drawn from, so a change of it on an animation
+        // cross-fades.
         [System.NonSerialized] private UIValue<Texture> _loaded = new UIValue<Texture>();
-        [System.NonSerialized] private RemoteImages.Entry _entry;
-        [System.NonSerialized] private Effect _loader;
+        [System.NonSerialized] private Effect _load;
+        // The copy it draws, the one it has asked for and waits for (its first, or a wider one), and one standing in until
+        // it has a copy of its own.
+        [System.NonSerialized] private RemoteImages.Entry _shown;
+        [System.NonSerialized] private RemoteImages.Entry _wanted;
+        [System.NonSerialized] private RemoteImages.Entry _standIn;
+        // The URL and loader its copies are of, and the widest copy it has asked for, in pixels.
+        [System.NonSerialized] private string _source;
+        [System.NonSerialized] private ImageLoader _sourceLoader;
+        [System.NonSerialized] private int _width;
 
         /// <summary>The sprite drawn, used over <see cref="Texture"/>.</summary>
         public UIValue<Sprite> Sprite => _sprite;
@@ -50,11 +61,21 @@ namespace TimboJimbo.UINext
 
         /// <summary>
         /// An image to load from the web and show instead of its sprite and texture: downloaded once and shared by every
-        /// image showing it, and kept while anything shows it and for a while after. Until it arrives its node is in
-        /// <see cref="UIStates.Loading"/> (in <see cref="UIStates.Failed"/> if it cannot be loaded), for variants of it and
-        /// of what is inside it to follow, and it fades in as it arrives.
+        /// image showing it, and kept while anything shows it and for a while after. With a <see cref="Loader"/>, it asks
+        /// for a copy only as wide as it is drawn. Until its copy arrives its node is in <see cref="UIStates.Loading"/> (in
+        /// <see cref="UIStates.Failed"/> if it cannot be loaded), for variants of it and of what is inside it to follow, and
+        /// the copy fades in as it arrives.
         /// </summary>
         public UIValue<string> Url => _url;
+
+        /// <summary>
+        /// How it asks for its URL's image (a CDN's resizing): once laid out, a copy as wide as it is drawn, rounded up to
+        /// the loader's next width and never narrower than one it has asked for, a wider copy loaded already doing as well,
+        /// and until it arrives a narrower copy loaded already, or the loader's preview, standing in. None for the project's
+        /// default (Project Settings > Timbo Jimbo > UI Next). With neither, or with its node's width fitted to it (it is
+        /// then shown at the image's own size), it loads its URL as it is.
+        /// </summary>
+        public UIValue<ImageLoader> Loader => _loader;
 
         /// <summary>
         /// Forgets every image loaded from a URL: those nothing shows go now, and images showing one load it again.
@@ -65,7 +86,10 @@ namespace TimboJimbo.UINext
         public UIValue<ImageFit> Fit => _fit;
         public UIValue<CornerRadii> CornerRadii => _cornerRadii;
 
-        /// <summary>Its native size in points, scaled down to <paramref name="availableWidth"/> keeping its aspect when that is narrower.</summary>
+        /// <summary>
+        /// Its native size in points, scaled down to <paramref name="availableWidth"/> keeping its aspect when that is
+        /// narrower. A copy its loader asked for is scaled to the width either way: its pixels are only as many as it is drawn.
+        /// </summary>
         public Vector2 Measure(float availableWidth)
         {
             Vector2 native;
@@ -74,7 +98,8 @@ namespace TimboJimbo.UINext
                 native = sprite.rect.size * (100f / Mathf.Max(1f, sprite.pixelsPerUnit));
             else
                 native = texture != null ? new Vector2(texture.width, texture.height) : Vector2.zero;
-            if (availableWidth >= 0f && native.x > availableWidth && native.x > 0f)
+            bool scales = native.x > availableWidth || (_sourceLoader != null && texture != null && sprite == null);
+            if (availableWidth >= 0f && native.x > 0f && scales)
                 native *= availableWidth / native.x;
             return native;
         }
@@ -169,67 +194,230 @@ namespace TimboJimbo.UINext
         protected override void OnEnable()
         {
             base.OnEnable();
-            _loader = new Effect(Load);
-            _loader.Invalidate();
+            // After layout, to know how wide it is drawn.
+            _load = new Effect(Load, Phase.Draw);
+            _load.Invalidate();
         }
 
         protected override void OnDisable()
         {
-            _loader?.Dispose();
-            _loader = null;
+            _load?.Dispose();
+            _load = null;
             LetGo();
+            _source = null;
+            _sourceLoader = null;
             base.OnDisable();
         }
 
-        // The image at its URL asked for as the URL changes, the one asked for before let go.
+        // As its URL, its loader or the size it is laid out at changes: the copy of its URL's image to draw.
         private void Load()
         {
             string url = _url.Value;
             if (string.IsNullOrEmpty(url)) url = null;
-            if (_entry?.Url == url) return;
-            LetGo();
+            var loader = url != null ? LoaderFor() : null;
+            if (url != _source || loader != _sourceLoader)
+            {
+                LetGo();
+                _source = url;
+                _sourceLoader = loader;
+            }
             if (url == null) return;
-            _entry = RemoteImages.Acquire(url);
-            _entry.Dropped += Reload;
-            if (_entry.Loading)
+            if (loader == null)
             {
-                _entry.Done += Arrived;
-                Show(null, loading: true, failed: false);
+                if (_shown == null && _wanted == null)
+                    Want(url, 0, null, 0f);
+                return;
             }
-            else
+
+            var node = Node;
+            var size = node.Frame.Model.size;
+            // Asked for once it has been laid out with a width.
+            if (size.x <= 0f) return;
+            var tree = node.Tree;
+            var root = tree != null ? tree.Root : null;
+            float scale = root != null ? root.PixelsPerPoint : 1f;
+            // Its node's shape, for a loader asking for it, unless its height is fitted to its image, whose own shape it is.
+            bool shaped = loader.AsksForShape && size.y > 0f &&
+                          !(node.Height.Value.Mode == SizingMode.Fit && node.AspectRatio.Value <= 0f);
+            float shape = shaped ? size.y / size.x : 0f;
+
+            float pixels = size.x * scale;
+            var texture = _loaded.Value;
+            if (!shaped && texture != null && texture.height > 0 && size.y > 0f)
             {
-                Show(_entry.Texture, loading: false, failed: _entry.Texture == null);
+                // A copy of the image's own shape covering its node is wider than the node is; one fitting in it, narrower.
+                float aspect = (float)texture.width / texture.height;
+                var fit = _fit.Value;
+                if (fit == ImageFit.Cover) pixels = Mathf.Max(pixels, size.y * aspect * scale);
+                else if (fit == ImageFit.Contain) pixels = Mathf.Min(pixels, size.y * aspect * scale);
             }
+            int width = loader.WidthFor(pixels);
+            if (width <= _width) return;
+
+            // A wider copy loaded already will do.
+            string copy = loader.UrlFor(url, width, HeightAt(width, shape));
+            foreach (int wider in loader.Widths ?? System.Array.Empty<int>())
+            {
+                if (wider <= width) continue;
+                string candidate = loader.UrlFor(url, wider, HeightAt(wider, shape));
+                if (!RemoteImages.IsLoaded(candidate)) continue;
+                copy = candidate;
+                width = wider;
+                break;
+            }
+            Want(copy, width, loader, shape);
         }
 
-        // As it arrives it fades in over what was there, as any value drawn from does when it changes on an animation.
+        // The loader it asks with: its own, else the project's default; none if its node's width is fitted to it, as it is
+        // then shown at the image's own size, which only the image as it is has.
+        private ImageLoader LoaderFor()
+        {
+            var node = Node;
+            if (node.Width.Value.Mode == SizingMode.Fit && node.AspectRatio.Value <= 0f) return null;
+            var loader = _loader.Value;
+            if (loader != null) return loader;
+            UISettings.Watch();
+            var settings = UISettings.Instance;
+            return settings != null ? settings.DefaultImageLoader : null;
+        }
+
+        private static int HeightAt(int width, float shape) => shape > 0f ? Mathf.Max(1, Mathf.RoundToInt(width * shape)) : 0;
+
+        // Asks for a copy (its first, or a wider one), drawn at once if it is loaded already; until it arrives, what it draws
+        // stays, or, without a copy of its own yet, one stands in and its node is in Loading.
+        private void Want(string url, int width, ImageLoader loader, float shape)
+        {
+            if (_wanted != null) Drop(ref _wanted);
+            _width = width;
+            var entry = Hold(url);
+            if (!entry.Loading)
+            {
+                Arrive(entry, animate: false);
+                return;
+            }
+            _wanted = entry;
+            entry.Done += Arrived;
+            if (_shown != null) return;
+            if (loader != null && _standIn == null)
+                StandIn(loader, width, shape);
+            SetStates(loading: true, failed: false);
+        }
+
+        // Until it has a copy of its own: the widest narrower copy loaded already, else the loader's preview.
+        private void StandIn(ImageLoader loader, int width, float shape)
+        {
+            int best = 0;
+            string found = null;
+            foreach (int narrower in loader.Widths ?? System.Array.Empty<int>())
+            {
+                if (narrower >= width || narrower <= best) continue;
+                string candidate = loader.UrlFor(_source, narrower, HeightAt(narrower, shape));
+                if (!RemoteImages.IsLoaded(candidate)) continue;
+                best = narrower;
+                found = candidate;
+            }
+            found ??= loader.PreviewFor(_source, width, HeightAt(width, shape));
+            if (found == null) return;
+            _standIn = Hold(found);
+            if (_standIn.Loading)
+                _standIn.Done += StoodIn;
+            else if (_standIn.Texture != null)
+                _loaded.Value = _standIn.Texture;
+        }
+
+        // A stand-in that had to load fades in, unless the copy came first.
+        private void StoodIn(RemoteImages.Entry entry)
+        {
+            if (entry != _standIn || _shown != null || entry.Texture == null) return;
+            UI.Animate(UIAnimation.Smooth, () => _loaded.Value = entry.Texture);
+        }
+
         private void Arrived(RemoteImages.Entry entry)
         {
-            if (entry != _entry) return;
-            UI.Animate(UIAnimation.Smooth, () => Show(entry.Texture, loading: false, failed: entry.Texture == null));
+            if (entry == _wanted)
+                Arrive(entry, animate: true);
         }
 
-        // Its image forgotten (the cache cleared): it loads it again.
+        // A copy it asked for has come, or failed to. Come, it is drawn, cross-fading over what stood in for it or the
+        // narrower copy it replaces (fading in over nothing), which is let go of. Failed, what is drawn stays, the node in
+        // Failed if it has no copy of its own (kept, so that it is not asked for again at that width).
+        private void Arrive(RemoteImages.Entry entry, bool animate)
+        {
+            if (entry.Texture == null)
+            {
+                if (_shown != null)
+                {
+                    if (_wanted == entry) _wanted = null;
+                    Drop(ref entry);
+                    return;
+                }
+                _wanted = entry;
+                Change(animate ? UIAnimation.Smooth : (UIAnimation?)null, () => SetStates(loading: false, failed: true));
+                return;
+            }
+            if (_wanted == entry) _wanted = null;
+            var replaced = _shown;
+            _shown = entry;
+            var animation = !animate ? (UIAnimation?)null
+                : _loaded.Peek != null && _sourceLoader != null ? new UIAnimation(_sourceLoader.CrossFade)
+                : UIAnimation.Smooth;
+            Change(animation, () =>
+            {
+                _loaded.Value = entry.Texture;
+                SetStates(loading: false, failed: false);
+            });
+            if (replaced != null) Drop(ref replaced);
+            if (_standIn != null) Drop(ref _standIn);
+        }
+
+        private static void Change(UIAnimation? animation, System.Action change)
+        {
+            if (animation is { } on)
+                UI.Animate(on, change);
+            else
+                change();
+        }
+
+        // Its copies forgotten (the cache cleared): it asks for them again.
         private void Reload(RemoteImages.Entry entry)
         {
-            if (entry != _entry) return;
+            if (entry != _shown && entry != _wanted && entry != _standIn) return;
             LetGo();
-            _loader?.Invalidate();
+            _source = null;
+            _sourceLoader = null;
+            _load?.Invalidate();
+        }
+
+        private RemoteImages.Entry Hold(string url)
+        {
+            var entry = RemoteImages.Acquire(url);
+            entry.Dropped += Reload;
+            return entry;
+        }
+
+        private void Drop(ref RemoteImages.Entry entry)
+        {
+            entry.Done -= Arrived;
+            entry.Done -= StoodIn;
+            entry.Dropped -= Reload;
+            RemoteImages.Release(entry);
+            entry = null;
         }
 
         private void LetGo()
         {
-            if (_entry == null) return;
-            _entry.Done -= Arrived;
-            _entry.Dropped -= Reload;
-            RemoteImages.Release(_entry);
-            _entry = null;
-            Show(null, loading: false, failed: false);
+            bool held = _shown != null || _wanted != null || _standIn != null;
+            if (_shown != null) Drop(ref _shown);
+            if (_wanted != null) Drop(ref _wanted);
+            if (_standIn != null) Drop(ref _standIn);
+            _width = 0;
+            if (!held) return;
+            _loaded.Value = null;
+            SetStates(loading: false, failed: false);
         }
 
-        private void Show(Texture texture, bool loading, bool failed)
+        private void SetStates(bool loading, bool failed)
         {
-            _loaded.Value = texture;
             var node = Node;
             if (node == null) return;
             node.SetState(UIStates.Loading, loading);

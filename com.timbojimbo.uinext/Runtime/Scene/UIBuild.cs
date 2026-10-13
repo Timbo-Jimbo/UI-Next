@@ -136,12 +136,17 @@ namespace TimboJimbo.UINext
             return image;
         }
 
-        /// <summary>An image loaded from <paramref name="url"/>: the node fits it once it arrives unless sized otherwise.</summary>
-        public static Image Image(this UINode node, string url, ImageFit fit = ImageFit.Cover)
+        /// <summary>
+        /// An image loaded from <paramref name="url"/>, asked for through <paramref name="loader"/> (else the project's
+        /// default): the node fits it once it arrives unless sized otherwise.
+        /// </summary>
+        public static Image Image(this UINode node, string url, ImageFit fit = ImageFit.Cover, ImageLoader loader = null)
         {
             var image = node.gameObject.AddComponent<Image>();
             image.Url.Value = url;
             image.Fit.Value = fit;
+            if (loader != null)
+                image.Loader.Value = loader;
             return image;
         }
 

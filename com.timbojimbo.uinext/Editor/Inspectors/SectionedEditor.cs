@@ -493,7 +493,7 @@ namespace TimboJimboEditor.UINext
     {
         private static readonly Section[] s_sections =
         {
-            new("Image", true, "_sprite", "_texture", "_url", "_tint", "_fit", "_cornerRadii"),
+            new("Image", true, "_sprite", "_texture", "_url", "_loader", "_tint", "_fit", "_cornerRadii"),
         };
 
         protected override Section[] Sections => s_sections;
