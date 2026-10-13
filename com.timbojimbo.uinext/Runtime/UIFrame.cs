@@ -104,6 +104,7 @@ namespace TimboJimbo.UINext
             if (dt > 0f)
             {
                 using (UIProfiling.Step.Auto())
+                using (UIProfiling.Measure(UIProfiling.MotionTime))
                 {
                     ScrollView.StepAll(dt);
                     Pressable.StepAll(dt);
@@ -121,6 +122,7 @@ namespace TimboJimbo.UINext
             Compositor.Build();
             PendingSprings.LandUnread(FrameIndex);
             Ended?.Invoke();
+            UIProfiling.CountFrame();
         }
 
         private static void UpdateRoots()

@@ -7,7 +7,8 @@
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.TextCore.FontEngine.Tools",
         "TimboJimbo.UINext.Text",
-        "TimboJimbo.Core.Runtime"
+        "TimboJimbo.Core.Runtime",
+        "Unity.Profiling.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -44,8 +44,9 @@ namespace TimboJimbo.UINext
         {
             if (s_flushing) return;
             s_flushing = true;
-            // The phase being run, for the Profiler: one sample for each stretch spent in one.
+            // The phase being run, for the Profiler: one sample for each stretch spent in one, and its time.
             int phase = -1;
+            long since = 0;
             try
             {
                 int runs = 0;
@@ -55,8 +56,9 @@ namespace TimboJimbo.UINext
                     int next = (int)computation.Phase;
                     if (next != phase)
                     {
-                        if (phase >= 0) UIProfiling.Phases[phase].End();
+                        if (phase >= 0) EndPhase(phase, since);
                         UIProfiling.Phases[next].Begin();
+                        since = UIProfiling.Now;
                         phase = next;
                     }
                     computation.Run();
@@ -73,9 +75,15 @@ namespace TimboJimbo.UINext
             }
             finally
             {
-                if (phase >= 0) UIProfiling.Phases[phase].End();
+                if (phase >= 0) EndPhase(phase, since);
                 s_flushing = false;
             }
+        }
+
+        private static void EndPhase(int phase, long since)
+        {
+            UIProfiling.Phases[phase].End();
+            UIProfiling.AddSince(UIProfiling.PhaseTimes[phase], since);
         }
 
         private static bool TryNext(Phase upTo, out Computation computation)

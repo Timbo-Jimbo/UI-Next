@@ -56,6 +56,9 @@ namespace TimboJimbo.UINext
         }
 
         private static readonly List<Page> s_pages = new();
+
+        /// <summary>How many pages there are, for the Profiler.</summary>
+        internal static int PageCount => s_pages.Count;
         private static GraphicsFormat s_format = GraphicsFormat.None;
 
         // What pages are: 8-bit RGBA, in the project's colour space.

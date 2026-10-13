@@ -182,6 +182,7 @@ namespace TimboJimbo.UINext
             var update = InputState.currentUpdateType;
             if (!Application.isPlaying || update == InputUpdateType.Editor || update == InputUpdateType.BeforeRender) return;
             using (UIProfiling.Input.Auto())
+            using (UIProfiling.Measure(UIProfiling.InputTime))
                 Poll();
         }
 

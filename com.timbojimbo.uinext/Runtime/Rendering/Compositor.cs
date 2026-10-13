@@ -175,6 +175,7 @@ namespace TimboJimbo.UINext
         public static void Build()
         {
             using var build = UIProfiling.Composite.Auto();
+            using var time = UIProfiling.Measure(UIProfiling.CompositorTime);
             // A flight moves every frame it flies. The focus path is drawn again as focus moves.
             if (MatchedGeometry.Flights.Count > 0)
                 s_orderDirty = s_slotsDirty = true;

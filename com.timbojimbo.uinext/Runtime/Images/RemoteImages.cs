@@ -82,6 +82,12 @@ namespace TimboJimbo.UINext
         private static readonly Queue<Entry> s_waiting = new();
         private static long s_unusedBytes;
         private static int s_downloads;
+        private static int s_inUse;
+
+        // For the Profiler: images waiting for or in a download, those something holds, and the bytes kept of the others.
+        internal static int LoadingCount => s_downloads + s_waiting.Count;
+        internal static int InUseCount => s_inUse;
+        internal static long UnusedBytes => s_unusedBytes;
 
         /// <summary>
         /// The image at a URL, loading it unless it is loaded or loading already; let go of it with <see cref="Release"/>.
@@ -102,7 +108,8 @@ namespace TimboJimbo.UINext
                 entry.Unused = null;
                 s_unusedBytes -= entry.Bytes;
             }
-            entry.Users++;
+            if (entry.Users++ == 0)
+                s_inUse++;
             Pump();
             return entry;
         }
@@ -118,6 +125,7 @@ namespace TimboJimbo.UINext
         public static void Release(Entry entry)
         {
             if (--entry.Users > 0) return;
+            s_inUse--;
             if (entry.Texture == null || !Known(entry))
             {
                 Forget(entry);
@@ -205,6 +213,7 @@ namespace TimboJimbo.UINext
         private static void Download(Entry entry)
         {
             using var start = UIProfiling.ImageStart.Auto();
+            using var time = UIProfiling.Measure(UIProfiling.ImagesTime);
             string file = ImageDiskCache.Find(entry.Url);
             Send(entry, file ?? entry.Url, fromDisk: file != null);
         }
@@ -225,6 +234,7 @@ namespace TimboJimbo.UINext
         private static void Downloaded(Entry entry, UnityWebRequest request, bool fromDisk)
         {
             using var take = UIProfiling.ImageTake.Auto();
+            using var time = UIProfiling.Measure(UIProfiling.ImagesTime);
             s_downloads--;
             entry.Request = null;
             // An entry nothing wants any more was called off.
@@ -248,6 +258,7 @@ namespace TimboJimbo.UINext
                         using (UIProfiling.ImageKeep.Auto())
                             ImageDiskCache.Keep(entry.Url, request.downloadHandler.data);
                     }
+                    UIProfiling.ImagesArrived.Value++;
                     entry.Width = texture.width;
                     entry.Height = texture.height;
                     var slot = entry.Atlas ? ImageAtlas.Add(texture) : null;
@@ -305,6 +316,7 @@ namespace TimboJimbo.UINext
             s_unused.Clear();
             s_waiting.Clear();
             s_unusedBytes = 0;
+            s_inUse = 0;
         };
 #endif
     }
