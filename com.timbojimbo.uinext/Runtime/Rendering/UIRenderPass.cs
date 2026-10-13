@@ -95,6 +95,20 @@ namespace TimboJimbo.UINext
             data.SceneView = sceneView;
             data.Color = resourceData.activeColorTexture;
             builder.SetRenderAttachment(data.Color, 0, AccessFlags.ReadWrite);
+            if (!sceneView)
+            {
+                // In the game view, a depth buffer of its own for the occluders (Compositor.Render): cleared, used by this
+                // pass alone and never stored, so on a tiled GPU it stays on the chip.
+                var info = renderGraph.GetRenderTargetInfo(data.Color);
+                var depth = renderGraph.CreateTexture(new TextureDesc(info.width, info.height)
+                {
+                    depthBufferBits = DepthBits.Depth24,
+                    msaaSamples = (MSAASamples)Mathf.Max(1, info.msaaSamples),
+                    clearBuffer = true,
+                    name = "UINext Depth",
+                });
+                builder.SetRenderAttachmentDepth(depth, AccessFlags.Write);
+            }
             foreach (var groupTexture in s_groupTextures)
                 builder.UseTexture(groupTexture, AccessFlags.Read);
             builder.AllowPassCulling(false);

@@ -1069,14 +1069,7 @@ namespace TimboJimbo.UINext
                     clip = _clipIndex[i] = ClipShapes.Count;
                     ClipShapes.Add(default);
                 }
-                var inverse = world.Inverse;
-                ClipShapes[clip] = new ClipShape
-                {
-                    Inverse0 = new Vector4(inverse.A, inverse.B, inverse.Tx, 0f),
-                    Inverse1 = new Vector4(inverse.C, inverse.D, inverse.Ty, 0f),
-                    Size = new Vector4(frame.width, frame.height, 0f, 0f),
-                    Radii = inputs.ClipRadii,
-                };
+                ClipShapes[clip] = ClipShape.Of(world.Inverse, frame.size, inputs.ClipRadii);
                 ChangedClipsFrom = Mathf.Min(ChangedClipsFrom, clip);
                 ChangedClipsTo = Mathf.Max(ChangedClipsTo, clip + 1);
             }

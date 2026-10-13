@@ -12,13 +12,14 @@
 - Small images loaded through a loader (copies up to 512 pixels a side, asked for at the size they are drawn, and previews) are copied onto shared atlas pages on the GPU, so that a screen of photos samples a few textures and draws in a few calls: 2048-pixel pages of 8-bit RGBA (an image in another format, as a decoded JPEG is, drawn into a render texture of theirs first), the images along shelves of their height with their edge pixels copied once more round them. An image let go of leaves its room for another, and a page with nothing left on it goes; past four pages, or where the GPU can't copy textures, an image keeps its own.
 - Project Settings > Timbo Jimbo > UI Next (`UISettings`): the default image loader, how much of the images nothing shows is kept in memory (64 MB unless set) and how much is kept on disk (256 MB).
 - The Showcase has an Images page: one sprite, sliced to three sizes, and three photos loaded from the web through a loader of the page's own (Bunny's optimizer: copies as wide as they are drawn, in their shape, and a blurred preview), which a tap opens full screen, where a wider copy loads with the page's standing in, and a button clearing the cache.
-
+- `UIDebug.Repeat`: the UI drawn that many times over each frame, which keeps a phone's GPU at its full clock, so what one drawing costs shows in the GPU's time (a GPU with little to do slows down, which hides it).
 - `UIDebug.VerifyLayout`: each layout pass that solves only what can have moved is checked against solving every node, and each node laid out anywhere else logged as an error: for testing layout.
 
 ### Changed
 
 - `ImageView` is `Image`, as `Box` and `Label` are; scenes keep their images.
 - Layout solves only what can have moved: a node whose values or content changed, the nodes up from it to its root and their children, each child holding no change taken whole, as it was last fitted.
+- In the game view the UI's render pass has a depth buffer of its own (cleared, never stored, so a tiled GPU keeps it on the chip): what an opaque shape covers is not shaded, and nothing a clip cuts away is shaded either.
 - Measuring (`IMeasurable`) is no longer tracked by layout, since a layout that does not reach a node would let go of what its measuring read: a drawable that measures says when what it measures changes (`UIDrawable.ContentChanged`), as `Label`, `Image` and `TextFieldText` do.
 
 ### Fixed

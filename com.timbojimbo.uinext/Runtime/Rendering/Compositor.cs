@@ -117,6 +117,10 @@ namespace TimboJimbo.UINext
         private static readonly int InstanceOffsetId = Shader.PropertyToID("_InstanceOffset");
         private static readonly int MatrixId = Shader.PropertyToID("_UIMatrix");
         private static readonly int OverdrawId = Shader.PropertyToID("_UINextOverdraw");
+        private static readonly int OcclusionId = Shader.PropertyToID("_UINextOcclusion");
+        private static readonly int InstanceTotalId = Shader.PropertyToID("_InstanceTotal");
+        // The primitive shader's second pass, which draws the occluders.
+        private const int OccludersPass = 1;
         private static readonly int[] TextureIds =
         {
             Shader.PropertyToID("_Texture0"), Shader.PropertyToID("_Texture1"), Shader.PropertyToID("_Texture2"), Shader.PropertyToID("_Texture3"),
@@ -1125,13 +1129,7 @@ namespace TimboJimbo.UINext
         private static int AddClip(Affine2 inverse, Vector2 size, Vector4 radii)
         {
             EnsureClips(s_clipCount + 1);
-            s_clips[s_clipCount] = new ClipShape
-            {
-                Inverse0 = new Vector4(inverse.A, inverse.B, inverse.Tx, 0f),
-                Inverse1 = new Vector4(inverse.C, inverse.D, inverse.Ty, 0f),
-                Size = new Vector4(size.x, size.y, 0f, 0f),
-                Radii = radii,
-            };
+            s_clips[s_clipCount] = ClipShape.Of(inverse, size, radii);
             return s_clipCount++;
         }
 
@@ -1324,14 +1322,43 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
-        /// Draws every batch with <paramref name="cmd"/>. In the game view a root covers the screen; in the scene view it
-        /// is drawn where its RectTransform is, seen by <paramref name="camera"/>.
+        /// Draws every batch with <paramref name="cmd"/>. In the game view a root covers the screen, and the occluders are
+        /// drawn first, into the pass's depth buffer, so what an opaque shape covers is not shaded (see Primitive.shader);
+        /// in the scene view a root is drawn where its RectTransform is, seen by <paramref name="camera"/>.
         /// </summary>
         public static void Render(RasterCommandBuffer cmd, Camera camera, bool sceneView, bool flipped)
         {
             using var render = UIProfiling.Render.Auto();
+            bool occlusion = !sceneView;
+            if (occlusion)
+                DrawOccluders(cmd, camera, flipped);
             for (int r = 0; r < UIDebug.Repeat; r++)
-                Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped);
+                Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped, occlusion: occlusion);
+        }
+
+        // The occluders: a draw for each root's run of batches, which lie one after another in the buffer.
+        private static void DrawOccluders(RasterCommandBuffer cmd, Camera camera, bool flipped)
+        {
+            var material = Material;
+            if (material == null || s_instanceBuffer == null) return;
+            for (int b = 0; b < Batches.Count;)
+            {
+                var tree = Batches[b].Tree;
+                int start = Batches[b].Start, end = start + Batches[b].Count;
+                for (b++; b < Batches.Count && Batches[b].Tree == tree && Batches[b].Start == end; b++)
+                    end += Batches[b].Count;
+                if (tree.Root == null) continue;
+                var properties = s_properties;
+                properties.Clear();
+                properties.SetBuffer(InstancesId, s_instanceBuffer);
+                properties.SetBuffer(SlotsId, s_slotBuffer);
+                properties.SetBuffer(ClipsId, s_clipBuffer);
+                properties.SetInt(InstanceOffsetId, start);
+                properties.SetMatrix(MatrixId, MatrixFor(tree.Root, camera, false, flipped));
+                properties.SetFloat(OcclusionId, 1f);
+                properties.SetInt(InstanceTotalId, s_instanceCount);
+                cmd.DrawProcedural(Matrix4x4.identity, material, OccludersPass, MeshTopology.Triangles, 6, end - start, properties);
+            }
         }
 
         /// <summary>Draws the index-th group's image: what is in it, the part of its root it covers, over a clear image.</summary>
@@ -1377,7 +1404,7 @@ namespace TimboJimbo.UINext
         }
 
         private static void Draw(RasterCommandBuffer cmd, List<Batch> batches, int first, int count, Camera camera, bool sceneView, bool flipped,
-            Matrix4x4? region = null)
+            Matrix4x4? region = null, bool occlusion = false)
         {
             var material = Material;
             if (material == null || count == 0 || s_instanceBuffer == null) return;
@@ -1404,6 +1431,8 @@ namespace TimboJimbo.UINext
                 properties.SetInt(InstanceOffsetId, batch.Start);
                 properties.SetMatrix(MatrixId, matrix);
                 properties.SetFloat(OverdrawId, UIDebug.Overdraw ? 1f : 0f);
+                properties.SetFloat(OcclusionId, occlusion ? 1f : 0f);
+                properties.SetInt(InstanceTotalId, s_instanceCount);
                 for (int t = 0; t < TexturesPerBatch; t++)
                 {
                     var texture = s_batchTextures[batch.Textures + t];

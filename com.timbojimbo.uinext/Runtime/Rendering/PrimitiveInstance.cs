@@ -105,9 +105,27 @@ namespace TimboJimbo.UINext
     {
         public Vector4 Inverse0;
         public Vector4 Inverse1;
+
+        // Its size, and in z how far a point of its root's space reaches in its own (the transform's scale), which its
+        // edge is smoothed over.
         public Vector4 Size;
+
+        // Its corners' radii (top-left, top-right, bottom-right, bottom-left), none more than half its shorter side.
         public Vector4 Radii;
 
         public const int Stride = 4 * 16;
+
+        /// <summary>A clip <paramref name="size"/> big with corners of <paramref name="radii"/>, <paramref name="inverse"/> taking its root's space into its own.</summary>
+        public static ClipShape Of(in Affine2 inverse, Vector2 size, Vector4 radii)
+        {
+            float most = Mathf.Max(0f, Mathf.Min(size.x, size.y) * 0.5f);
+            return new ClipShape
+            {
+                Inverse0 = new Vector4(inverse.A, inverse.B, inverse.Tx, 0f),
+                Inverse1 = new Vector4(inverse.C, inverse.D, inverse.Ty, 0f),
+                Size = new Vector4(size.x, size.y, inverse.ScaleFactor, 0f),
+                Radii = new Vector4(Mathf.Min(radii.x, most), Mathf.Min(radii.y, most), Mathf.Min(radii.z, most), Mathf.Min(radii.w, most)),
+            };
+        }
     }
 }

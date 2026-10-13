@@ -629,13 +629,7 @@ namespace TimboJimbo.UINext
                 var shape = _treeClips[index];
                 var fromSource = InverseOf(shape) * _world;
                 inside[n++] = Clips.Count;
-                Clips.Add(new ClipShape
-                {
-                    Inverse0 = new Vector4(fromSource.A, fromSource.B, fromSource.Tx, 0f),
-                    Inverse1 = new Vector4(fromSource.C, fromSource.D, fromSource.Ty, 0f),
-                    Size = shape.Size,
-                    Radii = shape.Radii,
-                });
+                Clips.Add(ClipShape.Of(fromSource, shape.Size, shape.Radii));
             }
             return inside;
         }
