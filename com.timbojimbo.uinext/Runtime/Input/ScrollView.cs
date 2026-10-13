@@ -230,6 +230,47 @@ namespace TimboJimbo.UINext
             }
         }
 
+        /// <summary>
+        /// Reads, tracked, where the nodes it keeps clear of are drawn (their values and those of everything above them),
+        /// which its clear insets hang on but measure untracked: what composites its node reads them too, and composites it
+        /// again (with what it holds) as they move, a bar sliding away.
+        /// </summary>
+        internal void TrackClearNodes()
+        {
+            bool across = Scrolls(0), down = Scrolls(1);
+            if (down)
+            {
+                TrackDrawn(_clearOfTop);
+                TrackDrawn(_clearOfBottom);
+            }
+            if (across)
+            {
+                TrackDrawn(_clearOfLeft);
+                TrackDrawn(_clearOfRight);
+            }
+        }
+
+        private static void TrackDrawn(List<UINode> nodes)
+        {
+            foreach (var other in nodes)
+            {
+                for (var node = other; node != null; node = node.ParentNode)
+                {
+                    _ = node.Frame.Value;
+                    _ = node.Offset.Value;
+                    _ = node.Scale.Value;
+                    _ = node.Rotation.Value;
+                    _ = node.Display.Value;
+                    _ = node.Leaving.Value;
+                    _ = node.PresentationLevel.Value;
+                    var transition = node.Transition;
+                    if (transition == null) continue;
+                    _ = transition.Offset.Value;
+                    _ = transition.Scale.Value;
+                }
+            }
+        }
+
         /// <summary>Its size, as last laid out.</summary>
         public Vector2 Viewport { get; private set; }
 
@@ -345,6 +386,8 @@ namespace TimboJimbo.UINext
             base.OnEnable();
             Node.Scroller = this;
             Node.Tree?.InvalidateLayout();
+            // It clips and moves what its node holds.
+            Node.CompositeComputation?.Invalidate();
         }
 
         protected override void OnDisable()
@@ -358,6 +401,7 @@ namespace TimboJimbo.UINext
             {
                 Node.Scroller = null;
                 Node.Tree?.InvalidateLayout();
+                Node.CompositeComputation?.Invalidate();
             }
         }
 

@@ -179,19 +179,29 @@ namespace TimboJimbo.UINext
 
             // Widths: fitted to content up the tree, then the root's given and each parent's shared out down it (lines
             // broken as they are).
-            FitAxis(nodes, count, 0);
-            nodes[0].Size.x = rootSize.x;
-            DistributeAxis(nodes, 0);
+            using (UIProfiling.SolveWidths.Auto())
+            {
+                FitAxis(nodes, count, 0);
+                nodes[0].Size.x = rootSize.x;
+                DistributeAxis(nodes, 0);
+            }
 
             // Content wrapped to the widths it got, then heights the same way as widths.
-            WrapContent(nodes, count);
-            FitAxis(nodes, count, 1);
-            nodes[0].Size.y = rootSize.y;
-            DistributeAxis(nodes, 1);
+            using (UIProfiling.SolveWrap.Auto())
+                WrapContent(nodes, count);
+            using (UIProfiling.SolveHeights.Auto())
+            {
+                FitAxis(nodes, count, 1);
+                nodes[0].Size.y = rootSize.y;
+                DistributeAxis(nodes, 1);
+            }
 
             // What each node holds, from the sizes everything ended up with, then where it all goes.
-            SizeContent(nodes, count);
-            Place(nodes, safeArea);
+            using (UIProfiling.SolvePlace.Auto())
+            {
+                SizeContent(nodes, count);
+                Place(nodes, safeArea);
+            }
         }
 
         // ── Order ────────────────────────────────────────────────────────────────

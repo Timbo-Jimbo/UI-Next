@@ -6,9 +6,11 @@ namespace TimboJimbo.UINext
 {
     /// <summary>
     /// One root's nodes as flat arrays in pre-order, with the two computations that work on them: layout (which reads
-    /// every node's layout values as they are going, solves, and gives each node its frame) and compositing (which
-    /// reads every node's frame and drawn values as they are drawn, and works out where each is drawn in the root's
-    /// space, how opaque, and what clips it). Each runs again only when something it read changes.
+    /// every node's layout values as they are going, solves, and gives each node its frame) and compositing (which works
+    /// out where each node is drawn in the root's space, how opaque, and what clips it). Layout runs again when anything
+    /// it read changes. Compositing works from each node's inputs, read by a computation of the node's own
+    /// (<see cref="NodeComposite"/>), and composites again only the nodes whose inputs changed, with everything inside
+    /// them: a scroll view scrolling composites what it holds, not the rest of the tree.
     /// </summary>
     internal sealed class UITree : IDisposable
     {
@@ -48,12 +50,37 @@ namespace TimboJimbo.UINext
 
         // How far each node drawn as a group is blurred, in points (0 for none, and for nodes not drawn as groups).
         public float[] Blurs = new float[32];
+
+        // The clips nodes give what is inside them, each clipping node's at the index it keeps (-1 for none) until the
+        // tree's nodes change; and each node's chain of the clips that cut it.
         public readonly List<ClipShape> ClipShapes = new();
+        private int[] _clipIndex = new int[32];
         private Vector4[] _clipChains = new Vector4[32];
+
+        // What compositing changed since the compositor last took it, as ranges of indices: slots and clip shapes. And where
+        // the compositor last put them in its buffers, and how many there were then.
+        internal int ChangedSlotsFrom = int.MaxValue, ChangedSlotsTo;
+        internal int ChangedClipsFrom = int.MaxValue, ChangedClipsTo;
+        internal int CopiedSlotBase = -1, CopiedClipBase = -1, CopiedSlots = -1, CopiedClips = -1;
+
+        // Nodes whose compositing inputs changed since compositing last ran; per node, whether they did; whether every node
+        // is composited next (the tree's nodes changed); and the root's size and scale as last composited.
+        private readonly List<UINode> _changed = new();
+        private bool[] _inputsChanged = new bool[32];
+        private bool _compositeAll = true;
+        private Vector2 _compositedSize;
+        private float _compositedPixels;
 
         // Per node, how far what it holds is moved in its own space by its scrolling: drawn from under its top and left
         // clear insets, less its offset (nothing for a node that does not scroll).
         private Vector2[] _scrolled = new Vector2[32];
+
+        // Per node, as compositing last found them, what else the draw order hangs on: whether it is inside a group, the
+        // mask its group is cut by, its z-index, and whether it is lifted into the top layer.
+        private bool[] _inGroup = new bool[32];
+        private Texture[] _masks = new Texture[32];
+        private int[] _zIndices = new int[32];
+        private bool[] _lifted = new bool[32];
 
         // The nodes shown, in the order they are drawn (the compositor's), which hit testing walks backwards; and each
         // presentation level drawn (its root's node, then each presented node, lowest first), where it starts in it, and
@@ -62,6 +89,13 @@ namespace TimboJimbo.UINext
         public readonly List<UINode> Levels = new();
         public readonly List<int> LevelStarts = new();
         public readonly List<bool> LevelInteractive = new();
+
+        // Every presentation level as the compositor last made the draw order (drawn or not), which of them it drew from
+        // (the topmost cover in place, which hides what is below it), and whether a presented screen or what is on it has
+        // moved or faded since: whether that cover is in place may have changed.
+        internal readonly List<UINode> AllLevels = new();
+        internal int CoverFrom;
+        internal bool CoverCheck;
 
         private readonly LayoutComputation _layout;
         private readonly CompositeComputation _composite;
@@ -113,6 +147,7 @@ namespace TimboJimbo.UINext
         public void InvalidateStructure()
         {
             _structureDirty = true;
+            _compositeAll = true;
             _layout.Invalidate();
             _composite.Invalidate();
             Compositor.MarkOrderDirty();
@@ -120,7 +155,22 @@ namespace TimboJimbo.UINext
 
         public void InvalidateLayout() => _layout.Invalidate();
 
-        public void InvalidateComposite() => _composite.Invalidate();
+        /// <summary>Composites every node again.</summary>
+        public void InvalidateComposite()
+        {
+            _compositeAll = true;
+            _composite.Invalidate();
+        }
+
+        /// <summary>
+        /// <paramref name="node"/>'s compositing inputs may have changed (a value it reads for them did): it is composited
+        /// again, with everything inside it, the next time compositing runs.
+        /// </summary>
+        public void CompositeChanged(UINode node)
+        {
+            _changed.Add(node);
+            _composite.Invalidate();
+        }
 
         public void Remove(UINode node)
         {
@@ -356,6 +406,7 @@ namespace TimboJimbo.UINext
         {
             int end = SubtreeEnd[start];
             int count = 0;
+            var gather = UIProfiling.Gather.Auto();
             for (int i = start; i < end; i++)
             {
                 var node = Nodes[i];
@@ -416,10 +467,12 @@ namespace TimboJimbo.UINext
                 else
                     s.Floating.AttachTo = FloatingAttach.Parent;
             }
+            gather.Dispose();
 
             using (UIProfiling.Solve.Auto())
                 LayoutSolver.Solve(_solver, count, rootSize, safeArea);
 
+            using var apply = UIProfiling.Apply.Auto();
             for (int k = 0; k < count; k++)
             {
                 var node = Nodes[_solverToNode[k]];
@@ -475,98 +528,177 @@ namespace TimboJimbo.UINext
 
         // ── Compositing ──────────────────────────────────────────────────────────
 
+        // Composites what changed since it last ran: each node whose inputs changed is worked out again, with everything
+        // inside it, from its inputs (read again first, as its own computation is run here, in tree order) and its parent's.
+        // Once the tree's nodes changed, or its root's size or scale, every node is, and its clips are numbered afresh;
+        // still, only nodes whose values changed read them again.
         private void Composite()
         {
             int nodeCount = Nodes.Count;
             EnsureCapacity(nodeCount);
-            ClipShapes.Clear();
             var rootSize = Root.SizeObservable.Value;
-            int pass = CompositePass = ++s_compositePasses;
+            float pixels = Root.PixelsPerPoint;
+            bool all = _compositeAll || rootSize != _compositedSize || pixels != _compositedPixels;
+            if (all)
+            {
+                // A pass that composites every node: the nodes it drew carry its number until the tree's nodes change.
+                _compositeAll = false;
+                _compositedSize = rootSize;
+                _compositedPixels = pixels;
+                CompositePass = ++s_compositePasses;
+                ClipShapes.Clear();
+                for (int i = 0; i < nodeCount; i++)
+                    _clipIndex[i] = -1;
+            }
+            foreach (var changed in _changed)
+            {
+                if (changed != null && changed.Tree == this && changed.Index >= 0 && changed.Index < nodeCount)
+                    _inputsChanged[changed.Index] = true;
+            }
+            _changed.Clear();
 
+            // Whether what changed changes what is drawn or in what order, not only where nodes are drawn and how opaque.
+            bool order = false;
+            int composited = 0, read = 0;
+            // Nodes before this one are inside a node composited again, so they are too.
+            int until = all ? nodeCount : 0;
             for (int i = 0; i < nodeCount; i++)
             {
+                if (_inputsChanged[i])
+                {
+                    _inputsChanged[i] = false;
+                    until = Mathf.Max(until, SubtreeEnd[i]);
+                }
+                if (i >= until) continue;
                 var node = Nodes[i];
-                // A presented node hangs off the root, whatever its place in the hierarchy.
-                var parent = i > 0 && node.PresentationLevel.Value != 0 ? RootNode : node.ParentNode;
-                int p = parent != null ? parent.Index : -1;
-
-                var frame = p < 0 ? new Rect(0f, 0f, rootSize.x, rootSize.y) : node.Frame.Value;
-                var offset = node.Offset.Value;
-                float scale = node.Scale.Value;
-                float rotation = node.Rotation.Value;
-                float opacity = Mathf.Clamp01(node.Opacity.Value);
-                var transition = node.Transition;
-                if (transition != null)
+                var inputs = node.CompositeComputation;
+                if (inputs != null && inputs.Dirty)
                 {
-                    offset += transition.Offset.Value;
-                    scale *= transition.Scale.Value;
-                    opacity *= Mathf.Clamp01(transition.Opacity.Value);
+                    inputs.Run();
+                    read++;
                 }
-                bool shown = (node.Display.Value == DisplayMode.Visible || node.Leaving.Value) && (p < 0 || Shown[p]);
-                // Lifted into the top layer or presented: out of its ancestors' clips.
-                bool topLayer = node.TopLayer.Value || node.PresentationLevel.Value != 0;
-                _ = node.ZIndex.Value;
-
-                var local = Affine2.Translate(frame.position + offset)
-                            * Affine2.AroundPivot(frame.size * 0.5f, scale, rotation);
-                var world = p < 0 ? local : World[p] * Affine2.Translate(_scrolled[p]) * local;
-                var scroller = node.Scroller;
-                _scrolled[i] = scroller != null && scroller.isActiveAndEnabled ? scroller.ClearShift - scroller.Offset.Value : Vector2.zero;
-                World[i] = world;
-                Shown[i] = shown;
-                float effectiveOpacity = (p < 0 ? 1f : Slots[p].SizeOpacity.z) * opacity;
-                // Colour filters multiply down the tree, as opacity does, and every pixel drawn applies them.
-                float saturation = (p < 0 ? 1f : Slots[p].Row0.w) * Mathf.Max(0f, node.Saturation.Value);
-                float brightness = (p < 0 ? 1f : Slots[p].Row1.w) * Mathf.Max(0f, node.Brightness.Value);
-                Opacities[i] = (p < 0 ? 1f : Opacities[p]) * opacity;
-                // A group not fully opaque: what is in it is drawn at its own opacities into the group's image, which
-                // is drawn at the group's. A node a transition is fading (a page, an alert, an item going away) fades
-                // as a group too, so its parts never show through each other on the way.
-                bool fadingIn = transition != null && transition.Opacity.Value < 0.999f;
-                // A composite group is drawn as one image while not fully opaque, blurred or masked: its image is what is
-                // faded, blurred and masked, however opaque it is. Blur and masks apply to nothing else. A node drawn at
-                // no opacity at all (faded out, a fade's first frame, a bouncy fade past nothing) is no group: nothing in
-                // it is seen, so its image is not made, and what is in it is drawn at nothing (not at the group's 1).
-                bool composite = node.CompositeGroup.Value;
-                float blur = composite ? node.Blur.Value : 0f;
-                bool masked = composite && node.Mask.Value != null;
-                if (!composite && !node.WarnedOutsideGroup && (node.Blur.Value > 0.01f || node.Mask.Value != null))
-                {
-                    node.WarnedOutsideGroup = true;
-                    Debug.LogWarning($"UI Next: {node.name} has a blur or a mask, which apply only to a composite group; turn on its Composite Group.", node);
-                }
-                bool group = shown && effectiveOpacity > 0f
-                             && (((composite || fadingIn) && opacity < 0.999f) || blur > 0.01f || masked);
-                GroupOpacities[i] = group ? effectiveOpacity : 0f;
-                Blurs[i] = group ? Mathf.Max(0f, blur) : 0f;
-                if (group) effectiveOpacity = 1f;
-
-                // Its clips: its parent's, and its parent's own clip; none for a node in the top layer.
-                var chain = new Vector4(-1f, -1f, -1f, -1f);
-                if (p >= 0 && !topLayer)
-                {
-                    chain = _clipChains[p];
-                    if (parent.Clips.Value || (parent.Scroller != null && parent.Scroller.isActiveAndEnabled))
-                        chain = Append(chain, OwnClip(parent, p));
-                }
-                _clipChains[i] = chain;
-                Slots[i] = new NodeSlot
-                {
-                    Row0 = new Vector4(world.A, world.B, world.Tx, saturation),
-                    Row1 = new Vector4(world.C, world.D, world.Ty, brightness),
-                    SizeOpacity = new Vector4(frame.width, frame.height, shown ? effectiveOpacity : 0f,
-                        1f / Mathf.Max(1e-4f, Root.PixelsPerPoint * world.ScaleFactor)),
-                    Clips = chain,
-                };
-                LocalOpacities[i] = opacity;
-                node.DrawnSlot = Slots[i];
-                node.DrawnOpacity = opacity;
-                node.DrawnShown = shown;
-                node.DrawnPass = pass;
+                order |= CompositeNode(i, node, rootSize, pixels);
+                composited++;
             }
-            Compositor.MarkSlotsDirty();
-            Compositor.MarkOrderDirty();
+            UIProfiling.Composited.Value += composited;
+            UIProfiling.InputsRead.Value += read;
+            if (composited > 0)
+                Compositor.MarkSlotsDirty();
+            if (order)
+                Compositor.MarkOrderDirty();
         }
+
+        // Works out node `i` from its inputs and its parent's: where it is drawn in the root's space, how opaque, whether it
+        // is shown, whether it is drawn as a group, what clips it, and its own clip, which cuts what is inside it. True if
+        // what changed changes what is drawn or in what order, so the draw order must be made again.
+        private bool CompositeNode(int i, UINode node, Vector2 rootSize, float pixels)
+        {
+            ref readonly var inputs = ref node.Composited;
+            // A presented node hangs off the root, whatever its place in the hierarchy.
+            bool presented = i > 0 && inputs.Presented;
+            var parent = presented ? RootNode : node.ParentNode;
+            int p = parent != null ? parent.Index : -1;
+
+            var frame = p < 0 ? new Rect(0f, 0f, rootSize.x, rootSize.y) : inputs.Frame;
+            float opacity = inputs.Opacity;
+            bool shown = inputs.Visible && (p < 0 || Shown[p]);
+            // Lifted into the top layer or presented: out of its ancestors' clips.
+            bool topLayer = inputs.Lifted || presented;
+
+            var local = Affine2.Translate(frame.position + inputs.Offset)
+                        * Affine2.AroundPivot(frame.size * 0.5f, inputs.Scale, inputs.Rotation);
+            var world = p < 0 ? local : World[p] * Affine2.Translate(_scrolled[p]) * local;
+            _scrolled[i] = inputs.Scrolled;
+            float effectiveOpacity = (p < 0 ? 1f : Slots[p].SizeOpacity.z) * opacity;
+            // Colour filters multiply down the tree, as opacity does, and every pixel drawn applies them.
+            float saturation = (p < 0 ? 1f : Slots[p].Row0.w) * inputs.Saturation;
+            float brightness = (p < 0 ? 1f : Slots[p].Row1.w) * inputs.Brightness;
+            float opacities = (p < 0 ? 1f : Opacities[p]) * opacity;
+            // A group not fully opaque: what is in it is drawn at its own opacities into the group's image, which is drawn
+            // at the group's. A composite group is drawn as one image while not fully opaque, blurred or masked: its image
+            // is what is faded, blurred and masked, however opaque it is; so is a node a transition is fading. A node drawn
+            // at no opacity at all (faded out, a fade's first frame, a bouncy fade past nothing) is no group: nothing in it
+            // is seen, so its image is not made, and what is in it is drawn at nothing (not at the group's 1).
+            bool group = shown && effectiveOpacity > 0f
+                         && (((inputs.Composite || inputs.FadingIn) && opacity < 0.999f) || inputs.Blur > 0.01f || inputs.Mask != null);
+            float groupOpacity = group ? effectiveOpacity : 0f;
+            float blur = group ? inputs.Blur : 0f;
+            if (group) effectiveOpacity = 1f;
+
+            // The draw order is made again for a change in whether it is seen, whether it is a group or how its group is
+            // drawn, its z-index or lift, and as a group or what is in one is drawn somewhere new or fades (a group's image
+            // covers what is drawn in it). As a presented screen or what is on it does, the compositor looks again at
+            // whether a cover is in place (one hides what is below it only while drawn in place, opaque).
+            bool inGroup = p >= 0 && (_inGroup[p] || GroupOpacities[p] > 0f);
+            bool moved = !Same(World[i], world) || Slots[i].SizeOpacity.x != frame.width || Slots[i].SizeOpacity.y != frame.height
+                         || Opacities[i] != opacities;
+            bool order = Shown[i] != shown || (Opacities[i] > 0f) != (opacities > 0f) || GroupOpacities[i] != groupOpacity
+                         || Blurs[i] != blur || _masks[i] != inputs.Mask || _zIndices[i] != inputs.ZIndex || _lifted[i] != inputs.Lifted
+                         || (moved && (group || inGroup));
+            if (moved && (presented || (p > 0 && Nodes[p].Composited.Presented)))
+                CoverCheck = true;
+            _inGroup[i] = inGroup;
+            _masks[i] = inputs.Mask;
+            _zIndices[i] = inputs.ZIndex;
+            _lifted[i] = inputs.Lifted;
+
+            World[i] = world;
+            Shown[i] = shown;
+            Opacities[i] = opacities;
+            GroupOpacities[i] = groupOpacity;
+            Blurs[i] = blur;
+
+            // Its clips: its parent's, and its parent's own clip; none for a node in the top layer.
+            var chain = new Vector4(-1f, -1f, -1f, -1f);
+            if (p >= 0 && !topLayer)
+            {
+                chain = _clipChains[p];
+                if (parent.Composited.Clips && _clipIndex[p] >= 0)
+                    chain = Append(chain, _clipIndex[p]);
+            }
+            _clipChains[i] = chain;
+            Slots[i] = new NodeSlot
+            {
+                Row0 = new Vector4(world.A, world.B, world.Tx, saturation),
+                Row1 = new Vector4(world.C, world.D, world.Ty, brightness),
+                SizeOpacity = new Vector4(frame.width, frame.height, shown ? effectiveOpacity : 0f,
+                    1f / Mathf.Max(1e-4f, pixels * world.ScaleFactor)),
+                Clips = chain,
+            };
+            ChangedSlotsFrom = Mathf.Min(ChangedSlotsFrom, i);
+            ChangedSlotsTo = Mathf.Max(ChangedSlotsTo, i + 1);
+
+            // Its own clip, which cuts what is inside it: its rect and clip radii, in its own space.
+            if (inputs.Clips)
+            {
+                int clip = _clipIndex[i];
+                if (clip < 0)
+                {
+                    clip = _clipIndex[i] = ClipShapes.Count;
+                    ClipShapes.Add(default);
+                }
+                var inverse = world.Inverse;
+                ClipShapes[clip] = new ClipShape
+                {
+                    Inverse0 = new Vector4(inverse.A, inverse.B, inverse.Tx, 0f),
+                    Inverse1 = new Vector4(inverse.C, inverse.D, inverse.Ty, 0f),
+                    Size = new Vector4(frame.width, frame.height, 0f, 0f),
+                    Radii = inputs.ClipRadii,
+                };
+                ChangedClipsFrom = Mathf.Min(ChangedClipsFrom, clip);
+                ChangedClipsTo = Mathf.Max(ChangedClipsTo, clip + 1);
+            }
+
+            LocalOpacities[i] = opacity;
+            node.DrawnSlot = Slots[i];
+            node.DrawnOpacity = opacity;
+            node.DrawnShown = shown;
+            node.DrawnPass = CompositePass;
+            return order;
+        }
+
+        private static bool Same(in Affine2 a, in Affine2 b) =>
+            a.A == b.A && a.B == b.B && a.C == b.C && a.D == b.D && a.Tx == b.Tx && a.Ty == b.Ty;
 
         /// <summary>
         /// Where <paramref name="node"/> is drawn <paramref name="ahead"/> seconds from now if everything that moves it keeps
@@ -614,21 +746,6 @@ namespace TimboJimbo.UINext
             return true;
         }
 
-        // The clip a node gives what is inside it: its own rect and clip radii, in its own space.
-        private int OwnClip(UINode node, int index)
-        {
-            var inverse = World[index].Inverse;
-            var size = new Vector2(Slots[index].SizeOpacity.x, Slots[index].SizeOpacity.y);
-            ClipShapes.Add(new ClipShape
-            {
-                Inverse0 = new Vector4(inverse.A, inverse.B, inverse.Tx, 0f),
-                Inverse1 = new Vector4(inverse.C, inverse.D, inverse.Ty, 0f),
-                Size = new Vector4(size.x, size.y, 0f, 0f),
-                Radii = node.ClipRadii.Value.ToVector(),
-            });
-            return ClipShapes.Count - 1;
-        }
-
         // A chain with one more clip, keeping the innermost four.
         private static Vector4 Append(Vector4 chain, int clip)
         {
@@ -659,6 +776,12 @@ namespace TimboJimbo.UINext
             Array.Resize(ref Blurs, size);
             Array.Resize(ref _clipChains, size);
             Array.Resize(ref _scrolled, size);
+            Array.Resize(ref _inGroup, size);
+            Array.Resize(ref _masks, size);
+            Array.Resize(ref _zIndices, size);
+            Array.Resize(ref _lifted, size);
+            Array.Resize(ref _clipIndex, size);
+            Array.Resize(ref _inputsChanged, size);
         }
 
         private sealed class LayoutComputation : Computation

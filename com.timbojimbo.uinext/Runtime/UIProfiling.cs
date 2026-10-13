@@ -30,8 +30,21 @@ namespace TimboJimbo.UINext
             new(Category, "UINext.Model"), new(Category, "UINext.Layout"), new(Category, "UINext.Draw"),
         };
 
+        /// <summary>A layout's steps: its nodes' values gathered, the solve (its widths, text wrapped, heights, then places), its results put on the nodes.</summary>
+        public static readonly ProfilerMarker Gather = new(Category, "UINext.Layout.Gather");
         public static readonly ProfilerMarker Solve = new(Category, "UINext.Layout.Solve");
+        public static readonly ProfilerMarker SolveWidths = new(Category, "UINext.Layout.Widths");
+        public static readonly ProfilerMarker SolveWrap = new(Category, "UINext.Layout.Wrap");
+        public static readonly ProfilerMarker SolveHeights = new(Category, "UINext.Layout.Heights");
+        public static readonly ProfilerMarker SolvePlace = new(Category, "UINext.Layout.Place");
+        public static readonly ProfilerMarker Apply = new(Category, "UINext.Layout.Apply");
+
+        /// <summary>The compositor's steps: slots and clips copied, drawings patched, the draw order made again (its batches made).</summary>
         public static readonly ProfilerMarker Composite = new(Category, "UINext.Compositor.Build");
+        public static readonly ProfilerMarker CopySlots = new(Category, "UINext.Compositor.Copy");
+        public static readonly ProfilerMarker Patch = new(Category, "UINext.Compositor.Patch");
+        public static readonly ProfilerMarker Order = new(Category, "UINext.Compositor.Order");
+        public static readonly ProfilerMarker Batch = new(Category, "UINext.Compositor.Batch");
         public static readonly ProfilerMarker Upload = new(Category, "UINext.Compositor.Upload");
         public static readonly ProfilerMarker Render = new(Category, "UINext.Compositor.Render");
         public static readonly ProfilerMarker Input = new(Category, "UINext.Input");
@@ -107,6 +120,11 @@ namespace TimboJimbo.UINext
         internal const string ImagesInUseName = "Images In Use";
         internal const string ImageCacheName = "Image Cache (MB)";
         internal const string AtlasPagesName = "Atlas Pages";
+        internal const string OrderRebuildsName = "Draw Order Rebuilds";
+        internal const string PatchedName = "Primitives Patched";
+        internal const string UploadedName = "Uploaded (KB)";
+        internal const string CompositedName = "Nodes Composited";
+        internal const string InputsReadName = "Composite Inputs Read";
 
         public static readonly ProfilerCounterValue<int> DrawCalls = Count(DrawCallsName);
         public static readonly ProfilerCounterValue<int> Primitives = Count(PrimitivesName);
@@ -115,6 +133,15 @@ namespace TimboJimbo.UINext
         public static readonly ProfilerCounterValue<int> ImagesInUse = Count(ImagesInUseName);
         public static readonly ProfilerCounterValue<int> ImageCache = Count(ImageCacheName);
         public static readonly ProfilerCounterValue<int> AtlasPages = Count(AtlasPagesName);
+
+        /// <summary>The compositor's work each frame: draw orders made again, primitives patched where they were, and what went to the GPU.</summary>
+        public static readonly ProfilerCounterValue<int> OrderRebuilds = Count(OrderRebuildsName, perFrame: true);
+        public static readonly ProfilerCounterValue<int> Patched = Count(PatchedName, perFrame: true);
+        public static readonly ProfilerCounterValue<int> Uploaded = Count(UploadedName, perFrame: true);
+
+        /// <summary>Compositing's work each frame: nodes composited again, and nodes whose values were read again for it.</summary>
+        public static readonly ProfilerCounterValue<int> Composited = Count(CompositedName, perFrame: true);
+        public static readonly ProfilerCounterValue<int> InputsRead = Count(InputsReadName, perFrame: true);
 
         private static readonly double s_nanosecondsPerTick = 1e9 / Stopwatch.Frequency;
 

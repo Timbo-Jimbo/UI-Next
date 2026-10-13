@@ -147,7 +147,7 @@ namespace TimboJimbo.UINext
                 if (_node.FocusVisible.Value && _node.FocusRing.Value)
                     UIFocus.DrawRing(_node, painter.Overlay);
             }
-            Compositor.MarkInstancesDirty(_node.Tree);
+            Compositor.MarkRedrawn(_node);
         }
     }
 }

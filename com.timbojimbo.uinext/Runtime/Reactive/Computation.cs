@@ -78,8 +78,14 @@ namespace TimboJimbo.UINext
         {
             if (Dirty || Disposed) return;
             Dirty = true;
-            UIScheduler.Enqueue(this);
+            Invalidated();
         }
+
+        /// <summary>
+        /// Just marked to run again: queued for its phase's flush. A computation something else runs when it needs it
+        /// tells that instead (a node's compositing inputs, which its tree reads as it composites the node).
+        /// </summary>
+        private protected virtual void Invalidated() => UIScheduler.Enqueue(this);
 
         /// <summary>Runs it now, recording its reads.</summary>
         public void Run()

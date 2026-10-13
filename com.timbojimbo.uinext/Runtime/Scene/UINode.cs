@@ -302,6 +302,10 @@ namespace TimboJimbo.UINext
         [NonSerialized] internal readonly List<Texture> OverlayTextures = new();
         [NonSerialized] internal NodeDraw DrawComputation;
 
+        // What compositing works from, as its composite computation last read it (which its tree runs as it composites it).
+        [NonSerialized] internal CompositeInputs Composited;
+        [NonSerialized] internal NodeComposite CompositeComputation;
+
         // Its scroll container behaviour, if any, which offsets what is inside it.
         [NonSerialized] internal ScrollView Scroller;
 
@@ -335,6 +339,19 @@ namespace TimboJimbo.UINext
         [NonSerialized] internal float DrawnOpacity;
         [NonSerialized] internal bool DrawnShown;
         [NonSerialized] internal int DrawnPass = -1;
+
+        // Where the compositor last put its primitives: the build that drew it (any other's: it is not drawn now), where
+        // its primitives under its children and those over them start, how many of each, and whether they went into a
+        // group's image. Drawn again with as many, they are patched there rather than the draw order made again.
+        [NonSerialized] internal int EmittedBuild = -1;
+        [NonSerialized] internal int EmittedAt;
+        [NonSerialized] internal int EmittedCount;
+        [NonSerialized] internal int EmittedOverlayAt;
+        [NonSerialized] internal int EmittedOverlayCount;
+        [NonSerialized] internal bool EmittedInGroup;
+
+        // Whether it was drawn again since the compositor last built (it is in the compositor's list of those that were).
+        [NonSerialized] internal bool Redrawn;
 
         // The flight it is drawn in while it flies to its place (a matched node shown), and the flight that took over from
         // it, whose picture of it flies instead (a matched node hidden).
@@ -632,7 +649,7 @@ namespace TimboJimbo.UINext
         {
             if (Transition != null) return Transition;
             Transition = new NodeTransition();
-            Tree?.InvalidateComposite();
+            CompositeComputation?.Invalidate();
             return Transition;
         }
 
@@ -644,6 +661,8 @@ namespace TimboJimbo.UINext
             ForEachValue(value => value.Attach(this));
             DrawComputation ??= new NodeDraw(this);
             DrawComputation.Invalidate();
+            CompositeComputation ??= new NodeComposite(this);
+            CompositeComputation.Invalidate();
             UITree.NodeChanged(this);
         }
 
@@ -653,6 +672,8 @@ namespace TimboJimbo.UINext
             ForEachValue(value => value.Detach());
             DrawComputation?.Dispose();
             DrawComputation = null;
+            CompositeComputation?.Dispose();
+            CompositeComputation = null;
             Frame.Settle();
             UITree.NodeChanged(this);
             Tree?.Remove(this);
