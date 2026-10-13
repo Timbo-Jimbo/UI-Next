@@ -19,8 +19,7 @@ namespace TimboJimbo.UINext.Demos.Showcase
 
         private void Awake()
         {
-            int rate = Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value);
-            Application.targetFrameRate = rate > 0 ? rate : 60;
+            Application.targetFrameRate = 120;
 
             // The Rich text page's code font, made as the showcase starts rather than as the page first opens.
             Markup.CodeFont.Prewarm();
