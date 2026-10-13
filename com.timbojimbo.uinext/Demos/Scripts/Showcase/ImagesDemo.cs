@@ -8,7 +8,8 @@ namespace TimboJimbo.UINext.Demos.Showcase
     /// Images: photos loaded from the web as small copies, which a tap opens full screen, flying out of their place as a
     /// larger copy loads over them there, and the cache cleared to load them all again. The CDN (Bunny's optimizer) sends
     /// each copy at the width its URL asks for. A photo on the page and the one full screen share a match name, the full
-    /// screen one taking the tapped one's id; the page's is hidden while it is open.
+    /// screen one taking the tapped one's id; the page's is hidden while it is open. Full screen, a tap or back closes it,
+    /// and a drag anywhere throws it away any way, as Circle's photo viewer does, the backdrop fading as it goes.
     /// </summary>
     public sealed class ImagesDemo : MonoBehaviour
     {
@@ -26,6 +27,7 @@ namespace TimboJimbo.UINext.Demos.Showcase
         [SerializeField] private UINode _shown;
         [SerializeField] private Image _small;
         [SerializeField] private Image _large;
+        [SerializeField] private SwipeToDismiss _swipe;
 
         private readonly List<Action> _opens = new();
         private Pressable _tapBackdrop;
@@ -33,7 +35,7 @@ namespace TimboJimbo.UINext.Demos.Showcase
         private int _open = -1;
 
         public void Setup(List<Pressable> photos, List<string> urls, Pressable clear, Presentation viewer, UINode backdrop,
-            UINode shown, Image small, Image large)
+            UINode shown, Image small, Image large, SwipeToDismiss swipe)
         {
             _photos = photos;
             _urls = urls;
@@ -43,6 +45,7 @@ namespace TimboJimbo.UINext.Demos.Showcase
             _shown = shown;
             _small = small;
             _large = large;
+            _swipe = swipe;
         }
 
         private void OnEnable()
@@ -62,7 +65,7 @@ namespace TimboJimbo.UINext.Demos.Showcase
             _tapPhoto = _shown.GetComponent<Pressable>();
             _tapBackdrop.Tapped += Close;
             _tapPhoto.Tapped += Close;
-            UIInput.Back += OnBack;
+            _swipe.Progress += Fade;
         }
 
         private void OnDisable()
@@ -76,7 +79,7 @@ namespace TimboJimbo.UINext.Demos.Showcase
             _viewer.Dismissed -= Closed;
             _tapBackdrop.Tapped -= Close;
             _tapPhoto.Tapped -= Close;
-            UIInput.Back -= OnBack;
+            _swipe.Progress -= Fade;
         }
 
         // Full screen, the small copy, which the page has already, shows at once; the large one loads over it, fading in
@@ -97,12 +100,8 @@ namespace TimboJimbo.UINext.Demos.Showcase
                 _viewer.Dismiss();
         }
 
-        private bool OnBack()
-        {
-            if (!_viewer.IsPresented) return false;
-            Close();
-            return true;
-        }
+        // The backdrop fades as the photo is thrown away, and comes back as it springs home.
+        private void Fade(float progress) => _backdrop.Opacity.Value = 1f - progress;
 
         // Inside the viewer's changes: the page's photo is hidden as this one flies out of it and the backdrop fades in;
         // closing, the page's photo is shown again (scrolled into view, for this one to fly home to) as the backdrop fades.

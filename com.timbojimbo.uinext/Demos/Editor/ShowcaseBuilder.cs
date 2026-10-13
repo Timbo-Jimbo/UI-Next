@@ -532,7 +532,8 @@ namespace TimboJimboEditor.UINext.Demos
             var clear = Button(web, "Clear the cache", Accent, Color.white);
 
             // Full screen: the photo across the width over a black backdrop, its small copy at once and a large one loading
-            // over it, closed by a tap or back.
+            // over it, closed by a tap or back, or thrown away any way by a drag anywhere in it, on the photo or the backdrop,
+            // as Circle's photo viewer is.
             var app = page.transform.parent.GetComponent<UINode>();
             var host = app.Child("Photo Viewer").Column().Center();
             var viewer = host.Add<Presentation>();
@@ -556,8 +557,11 @@ namespace TimboJimboEditor.UINext.Demos
             var largeImage = large.Image("");
             LoadingNote(large);
             shown.Pressable();
+            host.Add<Draggable>().Axis = ScrollAxis.Both;
+            var swipe = host.Add<SwipeToDismiss>();
+            swipe.Setup(viewer, SwipeDirections.Any, panel: shown);
 
-            page.Add<ImagesDemo>().Setup(photos, new List<string>(WebPhotos), clear, viewer, backdrop, shown, small, largeImage);
+            page.Add<ImagesDemo>().Setup(photos, new List<string>(WebPhotos), clear, viewer, backdrop, shown, small, largeImage, swipe);
         }
 
         // A "Loading…" pill in the middle of an image's node, there only while its image loads.
