@@ -1,7 +1,7 @@
 {
 	"name": "com.timbojimbo.uinext",
 	"displayName": "UI Next",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"unity": "6000.5",
 	"description": "A UI stack owned end to end: a Clay-style layout, values that animate on springs from where they are drawn, a compositor and URP render-graph renderer drawing instanced SDF primitives, and input through the Input System with UIKit-style gestures.",
 	"dependencies": {
@@ -11,7 +11,7 @@
 		"com.unity.modules.unitywebrequesttexture": "1.0.0",
 		"com.unity.profiling.core": "1.0.3",
 		"com.timbojimbo.core": "0.7.0",
-		"com.timbojimbo.uinext.text": "0.2.0"
+		"com.timbojimbo.uinext.text": "0.3.0"
 	},
 	"author": {
 		"name": "Timbo Jimbo",

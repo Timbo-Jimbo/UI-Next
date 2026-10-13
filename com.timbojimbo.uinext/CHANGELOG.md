@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.5.0] - 14/10/2026
 
 ### Added
 
@@ -19,6 +19,8 @@
 ### Changed
 
 - `ImageView` is `Image`, as `Box` and `Label` are; scenes keep their images.
+- Compositing and the compositor do only what changed: each node is composited by its own computation, run when what it reads changes, so a scroll view scrolling composites what it holds rather than the whole tree; only the slots and clips that changed go to the GPU, a node drawn again is patched in place, and the draw order is made again only when what is drawn or its order changes. On a Pixel 8 the benchmark's scrolling went from 7.2 to 0.7 ms a frame.
+- A node not seen (hidden, inside something hidden, or faded to nothing) is not drawn again until it is seen: a theme switch no longer draws again the pages that are not presented.
 - Layout solves only what can have moved: a node whose values or content changed, the nodes up from it to its root and their children, each child holding no change taken whole, as it was last fitted.
 - In the game view the UI's render pass has a depth buffer of its own (cleared, never stored, so a tiled GPU keeps it on the chip): what an opaque shape covers is not shaded, and nothing a clip cuts away is shaded either.
 - Measuring (`IMeasurable`) is no longer tracked by layout, since a layout that does not reach a node would let go of what its measuring read: a drawable that measures says when what it measures changes (`UIDrawable.ContentChanged`), as `Label`, `Image` and `TextFieldText` do.
