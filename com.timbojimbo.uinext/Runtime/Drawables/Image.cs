@@ -41,7 +41,7 @@ namespace TimboJimbo.UINext
         // What it draws of its URL's image: the copy it asked for, once that arrives, and until then one standing in for it
         // (a narrower copy loaded already, or its loader's preview). A value drawn from, so a change of it on an animation
         // cross-fades.
-        [System.NonSerialized] private UIValue<Texture> _loaded = new UIValue<Texture>();
+        [System.NonSerialized] private UIValue<RemoteImages.Entry> _loaded = new UIValue<RemoteImages.Entry>();
         [System.NonSerialized] private Effect _load;
         // The copy it draws, the one it has asked for and waits for (its first, or a wider one), and one standing in until
         // it has a copy of its own.
@@ -92,12 +92,12 @@ namespace TimboJimbo.UINext
         /// </summary>
         public Vector2 Measure(float availableWidth)
         {
+            var texture = Source(out var sprite, out _, out var pixels);
             Vector2 native;
-            Source(out var sprite, out var texture);
             if (sprite != null)
                 native = sprite.rect.size * (100f / Mathf.Max(1f, sprite.pixelsPerUnit));
             else
-                native = texture != null ? new Vector2(texture.width, texture.height) : Vector2.zero;
+                native = texture != null ? pixels : Vector2.zero;
             bool scales = native.x > availableWidth || (_sourceLoader != null && texture != null && sprite == null);
             if (availableWidth >= 0f && native.x > 0f && scales)
                 native *= availableWidth / native.x;
@@ -108,21 +108,8 @@ namespace TimboJimbo.UINext
 
         protected internal override void Draw(Painter painter)
         {
-            Source(out var sprite, out var texture);
+            var texture = Source(out var sprite, out var uv, out var native);
             if (texture == null) return;
-            Rect uv;
-            Vector2 native;
-            if (sprite != null)
-            {
-                var rect = sprite.textureRect;
-                uv = new Rect(rect.x / texture.width, rect.y / texture.height, rect.width / texture.width, rect.height / texture.height);
-                native = rect.size;
-            }
-            else
-            {
-                uv = new Rect(0f, 0f, 1f, 1f);
-                native = new Vector2(texture.width, texture.height);
-            }
 
             var size = painter.Size;
             var fit = _fit.Value;
@@ -176,17 +163,35 @@ namespace TimboJimbo.UINext
         }
 
         // What it shows: the image loaded from its URL when it has one (nothing until that arrives), else its sprite, else
-        // its texture.
-        private void Source(out Sprite sprite, out Texture texture)
+        // its texture; where on that texture it is, and how many pixels it is.
+        private Texture Source(out Sprite sprite, out Rect uv, out Vector2 pixels)
         {
+            sprite = null;
+            uv = new Rect(0f, 0f, 1f, 1f);
             if (!string.IsNullOrEmpty(_url.Value))
             {
-                sprite = null;
-                texture = _loaded.Value;
-                return;
+                var loaded = _loaded.Value;
+                if (loaded == null)
+                {
+                    pixels = Vector2.zero;
+                    return null;
+                }
+                uv = loaded.Uv;
+                pixels = new Vector2(loaded.Width, loaded.Height);
+                return loaded.Texture;
             }
             sprite = _sprite.Value;
-            texture = sprite != null ? sprite.texture : _texture.Value;
+            if (sprite != null)
+            {
+                var texture = sprite.texture;
+                var rect = sprite.textureRect;
+                uv = new Rect(rect.x / texture.width, rect.y / texture.height, rect.width / texture.width, rect.height / texture.height);
+                pixels = rect.size;
+                return texture;
+            }
+            var own = _texture.Value;
+            pixels = own != null ? new Vector2(own.width, own.height) : Vector2.zero;
+            return own;
         }
 
         // ── Loading ──────────────────────────────────────────────────────────────
@@ -242,11 +247,11 @@ namespace TimboJimbo.UINext
             float shape = shaped ? size.y / size.x : 0f;
 
             float pixels = size.x * scale;
-            var texture = _loaded.Value;
-            if (!shaped && texture != null && texture.height > 0 && size.y > 0f)
+            var loaded = _loaded.Value;
+            if (!shaped && loaded != null && loaded.Height > 0 && size.y > 0f)
             {
                 // A copy of the image's own shape covering its node is wider than the node is; one fitting in it, narrower.
-                float aspect = (float)texture.width / texture.height;
+                float aspect = (float)loaded.Width / loaded.Height;
                 var fit = _fit.Value;
                 if (fit == ImageFit.Cover) pixels = Mathf.Max(pixels, size.y * aspect * scale);
                 else if (fit == ImageFit.Contain) pixels = Mathf.Min(pixels, size.y * aspect * scale);
@@ -289,7 +294,7 @@ namespace TimboJimbo.UINext
         {
             if (_wanted != null) Drop(ref _wanted);
             _width = width;
-            var entry = Hold(url);
+            var entry = Hold(url, width);
             if (!entry.Loading)
             {
                 Arrive(entry, animate: false);
@@ -318,18 +323,18 @@ namespace TimboJimbo.UINext
             }
             found ??= loader.PreviewFor(_source, width, HeightAt(width, shape));
             if (found == null) return;
-            _standIn = Hold(found);
+            _standIn = Hold(found, best);
             if (_standIn.Loading)
                 _standIn.Done += StoodIn;
             else if (_standIn.Texture != null)
-                _loaded.Value = _standIn.Texture;
+                _loaded.Value = _standIn;
         }
 
         // A stand-in that had to load fades in, unless the copy came first.
         private void StoodIn(RemoteImages.Entry entry)
         {
             if (entry != _standIn || _shown != null || entry.Texture == null) return;
-            UI.Animate(UIAnimation.Smooth, () => _loaded.Value = entry.Texture);
+            UI.Animate(UIAnimation.Smooth, () => _loaded.Value = entry);
         }
 
         private void Arrived(RemoteImages.Entry entry)
@@ -363,7 +368,7 @@ namespace TimboJimbo.UINext
                 : UIAnimation.Smooth;
             Change(animation, () =>
             {
-                _loaded.Value = entry.Texture;
+                _loaded.Value = entry;
                 SetStates(loading: false, failed: false);
             });
             if (replaced != null) Drop(ref replaced);
@@ -388,9 +393,12 @@ namespace TimboJimbo.UINext
             _load?.Invalidate();
         }
 
-        private RemoteImages.Entry Hold(string url)
+        // A copy `width` pixels wide (0 for a preview). Asked for through a loader at the size it is drawn,
+        // one small enough to share an atlas page needs no mipmaps; a wider one keeps them, as a narrower image may draw it
+        // too (a wider copy loaded already doing for it).
+        private RemoteImages.Entry Hold(string url, int width)
         {
-            var entry = RemoteImages.Acquire(url);
+            var entry = RemoteImages.Acquire(url, atlas: _sourceLoader != null && width <= ImageAtlas.MaxSize);
             entry.Dropped += Reload;
             return entry;
         }

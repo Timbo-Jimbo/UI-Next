@@ -9,8 +9,9 @@ namespace TimboJimbo.UINext
     /// <summary>
     /// The images <see cref="Image"/>s load from URLs: each downloaded once and shared by every image showing it, kept
     /// while anything shows it and, after that, while the ones nothing shows fit in the cache, the longest unseen going
-    /// first. What is downloaded is kept on disk too (<see cref="ImageDiskCache"/>), and read from there the next time.
-    /// Downloads run a few at a time, in the order they were asked for, and one nothing wants any more is called off.
+    /// first. What is downloaded is kept on disk too (<see cref="ImageDiskCache"/>), and read from there the next time. A
+    /// small copy asked for at the size it is drawn goes onto a shared atlas page (<see cref="ImageAtlas"/>). Downloads run a
+    /// few at a time, in the order they were asked for, and one nothing wants any more is called off.
     /// </summary>
     internal static class RemoteImages
     {
@@ -36,14 +37,23 @@ namespace TimboJimbo.UINext
         {
             public readonly string Url;
 
-            /// <summary>The image, once loaded; null while it loads and if it failed to.</summary>
+            /// <summary>The texture the image is on, once loaded: its own, or an atlas page; null while it loads and if it failed to.</summary>
             public Texture2D Texture;
+
+            /// <summary>Where on its texture the image is: all of it, or its slot on an atlas page.</summary>
+            public Rect Uv = new Rect(0f, 0f, 1f, 1f);
+
+            /// <summary>Its size in pixels.</summary>
+            public int Width, Height;
 
             /// <summary>Whether it is still loading.</summary>
             public bool Loading = true;
 
             internal int Users;
             internal long Bytes;
+            // Whether it may go onto an atlas page (a copy asked for at the size it is drawn), and its slot there.
+            internal bool Atlas;
+            internal ImageAtlas.Slot Slot;
             internal UnityWebRequest Request;
             internal LinkedListNode<Entry> Unused;
 
@@ -73,12 +83,16 @@ namespace TimboJimbo.UINext
         private static long s_unusedBytes;
         private static int s_downloads;
 
-        /// <summary>The image at a URL, loading it unless it is loaded or loading already; let go of it with <see cref="Release"/>.</summary>
-        public static Entry Acquire(string url)
+        /// <summary>
+        /// The image at a URL, loading it unless it is loaded or loading already; let go of it with <see cref="Release"/>.
+        /// <paramref name="atlas"/>: a copy asked for at the size it is drawn, which needs no mipmaps and, if small, goes onto
+        /// an atlas page.
+        /// </summary>
+        public static Entry Acquire(string url, bool atlas = false)
         {
             if (!s_entries.TryGetValue(url, out var entry))
             {
-                entry = new Entry(url);
+                entry = new Entry(url) { Atlas = atlas };
                 s_entries.Add(url, entry);
                 s_waiting.Enqueue(entry);
             }
@@ -108,8 +122,7 @@ namespace TimboJimbo.UINext
             {
                 Forget(entry);
                 entry.Request?.Abort();
-                Destroy(entry.Texture);
-                entry.Texture = null;
+                Unload(entry);
                 return;
             }
             entry.Unused = s_unused.AddLast(entry);
@@ -127,9 +140,19 @@ namespace TimboJimbo.UINext
                 entry.Unused = null;
                 s_unusedBytes -= entry.Bytes;
                 Forget(entry);
-                Destroy(entry.Texture);
-                entry.Texture = null;
+                Unload(entry);
             }
+        }
+
+        // Lets go of what an image takes: its slot on an atlas page, or its own texture.
+        private static void Unload(Entry entry)
+        {
+            if (entry.Slot != null)
+                ImageAtlas.Remove(entry.Slot);
+            else
+                Destroy(entry.Texture);
+            entry.Slot = null;
+            entry.Texture = null;
         }
 
         /// <summary>
@@ -148,8 +171,7 @@ namespace TimboJimbo.UINext
                     continue;
                 }
                 entry.Unused = null;
-                Destroy(entry.Texture);
-                entry.Texture = null;
+                Unload(entry);
             }
             s_entries.Clear();
             s_unused.Clear();
@@ -186,11 +208,11 @@ namespace TimboJimbo.UINext
 
         private static void Send(Entry entry, string source, bool fromDisk)
         {
-            // Decoded off the main thread by the download handler, kept on the GPU alone, and with mipmaps, as it is
-            // likely drawn smaller than it is.
+            // Decoded off the main thread by the download handler and kept on the GPU alone; with mipmaps, as an image is
+            // likely drawn smaller than it is, but for a copy asked for at the size it is drawn.
             var parameters = DownloadedTextureParams.Default;
             parameters.readable = false;
-            parameters.mipmapChain = true;
+            parameters.mipmapChain = !entry.Atlas;
             var request = UnityWebRequestTexture.GetTexture(source, parameters);
             entry.Request = request;
             s_downloads++;
@@ -217,12 +239,27 @@ namespace TimboJimbo.UINext
                 {
                     if (!fromDisk)
                         ImageDiskCache.Keep(entry.Url, request.downloadHandler.data);
-                    texture.name = entry.Url;
-                    texture.hideFlags = Transient;
-                    texture.wrapMode = TextureWrapMode.Clamp;
-                    entry.Texture = texture;
-                    // Four bytes a pixel, and a third more for its mipmaps.
-                    entry.Bytes = (long)texture.width * texture.height * 4 * (texture.mipmapCount > 1 ? 4 : 3) / 3;
+                    entry.Width = texture.width;
+                    entry.Height = texture.height;
+                    var slot = entry.Atlas ? ImageAtlas.Add(texture) : null;
+                    if (slot != null)
+                    {
+                        // On a page now, its own texture goes.
+                        Destroy(texture);
+                        entry.Slot = slot;
+                        entry.Texture = slot.Texture;
+                        entry.Uv = slot.Uv;
+                        entry.Bytes = (long)entry.Width * entry.Height * 4;
+                    }
+                    else
+                    {
+                        texture.name = entry.Url;
+                        texture.hideFlags = Transient;
+                        texture.wrapMode = TextureWrapMode.Clamp;
+                        entry.Texture = texture;
+                        // Four bytes a pixel, and a third more for its mipmaps.
+                        entry.Bytes = (long)texture.width * texture.height * 4 * (texture.mipmapCount > 1 ? 4 : 3) / 3;
+                    }
                 }
                 else
                 {
@@ -251,8 +288,10 @@ namespace TimboJimbo.UINext
             foreach (var entry in s_entries.Values)
             {
                 entry.Request?.Dispose();
-                Destroy(entry.Texture);
+                if (entry.Slot == null)
+                    Destroy(entry.Texture);
             }
+            ImageAtlas.Clear();
             s_entries.Clear();
             s_unused.Clear();
             s_waiting.Clear();
