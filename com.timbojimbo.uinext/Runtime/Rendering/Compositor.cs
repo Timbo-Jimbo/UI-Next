@@ -174,6 +174,7 @@ namespace TimboJimbo.UINext
         /// <summary>Brings the buffers and batches up to date with the trees.</summary>
         public static void Build()
         {
+            using var build = UIProfiling.Composite.Auto();
             // A flight moves every frame it flies. The focus path is drawn again as focus moves.
             if (MatchedGeometry.Flights.Count > 0)
                 s_orderDirty = s_slotsDirty = true;
@@ -692,6 +693,7 @@ namespace TimboJimbo.UINext
 
         private static void Upload()
         {
+            using var upload = UIProfiling.Upload.Auto();
             if (s_instanceCount == 0 && s_slotCount == 0) return;
             Ensure(ref s_instanceBuffer, Mathf.Max(1, s_instanceCount), PrimitiveInstance.Stride);
             Ensure(ref s_slotBuffer, Mathf.Max(1, s_slotCount), NodeSlot.Stride);
@@ -1064,8 +1066,11 @@ namespace TimboJimbo.UINext
         /// Draws every batch with <paramref name="cmd"/>. In the game view a root covers the screen; in the scene view it
         /// is drawn where its RectTransform is, seen by <paramref name="camera"/>.
         /// </summary>
-        public static void Render(RasterCommandBuffer cmd, Camera camera, bool sceneView, bool flipped) =>
+        public static void Render(RasterCommandBuffer cmd, Camera camera, bool sceneView, bool flipped)
+        {
+            using var render = UIProfiling.Render.Auto();
             Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped);
+        }
 
         /// <summary>Draws the index-th group's image: what is in it, the part of its root it covers, over a clear image.</summary>
         public static void RenderGroup(RasterCommandBuffer cmd, int index, bool flipped)

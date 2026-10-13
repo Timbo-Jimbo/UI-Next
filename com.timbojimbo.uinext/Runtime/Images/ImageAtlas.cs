@@ -67,6 +67,7 @@ namespace TimboJimbo.UINext
         public static Slot Add(Texture2D image)
         {
             if (image == null || image.width > MaxSize || image.height > MaxSize) return null;
+            using var atlas = UIProfiling.Atlas.Auto();
             var support = SystemInfo.copyTextureSupport;
             if ((support & CopyTextureSupport.Basic) == 0) return null;
             bool converts = image.graphicsFormat != PageFormat;
@@ -179,6 +180,7 @@ namespace TimboJimbo.UINext
         // A page on the GPU alone: its pixels aren't kept in memory, and where nothing was copied is never sampled.
         private static Page NewPage()
         {
+            using var make = UIProfiling.AtlasPage.Auto();
             var texture = new Texture2D(PageSize, PageSize, PageFormat, TextureCreationFlags.DontInitializePixels)
             {
                 name = "UI Next image atlas",
@@ -202,6 +204,7 @@ namespace TimboJimbo.UINext
             RenderTexture converted = null;
             if (converts)
             {
+                using var convert = UIProfiling.AtlasConvert.Auto();
                 converted = RenderTexture.GetTemporary(new RenderTextureDescriptor(w, h, PageFormat, 0));
                 Graphics.Blit(image, converted);
                 source = converted;

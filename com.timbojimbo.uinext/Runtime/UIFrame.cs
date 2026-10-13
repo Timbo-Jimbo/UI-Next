@@ -94,15 +94,21 @@ namespace TimboJimbo.UINext
 
         private static void Frame(float dt)
         {
+            using var frame = UIProfiling.Frame.Auto();
             FrameIndex++;
-            UpdateRoots();
-            ListView.ReconcileAll();
+            using (UIProfiling.Roots.Auto())
+                UpdateRoots();
+            using (UIProfiling.Lists.Auto())
+                ListView.ReconcileAll();
             UIScheduler.Flush(Phase.Layout);
             if (dt > 0f)
             {
-                ScrollView.StepAll(dt);
-                Pressable.StepAll(dt);
-                SpringStore.Step(dt);
+                using (UIProfiling.Step.Auto())
+                {
+                    ScrollView.StepAll(dt);
+                    Pressable.StepAll(dt);
+                    SpringStore.Step(dt);
+                }
             }
             else if (!Live && SpringStore.ActiveCount > 0)
             {

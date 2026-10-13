@@ -44,12 +44,21 @@ namespace TimboJimbo.UINext
         {
             if (s_flushing) return;
             s_flushing = true;
+            // The phase being run, for the Profiler: one sample for each stretch spent in one.
+            int phase = -1;
             try
             {
                 int runs = 0;
                 while (TryNext(upTo, out var computation))
                 {
                     if (!computation.Dirty || computation.Disposed) continue;
+                    int next = (int)computation.Phase;
+                    if (next != phase)
+                    {
+                        if (phase >= 0) UIProfiling.Phases[phase].End();
+                        UIProfiling.Phases[next].Begin();
+                        phase = next;
+                    }
                     computation.Run();
                     if (++runs <= RunLimit) continue;
                     Debug.LogError($"UINext: a flush ran {RunLimit} computations without settling. Something writes a value it reads every time it runs; the last to run was a {computation.GetType().Name}.");
@@ -64,6 +73,7 @@ namespace TimboJimbo.UINext
             }
             finally
             {
+                if (phase >= 0) UIProfiling.Phases[phase].End();
                 s_flushing = false;
             }
         }

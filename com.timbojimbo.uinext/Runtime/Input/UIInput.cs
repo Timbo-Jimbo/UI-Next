@@ -181,7 +181,8 @@ namespace TimboJimbo.UINext
             // Once a frame (or each fixed step, if the Input System runs there), not for the editor's own updates.
             var update = InputState.currentUpdateType;
             if (!Application.isPlaying || update == InputUpdateType.Editor || update == InputUpdateType.BeforeRender) return;
-            Poll();
+            using (UIProfiling.Input.Auto())
+                Poll();
         }
 
         private static void Poll()

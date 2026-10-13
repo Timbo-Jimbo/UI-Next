@@ -545,6 +545,7 @@ namespace TimboJimbo.UINext
         // with, changes, and makes the inline content for what it found.
         private void ReadText()
         {
+            using var read = UIProfiling.LabelRead.Auto();
             string text = _text.Value ?? "";
             bool rich = _richText.Value;
             var markup = _markup.Value;

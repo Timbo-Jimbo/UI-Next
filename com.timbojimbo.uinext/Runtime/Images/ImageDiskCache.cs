@@ -190,15 +190,22 @@ namespace TimboJimbo.UINext
             }
         }
 
+        // Each piece of work on a thread of the pool, shown in the Profiler as a thread of its own while it runs.
         private static void Run(Action work) => s_io = s_io.ContinueWith(_ =>
         {
+            UnityEngine.Profiling.Profiler.BeginThreadProfiling("UI Next", "Image disk cache");
             try
             {
-                work();
+                using (UIProfiling.Disk.Auto())
+                    work();
             }
             catch (Exception e)
             {
                 Debug.LogWarning("UI Next's image cache on disk: " + e.Message);
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.EndThreadProfiling();
             }
         }, TaskScheduler.Default);
 

@@ -384,7 +384,8 @@ namespace TimboJimbo.UINext
                     s.Floating.AttachTo = FloatingAttach.Parent;
             }
 
-            LayoutSolver.Solve(_solver, count, rootSize, safeArea);
+            using (UIProfiling.Solve.Auto())
+                LayoutSolver.Solve(_solver, count, rootSize, safeArea);
 
             for (int k = 0; k < count; k++)
             {

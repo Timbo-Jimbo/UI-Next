@@ -133,6 +133,8 @@ namespace TimboJimbo.UINext
         // Drops the longest unseen images until those nothing shows fit in the cache.
         private static void Trim()
         {
+            if (s_unusedBytes <= CacheBytes) return;
+            using var evict = UIProfiling.ImageEvict.Auto();
             while (s_unusedBytes > CacheBytes && s_unused.First != null)
             {
                 var entry = s_unused.First.Value;
@@ -202,6 +204,7 @@ namespace TimboJimbo.UINext
         // From its file on disk if it has one, else from the web.
         private static void Download(Entry entry)
         {
+            using var start = UIProfiling.ImageStart.Auto();
             string file = ImageDiskCache.Find(entry.Url);
             Send(entry, file ?? entry.Url, fromDisk: file != null);
         }
@@ -221,12 +224,15 @@ namespace TimboJimbo.UINext
 
         private static void Downloaded(Entry entry, UnityWebRequest request, bool fromDisk)
         {
+            using var take = UIProfiling.ImageTake.Auto();
             s_downloads--;
             entry.Request = null;
             // An entry nothing wants any more was called off.
             if (entry.Users > 0)
             {
-                var texture = request.result == UnityWebRequest.Result.Success ? DownloadHandlerTexture.GetContent(request) : null;
+                Texture2D texture;
+                using (UIProfiling.ImageTexture.Auto())
+                    texture = request.result == UnityWebRequest.Result.Success ? DownloadHandlerTexture.GetContent(request) : null;
                 if (texture == null && fromDisk)
                 {
                     // A file that would not read goes, and the image is downloaded.
@@ -238,7 +244,10 @@ namespace TimboJimbo.UINext
                 if (texture != null)
                 {
                     if (!fromDisk)
-                        ImageDiskCache.Keep(entry.Url, request.downloadHandler.data);
+                    {
+                        using (UIProfiling.ImageKeep.Auto())
+                            ImageDiskCache.Keep(entry.Url, request.downloadHandler.data);
+                    }
                     entry.Width = texture.width;
                     entry.Height = texture.height;
                     var slot = entry.Atlas ? ImageAtlas.Add(texture) : null;

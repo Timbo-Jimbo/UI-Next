@@ -217,6 +217,7 @@ namespace TimboJimbo.UINext
         // As its URL, its loader or the size it is laid out at changes: the copy of its URL's image to draw.
         private void Load()
         {
+            using var load = UIProfiling.ImageLoad.Auto();
             string url = _url.Value;
             if (string.IsNullOrEmpty(url)) url = null;
             var loader = url != null ? LoaderFor() : null;
