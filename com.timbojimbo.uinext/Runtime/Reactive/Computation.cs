@@ -40,7 +40,26 @@ namespace TimboJimbo.UINext
         internal bool Dirty;
         internal bool Disposed;
 
+        // Its runs' marker in the Profiler, made the first time it runs.
+        private Unity.Profiling.ProfilerMarker _marker;
+        private bool _hasMarker;
+
         protected Computation(Phase phase) => Phase = phase;
+
+        /// <summary>What its runs are called in the Profiler, after "UINext.": its type's name unless it says otherwise.</summary>
+        protected virtual string ProfilerName => GetType().Name;
+
+        // Its runs' marker in the Profiler.
+        internal Unity.Profiling.ProfilerMarker Marker
+        {
+            get
+            {
+                if (_hasMarker) return _marker;
+                _marker = UIProfiling.MarkerFor(ProfilerName);
+                _hasMarker = true;
+                return _marker;
+            }
+        }
 
         /// <summary>The phase it runs in.</summary>
         public Phase Phase { get; }
@@ -157,5 +176,8 @@ namespace TimboJimbo.UINext
         }
 
         protected override void Execute() => _action();
+
+        // Named by what it runs: "Effect.Image.Load".
+        protected override string ProfilerName => "Effect." + UIProfiling.NameOf(_action);
     }
 }

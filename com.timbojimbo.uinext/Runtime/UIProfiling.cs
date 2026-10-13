@@ -36,6 +36,7 @@ namespace TimboJimbo.UINext
         public static readonly ProfilerMarker Render = new(Category, "UINext.Compositor.Render");
         public static readonly ProfilerMarker Input = new(Category, "UINext.Input");
         public static readonly ProfilerMarker LabelRead = new(Category, "UINext.Label.Read");
+        public static readonly ProfilerMarker CrossFade = new(Category, "UINext.Draw.CrossFade");
 
         public static readonly ProfilerMarker ImageLoad = new(Category, "UINext.Image.Load");
         public static readonly ProfilerMarker ImageStart = new(Category, "UINext.Images.Start");
@@ -47,6 +48,36 @@ namespace TimboJimbo.UINext
         public static readonly ProfilerMarker AtlasPage = new(Category, "UINext.Images.Atlas.NewPage");
         public static readonly ProfilerMarker AtlasConvert = new(Category, "UINext.Images.Atlas.Convert");
         public static readonly ProfilerMarker Disk = new(Category, "UINext.Images.Disk");
+
+        private static readonly System.Collections.Generic.Dictionary<string, ProfilerMarker> s_named = new();
+
+        /// <summary>A marker named "UINext." and <paramref name="name"/>, made once (a computation's runs, a drawable's drawing).</summary>
+        public static ProfilerMarker MarkerFor(string name)
+        {
+            if (!s_named.TryGetValue(name, out var marker))
+                s_named[name] = marker = new ProfilerMarker(Category, "UINext." + name);
+            return marker;
+        }
+
+        /// <summary>
+        /// A delegate's name for the Profiler: its class and method ("Image.Load"), a lambda by the class and method it is
+        /// written in ("Label.Bind lambda").
+        /// </summary>
+        public static string NameOf(System.Delegate action)
+        {
+            var method = action.Method;
+            var type = method.DeclaringType;
+            // The compiler puts lambdas in classes of its own, nested in the class they are written in.
+            while (type != null && type.Name.StartsWith("<", System.StringComparison.Ordinal) && type.DeclaringType != null)
+                type = type.DeclaringType;
+            string name = method.Name;
+            if (name.StartsWith("<", System.StringComparison.Ordinal))
+            {
+                int end = name.IndexOf('>');
+                name = end > 1 ? name.Substring(1, end - 1) + " lambda" : "lambda";
+            }
+            return (type != null ? type.Name : "?") + "." + name;
+        }
 
         // ── Counters: where each frame's time goes (the UI Next module) ───────────
 

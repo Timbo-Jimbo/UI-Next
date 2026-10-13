@@ -634,6 +634,8 @@ namespace TimboJimbo.UINext
 
             public LayoutComputation(UITree tree) : base(Phase.Layout) => _tree = tree;
 
+            protected override string ProfilerName => "Tree.LayOut";
+
             protected override void Execute() => _tree.LayOut();
         }
 
@@ -642,6 +644,8 @@ namespace TimboJimbo.UINext
             private readonly UITree _tree;
 
             public CompositeComputation(UITree tree) : base(Phase.Draw) => _tree = tree;
+
+            protected override string ProfilerName => "Tree.Composite";
 
             protected override void Execute() => _tree.Composite();
         }

@@ -19,6 +19,20 @@ namespace TimboJimbo.UINext
 
         [NonSerialized] private UINode _node;
         [NonSerialized] private bool _enabled;
+        [NonSerialized] private Unity.Profiling.ProfilerMarker _drawMarker;
+        [NonSerialized] private bool _hasDrawMarker;
+
+        // Its drawing's marker in the Profiler: "UINext.Draw.Label", by its type.
+        internal Unity.Profiling.ProfilerMarker DrawMarker
+        {
+            get
+            {
+                if (_hasDrawMarker) return _drawMarker;
+                _drawMarker = UIProfiling.MarkerFor("Draw." + GetType().Name);
+                _hasDrawMarker = true;
+                return _drawMarker;
+            }
+        }
 
         /// <summary>The node it draws on.</summary>
         public UINode Node => _node != null ? _node : _node = GetComponent<UINode>();
@@ -108,7 +122,10 @@ namespace TimboJimbo.UINext
                 // Cross-fading: the old drawing first, fading out, under the new one, fading in.
                 float t = _node.CrossFadeProgress();
                 if (t < 1f)
-                    _node.DrawOutgoing(1f - t);
+                {
+                    using (UIProfiling.CrossFade.Auto())
+                        _node.DrawOutgoing(1f - t);
+                }
                 int first = _node.Instances.Count, firstOverlay = _node.OverlayInstances.Count;
                 var painter = new Painter(_node);
                 var drawables = _node.Drawables;
@@ -116,7 +133,10 @@ namespace TimboJimbo.UINext
                 {
                     var drawable = drawables[i];
                     if (drawable != null && drawable.isActiveAndEnabled)
-                        drawable.Draw(painter);
+                    {
+                        using (drawable.DrawMarker.Auto())
+                            drawable.Draw(painter);
+                    }
                 }
                 if (t < 1f)
                 {

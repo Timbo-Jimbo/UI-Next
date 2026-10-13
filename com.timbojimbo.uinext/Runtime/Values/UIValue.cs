@@ -309,6 +309,8 @@ namespace TimboJimbo.UINext
 
             public Resolver(UIValue<T> value) : base(Phase.Model) => _value = value;
 
+            protected override string ProfilerName => "Value.Resolve";
+
             protected override void Execute() => _value.Recompute();
         }
     }

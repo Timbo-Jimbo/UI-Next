@@ -61,7 +61,8 @@ namespace TimboJimbo.UINext
                         since = UIProfiling.Now;
                         phase = next;
                     }
-                    computation.Run();
+                    using (computation.Marker.Auto())
+                        computation.Run();
                     if (++runs <= RunLimit) continue;
                     Debug.LogError($"UINext: a flush ran {RunLimit} computations without settling. Something writes a value it reads every time it runs; the last to run was a {computation.GetType().Name}.");
                     foreach (var queue in s_queues)
