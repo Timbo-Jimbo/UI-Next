@@ -1070,7 +1070,8 @@ namespace TimboJimbo.UINext
         public static void Render(RasterCommandBuffer cmd, Camera camera, bool sceneView, bool flipped)
         {
             using var render = UIProfiling.Render.Auto();
-            Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped);
+            for (int r = 0; r < UIDebug.Repeat; r++)
+                Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped);
         }
 
         /// <summary>Draws the index-th group's image: what is in it, the part of its root it covers, over a clear image.</summary>

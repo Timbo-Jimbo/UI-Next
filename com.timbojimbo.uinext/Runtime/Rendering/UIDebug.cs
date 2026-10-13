@@ -45,6 +45,20 @@ namespace TimboJimbo.UINext
             set => Set(ref s_focusPath, value);
         }
 
+        /// <summary>
+        /// How many times over the UI is drawn each frame (1 as it is): for measuring what it costs the GPU. A phone's GPU
+        /// slows down when it has little to do, which hides what its work costs; drawn several times over, the UI keeps it
+        /// busy, at its full clock, and the time a frame takes it, less what it takes with nothing drawn, over the number of
+        /// times, is what one drawing costs.
+        /// </summary>
+        public static int Repeat
+        {
+            get => s_repeat;
+            set => s_repeat = value < 1 ? 1 : value;
+        }
+
+        private static int s_repeat = 1;
+
         private static void Set(ref bool field, bool value)
         {
             if (field == value) return;
