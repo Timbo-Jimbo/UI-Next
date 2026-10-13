@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace TimboJimbo.UINext
 {
@@ -12,13 +13,18 @@ namespace TimboJimbo.UINext
         /// <summary>The EditorBuildSettings config object key the active asset is registered under.</summary>
         public const string ConfigObjectKey = "com.timbojimbo.uinext.settings";
 
-        internal const int DefaultImageCacheMegabytes = 64;
+        internal const int DefaultImageMemoryCacheMegabytes = 64;
+        internal const int DefaultImageDiskCacheMegabytes = 256;
 
         [Tooltip("How images with no loader of their own ask for what they load from URLs (a CDN's resizing). Empty: they load their URLs as they are.")]
         [SerializeField] private ImageLoader _defaultImageLoader;
 
-        [Tooltip("How much of the images loaded from URLs that nothing shows is kept for the next time one is asked for, in megabytes as drawn.")]
-        [SerializeField, Min(0)] private int _imageCacheMegabytes = DefaultImageCacheMegabytes;
+        [Tooltip("How much of the images loaded from URLs that nothing shows is kept in memory for the next time one is asked for, in megabytes as drawn.")]
+        [FormerlySerializedAs("_imageCacheMegabytes")]
+        [SerializeField, Min(0)] private int _imageMemoryCacheMegabytes = DefaultImageMemoryCacheMegabytes;
+
+        [Tooltip("How much of the images loaded from URLs is kept on disk between runs, in megabytes, the files used longest ago going first; 0 keeps none.")]
+        [SerializeField, Min(0)] private int _imageDiskCacheMegabytes = DefaultImageDiskCacheMegabytes;
 
         private static UISettings s_instance;
         private static readonly Observable<int> s_changes = new();
@@ -39,8 +45,11 @@ namespace TimboJimbo.UINext
         /// <summary>How images with no loader of their own ask for what they load; null to load their URLs as they are.</summary>
         public ImageLoader DefaultImageLoader => _defaultImageLoader;
 
-        /// <summary>How much of the images loaded from URLs that nothing shows is kept, in megabytes as drawn.</summary>
-        public int ImageCacheMegabytes => _imageCacheMegabytes;
+        /// <summary>How much of the images loaded from URLs that nothing shows is kept in memory, in megabytes as drawn.</summary>
+        public int ImageMemoryCacheMegabytes => _imageMemoryCacheMegabytes;
+
+        /// <summary>How much of the images loaded from URLs is kept on disk between runs, in megabytes; 0 keeps none.</summary>
+        public int ImageDiskCacheMegabytes => _imageDiskCacheMegabytes;
 
         /// <summary>A tracked read of the settings and the loaders they lead to: what reads it runs again as they change.</summary>
         internal static void Watch() => _ = s_changes.Value;

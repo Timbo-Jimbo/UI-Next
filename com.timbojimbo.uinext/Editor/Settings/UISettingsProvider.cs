@@ -69,7 +69,7 @@ namespace TimboJimboEditor.UINext
 
                     if (active == null)
                     {
-                        EditorGUILayout.HelpBox("No settings asset. Images load their URLs as they are, and keep 64 MB of the images nothing shows.", MessageType.Info);
+                        EditorGUILayout.HelpBox("No settings asset. Images load their URLs as they are, keep 64 MB of the images nothing shows in memory, and 256 MB on disk.", MessageType.Info);
                         if (GUILayout.Button("Create", GUILayout.Width(120)))
                         {
                             var created = CreateAsset();

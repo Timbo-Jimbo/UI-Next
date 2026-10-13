@@ -9,8 +9,8 @@ namespace TimboJimbo.UINext
     /// <summary>
     /// The images <see cref="Image"/>s load from URLs: each downloaded once and shared by every image showing it, kept
     /// while anything shows it and, after that, while the ones nothing shows fit in the cache, the longest unseen going
-    /// first. Downloads run a few at a time, in the order they were asked for, and one nothing wants any more is called
-    /// off.
+    /// first. What is downloaded is kept on disk too (<see cref="ImageDiskCache"/>), and read from there the next time.
+    /// Downloads run a few at a time, in the order they were asked for, and one nothing wants any more is called off.
     /// </summary>
     internal static class RemoteImages
     {
@@ -21,7 +21,7 @@ namespace TimboJimbo.UINext
             get
             {
                 var settings = UISettings.Instance;
-                return (settings != null ? settings.ImageCacheMegabytes : UISettings.DefaultImageCacheMegabytes) * 1024L * 1024L;
+                return (settings != null ? settings.ImageMemoryCacheMegabytes : UISettings.DefaultImageMemoryCacheMegabytes) * 1024L * 1024L;
             }
         }
 
@@ -133,11 +133,12 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
-        /// Forgets every image: those nothing shows go now, and those shown go as what shows them lets go of them to load
-        /// them again (<see cref="Entry.Dropped"/>).
+        /// Forgets every image, on disk too: those nothing shows go now, and those shown go as what shows them lets go of
+        /// them to load them again (<see cref="Entry.Dropped"/>).
         /// </summary>
         public static void Clear()
         {
+            ImageDiskCache.Clear();
             var shown = new List<Entry>();
             foreach (var entry in s_entries.Values)
             {
@@ -176,20 +177,27 @@ namespace TimboJimbo.UINext
             }
         }
 
+        // From its file on disk if it has one, else from the web.
         private static void Download(Entry entry)
+        {
+            string file = ImageDiskCache.Find(entry.Url);
+            Send(entry, file ?? entry.Url, fromDisk: file != null);
+        }
+
+        private static void Send(Entry entry, string source, bool fromDisk)
         {
             // Decoded off the main thread by the download handler, kept on the GPU alone, and with mipmaps, as it is
             // likely drawn smaller than it is.
             var parameters = DownloadedTextureParams.Default;
             parameters.readable = false;
             parameters.mipmapChain = true;
-            var request = UnityWebRequestTexture.GetTexture(entry.Url, parameters);
+            var request = UnityWebRequestTexture.GetTexture(source, parameters);
             entry.Request = request;
             s_downloads++;
-            request.SendWebRequest().completed += _ => Downloaded(entry, request);
+            request.SendWebRequest().completed += _ => Downloaded(entry, request, fromDisk);
         }
 
-        private static void Downloaded(Entry entry, UnityWebRequest request)
+        private static void Downloaded(Entry entry, UnityWebRequest request, bool fromDisk)
         {
             s_downloads--;
             entry.Request = null;
@@ -197,8 +205,18 @@ namespace TimboJimbo.UINext
             if (entry.Users > 0)
             {
                 var texture = request.result == UnityWebRequest.Result.Success ? DownloadHandlerTexture.GetContent(request) : null;
+                if (texture == null && fromDisk)
+                {
+                    // A file that would not read goes, and the image is downloaded.
+                    ImageDiskCache.Forget(entry.Url);
+                    request.Dispose();
+                    Send(entry, entry.Url, fromDisk: false);
+                    return;
+                }
                 if (texture != null)
                 {
+                    if (!fromDisk)
+                        ImageDiskCache.Keep(entry.Url, request.downloadHandler.data);
                     texture.name = entry.Url;
                     texture.hideFlags = Transient;
                     texture.wrapMode = TextureWrapMode.Clamp;
