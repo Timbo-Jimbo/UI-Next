@@ -61,6 +61,22 @@ namespace TimboJimbo.UINext
         private static int s_repeat = 1;
 
         /// <summary>
+        /// Whether the occluders are drawn (they are unless turned off): the depth of every large opaque shape's inside,
+        /// laid down first, so what such a shape covers is not shaded. Off, everything is shaded: for measuring what they
+        /// are worth on a GPU.
+        /// </summary>
+        public static bool Occluders { get; set; } = true;
+
+        /// <summary>How many draw calls the UI was last drawn with: the main pass's and the groups' images'.</summary>
+        public static int DrawCalls => Compositor.DrawCalls;
+
+        /// <summary>How many nodes were scrolled out from under a clip over them, so not drawn, as the UI was last drawn.</summary>
+        public static int OffscreenNodes => Compositor.OffscreenNodes;
+
+        /// <summary>How many layers the UI's main pass was last drawn in: nothing within a layer overlaps, so a layer draws kind by kind.</summary>
+        public static int Layers => Compositor.LayerCount;
+
+        /// <summary>
         /// Checks every layout pass that solves only what can have moved against solving every node again, logging an
         /// error for each node laid out anywhere else: for testing layout. Every such pass is solved twice over.
         /// </summary>

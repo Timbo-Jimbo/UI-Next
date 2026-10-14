@@ -79,6 +79,7 @@ namespace TimboJimbo.UINext
                     for (int i = 0; i < s_groupTextures.Count - 1; i++)
                         groupBuilder.UseTexture(s_groupTextures[i], AccessFlags.Read);
                     groupBuilder.AllowPassCulling(false);
+                    groupBuilder.AllowGlobalStateModification(true);
                     groupBuilder.SetRenderFunc(static (GroupPassData pass, RasterGraphContext context) =>
                     {
                         bool flipped = context.GetTextureUVOrigin(pass.Target) == TextureUVOrigin.BottomLeft;
@@ -112,6 +113,8 @@ namespace TimboJimbo.UINext
             foreach (var groupTexture in s_groupTextures)
                 builder.UseTexture(groupTexture, AccessFlags.Read);
             builder.AllowPassCulling(false);
+            // The compositor sets where each draw starts in the instances as a global.
+            builder.AllowGlobalStateModification(true);
             builder.SetRenderFunc(static (PassData pass, RasterGraphContext context) =>
             {
                 bool flipped = context.GetTextureUVOrigin(pass.Color) == TextureUVOrigin.BottomLeft;

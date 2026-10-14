@@ -108,7 +108,8 @@ namespace TimboJimbo.UINext
     /// A node's drawing: runs its drawables into its primitive list, again whenever what they read changes. A node not
     /// seen as compositing last found it (hidden, inside something hidden, or faded to nothing) is not drawn: its drawing
     /// waits, watching nothing meanwhile, until compositing finds it seen again, which draws it then (a page not presented
-    /// costs nothing as what is in it changes).
+    /// costs nothing as what is in it changes). So does one scrolled out from under a clip, once it has drawn: its drawing
+    /// stays recorded, so the draw order holds while scrolling, and it is drawn again the frame it comes back.
     /// </summary>
     internal sealed class NodeDraw : Computation
     {
@@ -120,7 +121,8 @@ namespace TimboJimbo.UINext
         {
             var tree = _node.Tree;
             int index = _node.Index;
-            if (tree != null && index >= 0 && index < tree.Nodes.Count && (!tree.Shown[index] || tree.Opacities[index] <= 0f))
+            if (tree != null && index >= 0 && index < tree.Nodes.Count
+                && (!tree.Shown[index] || tree.Opacities[index] <= 0f || (tree.Offscreen[index] && _node.HasDrawn)))
             {
                 _node.DrawWaiting = true;
                 return;
@@ -161,6 +163,46 @@ namespace TimboJimbo.UINext
                     UIFocus.DrawRing(_node, painter.Overlay);
             }
             Compositor.MarkRedrawn(_node);
+
+            // What it reaches past its rect now; compositing looks again at whether it is in view if that changed.
+            var reach = Vector4.zero;
+            var union = default(Rect);
+            bool outright = false;
+            Bound(_node.Instances, ref reach, ref union, ref outright);
+            Bound(_node.OverlayInstances, ref reach, ref union, ref outright);
+            bool changed = reach != _node.PaintReach || outright != _node.PaintsOutright || (outright && union != _node.PaintUnion);
+            _node.PaintReach = reach;
+            _node.PaintUnion = union;
+            _node.PaintsOutright = outright;
+            _node.HasDrawn = true;
+            if (changed && tree != null)
+                tree.CompositeChanged(_node);
+        }
+
+        // Takes each primitive's rect, with the room round it the shader draws into (two points of smoothed edge, and a
+        // shadow's blur, as PrimitiveKinds.hlsl has them; none for a glyph, whose rect has its own, or a group's image),
+        // into what the node reaches past its edges (a primitive placed against them) or the rect round what it draws
+        // outright.
+        private static void Bound(List<PrimitiveInstance> instances, ref Vector4 reach, ref Rect union, ref bool outright)
+        {
+            for (int i = 0; i < instances.Count; i++)
+            {
+                var instance = instances[i];
+                var type = (PrimitiveType)instance.Type;
+                float margin = type == PrimitiveType.GlyphSdf || type == PrimitiveType.GlyphBitmap || type == PrimitiveType.Group || type == PrimitiveType.Pair
+                    ? 0f : 2f + (type == PrimitiveType.Shadow ? instance.Params.y * 2.5f : 0f);
+                var r = instance.Rect;
+                if ((instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0)
+                {
+                    reach = Vector4.Max(reach, new Vector4(margin - r.x, margin - r.y, margin - r.z, margin - r.w));
+                    continue;
+                }
+                var rect = Rect.MinMaxRect(r.x - margin, r.y - margin, r.x + r.z + margin, r.y + r.w + margin);
+                union = outright
+                    ? Rect.MinMaxRect(Mathf.Min(union.xMin, rect.xMin), Mathf.Min(union.yMin, rect.yMin), Mathf.Max(union.xMax, rect.xMax), Mathf.Max(union.yMax, rect.yMax))
+                    : rect;
+                outright = true;
+            }
         }
     }
 }

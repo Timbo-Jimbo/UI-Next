@@ -15,18 +15,10 @@ namespace TimboJimbo.UINext
     /// own drawing laid out at the flight's rect, what is inside them fitted and cut to its window), and one quad summing
     /// them.
     /// </summary>
-    internal static class Compositor
+    internal static partial class Compositor
     {
         // A batch's textures: up to this many, each primitive sampling one of them by index.
         private const int TexturesPerBatch = 8;
-
-        internal struct Batch
-        {
-            public UITree Tree;
-            public int Start;
-            public int Count;
-            public int Textures;
-        }
 
         // Every batch's textures, TexturesPerBatch to a batch.
         private static readonly List<Texture> s_batchTextures = new();
@@ -73,6 +65,10 @@ namespace TimboJimbo.UINext
         private static int[] s_textureBase = new int[256];
         private static int s_instanceCount;
 
+        // A material a batch, holding its textures and the buffers: the draws of a batch's runs then carry no properties
+        // of their own, only where in the instances each starts (a global). The groups' batches' follow the main pass's.
+        private static readonly List<Material> s_batchMaterials = new();
+
         // Draw orders made so far: the nodes each one drew carry its number.
         private static int s_builds;
 
@@ -98,6 +94,8 @@ namespace TimboJimbo.UINext
         private static GraphicsBuffer s_instanceBuffer;
         private static GraphicsBuffer s_slotBuffer;
         private static GraphicsBuffer s_clipBuffer;
+        // The two triangles every quad draws as (0 1 2, 0 2 3): four vertices a quad rather than six.
+        private static GraphicsBuffer s_indexBuffer;
 
         private static bool s_orderDirty = true;
         private static bool s_slotsDirty = true;
@@ -109,18 +107,15 @@ namespace TimboJimbo.UINext
         private static readonly List<UINode> s_levels = new();
 
         private static Material s_material;
-        private static readonly MaterialPropertyBlock s_properties = new();
 
         private static readonly int InstancesId = Shader.PropertyToID("_Instances");
+        private static readonly int OrderId = Shader.PropertyToID("_Order");
         private static readonly int SlotsId = Shader.PropertyToID("_Slots");
         private static readonly int ClipsId = Shader.PropertyToID("_Clips");
         private static readonly int InstanceOffsetId = Shader.PropertyToID("_InstanceOffset");
         private static readonly int MatrixId = Shader.PropertyToID("_UIMatrix");
-        private static readonly int OverdrawId = Shader.PropertyToID("_UINextOverdraw");
         private static readonly int OcclusionId = Shader.PropertyToID("_UINextOcclusion");
         private static readonly int InstanceTotalId = Shader.PropertyToID("_InstanceTotal");
-        // The primitive shader's second pass, which draws the occluders.
-        private const int OccludersPass = 1;
         private static readonly int[] TextureIds =
         {
             Shader.PropertyToID("_Texture0"), Shader.PropertyToID("_Texture1"), Shader.PropertyToID("_Texture2"), Shader.PropertyToID("_Texture3"),
@@ -131,6 +126,12 @@ namespace TimboJimbo.UINext
         private static void ResetStatics()
         {
             Batches.Clear();
+            s_runs.Clear();
+            s_spans.Clear();
+            s_segments.Clear();
+            s_mainRuns = s_shapeRuns = 0;
+            s_offscreenSlots = 0;
+            s_classified = 0;
             s_slotBase.Clear();
             s_redrawn.Clear();
             s_orderDirty = s_slotsDirty = true;
@@ -143,8 +144,6 @@ namespace TimboJimbo.UINext
         // What the last build made, for the editor's readout: primitives (groups' included), draw calls in the main pass
         // and in groups' images, and groups.
         internal static int PrimitiveCount => s_instanceCount;
-        internal static int DrawCalls => Batches.Count + GroupBatches.Count;
-
         // The GPU's copies and the groups' images outlive a script reload otherwise: let go of them before one, and on quitting.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void HookRelease()
@@ -167,7 +166,9 @@ namespace TimboJimbo.UINext
             s_instanceBuffer?.Release();
             s_slotBuffer?.Release();
             s_clipBuffer?.Release();
-            s_instanceBuffer = s_slotBuffer = s_clipBuffer = null;
+            s_indexBuffer?.Release();
+            s_orderBuffer?.Release();
+            s_instanceBuffer = s_slotBuffer = s_clipBuffer = s_indexBuffer = s_orderBuffer = null;
             foreach (var target in s_groupTargets)
             {
                 if (target == null) continue;
@@ -177,9 +178,17 @@ namespace TimboJimbo.UINext
             s_groupTargets.Clear();
             Groups.Clear();
             Batches.Clear();
+            s_runs.Clear();
+            s_spans.Clear();
+            s_segments.Clear();
+            s_mainRuns = s_shapeRuns = 0;
             if (s_material != null)
                 Object.DestroyImmediate(s_material);
             s_material = null;
+            foreach (var material in s_batchMaterials)
+                if (material != null)
+                    Object.DestroyImmediate(material);
+            s_batchMaterials.Clear();
             if (s_maskMaterial != null)
                 Object.DestroyImmediate(s_maskMaterial);
             s_maskMaterial = null;
@@ -234,9 +243,31 @@ namespace TimboJimbo.UINext
                 if (node != null)
                     node.Redrawn = false;
             s_redrawn.Clear();
+            MakeRuns();
             Upload(rebuilt);
             s_orderDirty = false;
             s_slotsDirty = false;
+        }
+
+        // The material a batch draws with: its textures and the buffers set on it, so its draws carry no properties.
+        private static Material MaterialFor(int index, in Batch batch, Matrix4x4 matrix, bool occlusion)
+        {
+            while (s_batchMaterials.Count <= index)
+                s_batchMaterials.Add(new Material(Material) { hideFlags = HideFlags.HideAndDontSave });
+            var material = s_batchMaterials[index];
+            material.SetBuffer(InstancesId, s_instanceBuffer);
+            material.SetBuffer(OrderId, s_orderBuffer);
+            material.SetBuffer(SlotsId, s_slotBuffer);
+            material.SetBuffer(ClipsId, s_clipBuffer);
+            material.SetMatrix(MatrixId, matrix);
+            material.SetFloat(OcclusionId, occlusion ? 1f : 0f);
+            material.SetInt(InstanceTotalId, s_instanceCount);
+            for (int t = 0; t < TexturesPerBatch; t++)
+            {
+                var texture = s_batchTextures[batch.Textures + t];
+                material.SetTexture(TextureIds[t], texture != null ? texture : Texture2D.whiteTexture);
+            }
+            return material;
         }
 
         // Slots and clips: every tree's, one after another, and the flights'. A tree's are copied where compositing changed
@@ -270,6 +301,7 @@ namespace TimboJimbo.UINext
                     }
                     SentSlots(slotBase + from, slotBase + to);
                 }
+                int slotsFrom = from, slotsTo = to;
                 from = whole ? 0 : tree.ChangedClipsFrom;
                 to = whole ? clips : Mathf.Min(tree.ChangedClipsTo, clips);
                 if (to > from)
@@ -278,6 +310,9 @@ namespace TimboJimbo.UINext
                         s_clips[clipBase + c] = tree.ClipShapes[c];
                     SentClips(clipBase + from, clipBase + to);
                 }
+                // Classified once their clips are in place.
+                for (int i = slotsFrom; i < slotsTo; i++)
+                    ClassifySlot(slotBase + i, tree.Offscreen[i]);
                 tree.ChangedSlotsFrom = tree.ChangedClipsFrom = int.MaxValue;
                 tree.ChangedSlotsTo = tree.ChangedClipsTo = 0;
                 tree.CopiedSlotBase = slotBase;
@@ -292,7 +327,17 @@ namespace TimboJimbo.UINext
             AddFlightSlots();
             SentSlots(treeSlots, s_slotCount);
             SentClips(treeClips, s_clipCount);
+            // Slots gone since the last copy (a tree removed, a flight over) count for nothing.
+            for (int i = s_slotCount; i < s_classified; i++)
+            {
+                if (s_slotClipState[i] == ClipsOutside) s_offscreenSlots--;
+                s_slotClipState[i] = ClipsNone;
+            }
+            s_classified = s_slotCount;
         }
+
+        // How many slots have been classified: those past the count are cleared as the count falls.
+        private static int s_classified;
 
         // Slots and clips copied since the last upload, to send with the next.
         private static void SentSlots(int from, int to)
@@ -326,6 +371,8 @@ namespace TimboJimbo.UINext
                 var tree = trees[t];
                 if (tree.Nodes.Count == 0) continue;
                 int start = s_instanceCount;
+                SubtreeBounds(tree);
+                BeginRange();
                 if (UIDebug.Overdraw)
                     EmitOverdrawBackdrop(tree);
                 tree.DrawOrder.Clear();
@@ -346,18 +393,21 @@ namespace TimboJimbo.UINext
                     tree.LevelStarts.Add(tree.DrawOrder.Count);
                     tree.LevelInteractive.Add(level.PresentationLevel.Peek >= 0);
                     s_topLayer.Clear();
-                    Walk(tree, level, s_slotBase[tree], true, level);
+                    // Each level above the last; what is lifted into the top layer above the level, then its flights.
+                    s_layerTop = Mathf.Max(s_layerTop, Walk(tree, level, s_slotBase[tree], true, level, s_layerTop + 1));
                     for (int i = 0; i < s_topLayer.Count; i++)
-                        Walk(tree, s_topLayer[i], s_slotBase[tree], true, level);
+                        s_layerTop = Mathf.Max(s_layerTop, Walk(tree, s_topLayer[i], s_slotBase[tree], true, level, s_layerTop + 1));
                     EmitFlights(tree, l);
                 }
-                MakeBatches(Batches, tree, start, s_instanceCount);
+                LayerCount = s_layerTop + 1;
+                EndRange(Batches, tree, start);
                 WalkGroups(tree);
                 // Over all of it, once its groups (inner ones included) are known: the debug views' outlines.
                 int debug = s_instanceCount;
+                BeginRange();
                 EmitDebugOutlines(tree);
                 if (s_instanceCount > debug)
-                    MakeBatches(Batches, tree, debug, s_instanceCount);
+                    EndRange(Batches, tree, debug);
             }
         }
 
@@ -445,6 +495,8 @@ namespace TimboJimbo.UINext
                 var instance = instances[i];
                 instance.Slot = slot;
                 instance.Texture = (uint)index;
+                // Drawn with another pass than before: its run must be made again.
+                if (KindOf(instance) != s_kinds[at + i]) return false;
                 s_instances[at + i] = instance;
                 s_textures[at + i] = texture;
             }
@@ -550,14 +602,9 @@ namespace TimboJimbo.UINext
             });
         }
 
-        private static void EmitDebug(in PrimitiveInstance instance)
-        {
-            EnsureInstances(s_instanceCount + 1);
-            s_instances[s_instanceCount] = instance;
-            s_textures[s_instanceCount] = null;
-            s_textures2[s_instanceCount] = null;
-            s_instanceCount++;
-        }
+        // A debug primitive, in a layer of its own above everything in its range so far (the backdrop is the first thing
+        // in its tree's).
+        private static void EmitDebug(in PrimitiveInstance instance) => PutOnTop(instance, null, null);
 
         // The levels of a tree: its root, then every presented node in it, lowest level first.
         private static void CollectLevels(UITree tree)
@@ -582,70 +629,8 @@ namespace TimboJimbo.UINext
                 Mathf.Abs(a.PresentationLevel.Peek).CompareTo(Mathf.Abs(b.PresentationLevel.Peek));
         }
 
-        // Adds a node's primitives, then its children's in ZIndex order (siblings with equal ZIndex in hierarchy order);
-        // a node in the top layer is put off until the end of its level, and a presented node to its own level, unless
-        // it is the one being drawn there now.
-        private static void Walk(UITree tree, UINode node, int slotBase, bool lifted, UINode level)
-        {
-            if (node.Index < 0 || node.Tree != tree) return;
-            if (node != level && node.PresentationLevel.Peek != 0) return;
-            // Inside a group it is drawn in place: a group is one image.
-            if (!lifted && s_groupRoot == null && node.TopLayer.Peek)
-            {
-                s_topLayer.Add(node);
-                return;
-            }
-            // Hidden, or drawn at no opacity: nothing in it is seen.
-            if (!tree.Shown[node.Index] || tree.Opacities[node.Index] <= 0f) return;
-
-            // Flying to its place: drawn in its flight, above everything at its level, while it is hit where it is laid
-            // out. Taken over by a node matched to it: its picture flies instead.
-            var flying = node.FlightIn;
-            if (flying != null && flying.InBuild)
-            {
-                if (s_groupRoot == null)
-                    AddDrawOrder(tree, node);
-                return;
-            }
-            if (node.FlightOut != null) return;
-
-            // A group: a quad over the root draws its image here; what is in it is walked into a range of its own
-            // later. It still takes its place in drawing order for hit testing.
-            if (node != s_groupRoot && tree.GroupOpacities[node.Index] > 0f)
-            {
-                if (s_groupRoot == null)
-                    AddDrawOrder(tree, node);
-                EmitGroupQuad(tree, node, slotBase);
-                return;
-            }
-
-            if (s_groupRoot == null)
-                tree.DrawOrder.Add(node.Index);
-            uint slot = (uint)(slotBase + node.Index);
-            // Where its primitives go, so a drawing of as many is patched there.
-            node.EmittedBuild = s_builds;
-            node.EmittedInGroup = s_groupRoot != null;
-            node.EmittedAt = s_instanceCount;
-            node.EmittedCount = node.Instances.Count;
-            Emit(node.Instances, node.InstanceTextures, slot);
-
-            int first = s_children.Count;
-            int end = tree.SubtreeEnd[node.Index];
-            for (int i = node.Index + 1; i < end; i = tree.SubtreeEnd[i])
-                s_children.Add(tree.Nodes[i]);
-            int count = s_children.Count - first;
-            if (count > 1)
-                SortByZIndex(first, count);
-            for (int i = 0; i < count; i++)
-                Walk(tree, s_children[first + i], slotBase, false, level);
-            s_children.RemoveRange(first, count);
-            node.EmittedOverlayAt = s_instanceCount;
-            node.EmittedOverlayCount = node.OverlayInstances.Count;
-            Emit(node.OverlayInstances, node.OverlayTextures, slot);
-        }
-
         // A group's quad: covering its root (its slot is the root's), sampling the group's image at the group's opacity.
-        private static void EmitGroupQuad(UITree tree, UINode node, int slotBase)
+        private static void EmitGroupQuad(UITree tree, UINode node, int slotBase, int layer)
         {
             var root = tree.Root;
             float scale = root.PixelsPerPoint;
@@ -678,18 +663,14 @@ namespace TimboJimbo.UINext
                 MaskSize = tree.Slots[node.Index].SizeOpacity,
                 MaskInverse = tree.World[node.Index].Inverse,
             });
-            EnsureInstances(s_instanceCount + 1);
-            s_instances[s_instanceCount] = new PrimitiveInstance
+            Put(new PrimitiveInstance
             {
                 Rect = new Vector4(region.x, region.y, region.width, region.height),
                 Color = new Color(1f, 1f, 1f, tree.GroupOpacities[node.Index]),
                 Uv = new Vector4(0f, 0f, 1f, 1f),
                 Slot = (uint)slotBase,
                 Type = (uint)PrimitiveType.Group,
-            };
-            s_textures[s_instanceCount] = target;
-            s_textures2[s_instanceCount] = null;
-            s_instanceCount++;
+            }, (byte)PrimitiveKind.Group, layer, target, null);
         }
 
         // The bounds of what a group draws, in its root's points: every primitive the walk puts in it (its nodes but
@@ -763,6 +744,7 @@ namespace TimboJimbo.UINext
                 var group = Groups[g];
                 if (group.Tree != tree) continue;
                 int start = s_instanceCount;
+                BeginRange();
                 if (group.Flight != null)
                 {
                     EmitFlightEnd(tree, group.Flight, group.End);
@@ -772,7 +754,7 @@ namespace TimboJimbo.UINext
                     s_groupRoot = group.Node;
                     try
                     {
-                        Walk(tree, group.Node, s_slotBase[tree], true, group.Node);
+                        Walk(tree, group.Node, s_slotBase[tree], true, group.Node, 0);
                     }
                     finally
                     {
@@ -780,7 +762,7 @@ namespace TimboJimbo.UINext
                     }
                 }
                 group.FirstBatch = GroupBatches.Count;
-                MakeBatches(GroupBatches, tree, start, s_instanceCount);
+                EndRange(GroupBatches, tree, start);
                 group.BatchCount = GroupBatches.Count - group.FirstBatch;
                 Groups[g] = group;
             }
@@ -813,20 +795,6 @@ namespace TimboJimbo.UINext
             return target;
         }
 
-        private static void Emit(List<PrimitiveInstance> instances, List<Texture> textures, uint slot)
-        {
-            EnsureInstances(s_instanceCount + instances.Count);
-            for (int i = 0; i < instances.Count; i++)
-            {
-                var instance = instances[i];
-                instance.Slot = slot;
-                s_instances[s_instanceCount] = instance;
-                s_textures[s_instanceCount] = textures[i];
-                s_textures2[s_instanceCount] = null;
-                s_instanceCount++;
-            }
-        }
-
         // A stable insertion sort of one node's children by ZIndex.
         private static void SortByZIndex(int first, int count)
         {
@@ -842,90 +810,6 @@ namespace TimboJimbo.UINext
                 }
                 s_children[j + 1] = node;
             }
-        }
-
-        // Runs of primitives drawn in one call, each with up to eight textures that its primitives say which of they
-        // sample: a run ends only when a ninth texture turns up. A primitive that samples nothing (a shape, a shadow)
-        // goes with any run; one that samples two (a matched pair) has both in its run, the second's index in the
-        // second four bits of its texture index.
-        private static void MakeBatches(List<Batch> batches, UITree tree, int start, int end)
-        {
-            using var batch = UIProfiling.Batch.Auto();
-            int batchStart = start;
-            int first = s_batchTextures.Count;
-            int used = 0;
-            // The last texture looked up, and where it is in the run: a label's glyphs all sample one.
-            Texture last = null;
-            int lastIndex = 0;
-            for (int i = start; i < end; i++)
-            {
-                var texture = s_textures[i];
-                var second = s_textures2[i];
-                s_textureBase[i] = first;
-                if (texture is null && second is null)
-                {
-                    s_instances[i].Texture = 0;
-                    continue;
-                }
-                if (second is null && ReferenceEquals(texture, last))
-                {
-                    s_instances[i].Texture = (uint)lastIndex;
-                    continue;
-                }
-                // Room for what it samples that the run does not have yet.
-                int at = texture is null ? -1 : FindBatchTexture(texture, first, used);
-                int at2 = second is null || ReferenceEquals(second, texture) ? -1 : FindBatchTexture(second, first, used);
-                int needed = (texture is not null && at < 0 ? 1 : 0) + (second is not null && !ReferenceEquals(second, texture) && at2 < 0 ? 1 : 0);
-                if (used + needed > TexturesPerBatch)
-                {
-                    CloseBatch(batches, tree, batchStart, i, first);
-                    batchStart = i;
-                    first = s_batchTextures.Count;
-                    used = 0;
-                    at = at2 = -1;
-                    last = null;
-                    s_textureBase[i] = first;
-                }
-                int index = 0;
-                if (texture is not null)
-                {
-                    if (at < 0)
-                    {
-                        s_batchTextures.Add(texture);
-                        at = used++;
-                    }
-                    index = at;
-                }
-                if (second is not null)
-                {
-                    if (ReferenceEquals(second, texture))
-                    {
-                        at2 = at;
-                    }
-                    else if (at2 < 0)
-                    {
-                        s_batchTextures.Add(second);
-                        at2 = used++;
-                    }
-                    index |= at2 << 4;
-                }
-                s_instances[i].Texture = (uint)index;
-                if (second is null)
-                {
-                    last = texture;
-                    lastIndex = index;
-                }
-            }
-            if (end > batchStart)
-                CloseBatch(batches, tree, batchStart, end, first);
-        }
-
-        private static void CloseBatch(List<Batch> batches, UITree tree, int start, int end, int firstTexture)
-        {
-            // Unused slots hold the white texture, so every slot is bound.
-            while (s_batchTextures.Count < firstTexture + TexturesPerBatch)
-                s_batchTextures.Add(null);
-            batches.Add(new Batch { Tree = tree, Start = start, Count = end - start, Textures = firstTexture });
         }
 
         private static Vector4 OffsetChain(Vector4 chain, int clipBase)
@@ -951,6 +835,14 @@ namespace TimboJimbo.UINext
                     rebuilt || newInstances ? s_instanceCount : s_patchedTo, PrimitiveInstance.Stride);
                 bytes += Send(s_slotBuffer, s_slots, newSlots ? 0 : s_slotsFrom, newSlots ? s_slotCount : Mathf.Min(s_slotsTo, s_slotCount), NodeSlot.Stride);
                 bytes += Send(s_clipBuffer, s_clips, newClips ? 0 : s_clipsFrom, newClips ? s_clipCount : Mathf.Min(s_clipsTo, s_clipCount), ClipShape.Stride);
+                bool newOrder = Ensure(ref s_orderBuffer, Mathf.Max(1, s_instanceCount), sizeof(int));
+                if (rebuilt || newOrder)
+                    bytes += Send(s_orderBuffer, s_order, 0, s_instanceCount, sizeof(int));
+                if (s_indexBuffer == null || !s_indexBuffer.IsValid())
+                {
+                    s_indexBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Index, 6, sizeof(ushort));
+                    s_indexBuffer.SetData(new ushort[] { 0, 1, 2, 0, 2, 3 });
+                }
             }
             s_slotsFrom = s_clipsFrom = int.MaxValue;
             s_slotsTo = s_clipsTo = 0;
@@ -982,11 +874,14 @@ namespace TimboJimbo.UINext
             System.Array.Resize(ref s_textures, size);
             System.Array.Resize(ref s_textures2, size);
             System.Array.Resize(ref s_textureBase, size);
+            System.Array.Resize(ref s_kinds, size);
+            System.Array.Resize(ref s_layers, size);
         }
 
         private static void EnsureSlots(int count)
         {
             if (s_slots.Length < count) System.Array.Resize(ref s_slots, Mathf.NextPowerOfTwo(count));
+            EnsureSlotStates(count);
         }
 
         private static void EnsureClips(int count)
@@ -1058,6 +953,8 @@ namespace TimboJimbo.UINext
                 };
             }
             s_slotCount += end - d;
+            for (int i = flight.LiveSlots; i < s_slotCount; i++)
+                ClassifySlot(i, false);
             flight.LiveOwn = AddOwn(s_slots[flight.LiveSlots], rect, pixels);
 
             // The picture, as the source was drawn, fitted the same way.
@@ -1086,6 +983,8 @@ namespace TimboJimbo.UINext
                 };
             }
             s_slotCount += picture.Slots.Count;
+            for (int i = flight.PictureSlots; i < s_slotCount; i++)
+                ClassifySlot(i, false);
             flight.PictureOwn = picture.Slots.Count > 0 ? AddOwn(s_slots[flight.PictureSlots], rect, pixels) : -1;
         }
 
@@ -1121,8 +1020,10 @@ namespace TimboJimbo.UINext
         private static int AddSlot(in NodeSlot slot)
         {
             EnsureSlots(s_slotCount + 1);
-            s_slots[s_slotCount] = slot;
-            return s_slotCount++;
+            int index = s_slotCount++;
+            s_slots[index] = slot;
+            ClassifySlot(index, false);
+            return index;
         }
 
         // A clip from its transform from its root's space into its own, its size and its corners.
@@ -1192,18 +1093,15 @@ namespace TimboJimbo.UINext
             var live = GroupTarget(Groups.Count, picture.width, picture.height);
             Groups.Add(new Group { Tree = tree, Target = live, Region = region, Flight = flight, End = 1 });
 
-            EnsureInstances(s_instanceCount + 1);
-            s_instances[s_instanceCount] = new PrimitiveInstance
+            // Above everything at its level so far.
+            PutOnTop(new PrimitiveInstance
             {
                 Rect = new Vector4(region.x, region.y, region.width, region.height),
                 Color = new Color(1f, 1f, 1f, flight.Progress),
                 Uv = new Vector4(0f, 0f, 1f, 1f),
                 Slot = (uint)flight.PairSlot,
                 Type = (uint)PrimitiveType.Pair,
-            };
-            s_textures[s_instanceCount] = picture;
-            s_textures2[s_instanceCount] = live;
-            s_instanceCount++;
+            }, picture, live);
         }
 
         // Grows the bounds by what an end's root draws relative to its rect (a box, a shadow's blur past it), laid out at
@@ -1236,7 +1134,7 @@ namespace TimboJimbo.UINext
                 var drawn = picture.Slots[k];
                 s_skip.Add((drawn.Parent >= 0 && s_skip[drawn.Parent]) || (k > 0 && (FliesOnItsOwn(drawn.Node) || SetsOff(drawn.Node))));
             }
-            EnsureInstances(s_instanceCount + picture.Instances.Count);
+            // As it was drawn: a layer each keeps its order.
             for (int i = 0; i < picture.Instances.Count; i++)
             {
                 var instance = picture.Instances[i];
@@ -1245,10 +1143,7 @@ namespace TimboJimbo.UINext
                 instance.Slot = k == 0 && (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0
                     ? (uint)flight.PictureOwn
                     : (uint)(flight.PictureSlots + k);
-                s_instances[s_instanceCount] = instance;
-                s_textures[s_instanceCount] = picture.Textures[i];
-                s_textures2[s_instanceCount] = null;
-                s_instanceCount++;
+                PutOnTop(instance, picture.Textures[i], null);
             }
         }
 
@@ -1295,15 +1190,12 @@ namespace TimboJimbo.UINext
         // laid out at the flight's rect; for the nodes inside it, their slot), the rest in `slot`.
         private static void EmitLive(List<PrimitiveInstance> instances, List<Texture> textures, uint slot, uint own)
         {
-            EnsureInstances(s_instanceCount + instances.Count);
+            // As the walk draws them: a layer each keeps their order.
             for (int i = 0; i < instances.Count; i++)
             {
                 var instance = instances[i];
                 instance.Slot = (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0 ? own : slot;
-                s_instances[s_instanceCount] = instance;
-                s_textures[s_instanceCount] = textures[i];
-                s_textures2[s_instanceCount] = null;
-                s_instanceCount++;
+                PutOnTop(instance, textures[i], null);
             }
         }
 
@@ -1330,7 +1222,7 @@ namespace TimboJimbo.UINext
         {
             using var render = UIProfiling.Render.Auto();
             bool occlusion = !sceneView;
-            if (occlusion)
+            if (occlusion && UIDebug.Occluders)
                 DrawOccluders(cmd, camera, flipped);
             for (int r = 0; r < UIDebug.Repeat; r++)
                 Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped, occlusion: occlusion);
@@ -1339,25 +1231,18 @@ namespace TimboJimbo.UINext
         // The occluders: a draw for each root's run of batches, which lie one after another in the buffer.
         private static void DrawOccluders(RasterCommandBuffer cmd, Camera camera, bool flipped)
         {
-            var material = Material;
-            if (material == null || s_instanceBuffer == null) return;
-            for (int b = 0; b < Batches.Count;)
+            if (Material == null || s_instanceBuffer == null) return;
+            for (int b = 0; b < Batches.Count; b++)
             {
-                var tree = Batches[b].Tree;
-                int start = Batches[b].Start, end = start + Batches[b].Count;
-                for (b++; b < Batches.Count && Batches[b].Tree == tree && Batches[b].Start == end; b++)
-                    end += Batches[b].Count;
-                if (tree.Root == null) continue;
-                var properties = s_properties;
-                properties.Clear();
-                properties.SetBuffer(InstancesId, s_instanceBuffer);
-                properties.SetBuffer(SlotsId, s_slotBuffer);
-                properties.SetBuffer(ClipsId, s_clipBuffer);
-                properties.SetInt(InstanceOffsetId, start);
-                properties.SetMatrix(MatrixId, MatrixFor(tree.Root, camera, false, flipped));
-                properties.SetFloat(OcclusionId, 1f);
-                properties.SetInt(InstanceTotalId, s_instanceCount);
-                cmd.DrawProcedural(Matrix4x4.identity, material, OccludersPass, MeshTopology.Triangles, 6, end - start, properties);
+                var batch = Batches[b];
+                if (batch.Tree.Root == null) continue;
+                var material = MaterialFor(b, batch, MatrixFor(batch.Tree.Root, camera, false, flipped), true);
+                for (int s = batch.FirstSpan; s < batch.FirstSpan + batch.SpanCount; s++)
+                {
+                    var span = s_spans[s];
+                    cmd.SetGlobalInt(InstanceOffsetId, span.Start);
+                    cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, OccludersPass, MeshTopology.Triangles, 6, span.Count);
+                }
             }
         }
 
@@ -1403,11 +1288,12 @@ namespace TimboJimbo.UINext
             cmd.DrawProcedural(Matrix4x4.identity, s_maskMaterial, 0, MeshTopology.Triangles, 6, 1, s_maskProperties);
         }
 
+        // Draws batches [first, first + count) of `batches`: the main pass's (whose materials come first) or the groups'.
         private static void Draw(RasterCommandBuffer cmd, List<Batch> batches, int first, int count, Camera camera, bool sceneView, bool flipped,
             Matrix4x4? region = null, bool occlusion = false)
         {
-            var material = Material;
-            if (material == null || count == 0 || s_instanceBuffer == null) return;
+            if (Material == null || count == 0 || s_instanceBuffer == null) return;
+            int materials = ReferenceEquals(batches, Batches) ? 0 : Batches.Count;
             UITree currentTree = null;
             bool skip = false;
             Matrix4x4 matrix = Matrix4x4.identity;
@@ -1423,22 +1309,17 @@ namespace TimboJimbo.UINext
                         matrix = region ?? MatrixFor(currentTree.Root, camera, sceneView, flipped);
                 }
                 if (skip) continue;
-                var properties = s_properties;
-                properties.Clear();
-                properties.SetBuffer(InstancesId, s_instanceBuffer);
-                properties.SetBuffer(SlotsId, s_slotBuffer);
-                properties.SetBuffer(ClipsId, s_clipBuffer);
-                properties.SetInt(InstanceOffsetId, batch.Start);
-                properties.SetMatrix(MatrixId, matrix);
-                properties.SetFloat(OverdrawId, UIDebug.Overdraw ? 1f : 0f);
-                properties.SetFloat(OcclusionId, occlusion ? 1f : 0f);
-                properties.SetInt(InstanceTotalId, s_instanceCount);
-                for (int t = 0; t < TexturesPerBatch; t++)
+                var material = MaterialFor(materials + b, batch, matrix, occlusion);
+                // Each run with its pass, from where it starts.
+                for (int r = batch.FirstRun; r < batch.FirstRun + batch.RunCount; r++)
                 {
-                    var texture = s_batchTextures[batch.Textures + t];
-                    properties.SetTexture(TextureIds[t], texture != null ? texture : Texture2D.whiteTexture);
+                    var run = s_runs[r];
+                    cmd.SetGlobalInt(InstanceOffsetId, run.Start);
+                    cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, run.Pass, MeshTopology.Triangles, 6, run.Count * PartsOf(run.Pass));
+                    // A shape's bands after its corners: within a layer nothing overlaps, so the order between shapes is free.
+                    if (run.Pass < 2)
+                        cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, FlatPass + run.Pass, MeshTopology.Triangles, 6, run.Count * 3);
                 }
-                cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 6, batch.Count, properties);
             }
         }
 
