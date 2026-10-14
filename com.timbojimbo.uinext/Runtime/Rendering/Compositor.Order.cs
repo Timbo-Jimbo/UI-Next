@@ -303,9 +303,10 @@ namespace TimboJimbo.UINext
         // Adds a node's primitives, then its children's in ZIndex order (siblings with equal ZIndex in hierarchy order);
         // a node in the top layer is put off until the end of its level, and a presented node to its own level, unless
         // it is the one being drawn there now. The node's primitives go in `layer` (or above it, where they overlap an
-        // earlier one of its own: EmitNode); each child's in the layer above, or past any earlier sibling's subtree it
-        // overlaps; its overlay primitives above everything inside it. Returns the highest layer given out in its subtree,
-        // -1 for nothing drawn.
+        // earlier one of its own: EmitNode); each child's in the layer above the node's surfaces, or in the node's own
+        // layer when it paints no surface (a layout container, or a shadow alone, which draws first in any case), and
+        // past any earlier sibling's subtree it overlaps; its overlay primitives above everything inside it. Returns the
+        // highest layer given out in its subtree, -1 for nothing drawn.
         private static int Walk(UITree tree, UINode node, int slotBase, bool lifted, UINode level, int layer)
         {
             if (node.Index < 0 || node.Tree != tree) return -1;
@@ -348,7 +349,9 @@ namespace TimboJimbo.UINext
             node.EmittedInGroup = s_groupRoot != null;
             node.EmittedAt = s_instanceCount;
             node.EmittedCount = node.Instances.Count;
-            int top = EmitNode(tree, node, node.Instances, node.InstanceTextures, slot, layer);
+            int top = EmitNode(tree, node, node.Instances, node.InstanceTextures, slot, layer, out bool surfaces);
+            // What is inside it lies above its surfaces; above nothing, if it has none.
+            int inside = surfaces ? top + 1 : layer;
 
             int first = s_children.Count;
             int end = tree.SubtreeEnd[node.Index];
@@ -363,8 +366,8 @@ namespace TimboJimbo.UINext
             for (int i = 0; i < count; i++)
             {
                 var child = s_children[first + i];
-                // Above its parent, and past any earlier sibling's subtree it overlaps.
-                int childLayer = layer + 1;
+                // Above its parent's surfaces, and past any earlier sibling's subtree it overlaps.
+                int childLayer = inside;
                 if (child.Index >= 0 && child.Index < s_subtreeBounds.Length)
                 {
                     var bounds = s_subtreeBounds[child.Index];
@@ -385,16 +388,17 @@ namespace TimboJimbo.UINext
             node.EmittedOverlayAt = s_instanceCount;
             node.EmittedOverlayCount = node.OverlayInstances.Count;
             // Over everything inside it.
-            top = Mathf.Max(top, EmitNode(tree, node, node.OverlayInstances, node.OverlayTextures, slot, Mathf.Max(layer, top + 1)));
+            top = Mathf.Max(top, EmitNode(tree, node, node.OverlayInstances, node.OverlayTextures, slot, Mathf.Max(layer, top + 1), out _));
             return top;
         }
 
         // A node's primitives, from `layer` up: one goes past an earlier one of the node it overlaps whose kind would
         // otherwise draw after it (a shape over an image), and a shape past any earlier shape it overlaps (a layer's
         // shapes draw their corners then their bands). Each into its layer's bucket for its kind. Returns the highest
-        // layer given out, -1 for none.
-        private static int EmitNode(UITree tree, UINode node, List<PrimitiveInstance> instances, List<Texture> textures, uint slot, int layer)
+        // layer given out, -1 for none; and whether any of them is a surface (anything but a shadow, with any alpha).
+        private static int EmitNode(UITree tree, UINode node, List<PrimitiveInstance> instances, List<Texture> textures, uint slot, int layer, out bool surfaces)
         {
+            surfaces = false;
             int count = instances.Count;
             if (count == 0) return -1;
             EnsureInstances(s_instanceCount + count);
@@ -440,6 +444,10 @@ namespace TimboJimbo.UINext
                 }
                 Put(instance, kind, own, textures[i], null);
                 top = Mathf.Max(top, own);
+                // A surface: anything but a shadow that shows at all (a fill at no alpha, a hit area, is none; its second
+                // colour shows only as a gradient or a border).
+                bool second = (instance.Flags & (uint)PrimitiveFlags.Gradient) != 0 || (instance.Type == (uint)PrimitiveType.Shape && instance.Params.x > 0f);
+                surfaces |= rank != 0 && (instance.Color.w > 0f || (second && instance.Color2.w > 0f));
             }
             return top;
         }
