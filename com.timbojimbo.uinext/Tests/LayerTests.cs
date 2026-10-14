@@ -36,6 +36,28 @@ namespace TimboJimboTests.UINext
         }
 
         [Test]
+        public void SiblingsThatTouchOrReachEachOtherOnlyByShadowShareALayer()
+        {
+            var column = Root.Node.Column();
+            // Rows that abut exactly: their smoothed edges share a pixel row, which is no overlap.
+            var a = column.Child("A").Sized(Sizing.Fixed(100f), Sizing.Fixed(40f));
+            a.Box(Color.white);
+            var b = column.Child("B").Sized(Sizing.Fixed(100f), Sizing.Fixed(40f));
+            b.Box(Color.white);
+            // A card whose shadow reaches onto the one before it, and the one after it.
+            var c = column.Child("C").Sized(Sizing.Fixed(100f), Sizing.Fixed(40f));
+            var box = c.Box(Color.white);
+            box.ShadowColor.Value = Color.black;
+            box.ShadowBlur.Value = 30f;
+            var d = column.Child("D").Sized(Sizing.Fixed(100f), Sizing.Fixed(40f));
+            d.Box(Color.white);
+            Frame();
+            Assert.AreEqual(Compositor.LayerOf(a), Compositor.LayerOf(b), "rows that touch");
+            Assert.AreEqual(Compositor.LayerOf(b), Compositor.LayerOf(c), "a shadow reaching up onto the row before");
+            Assert.AreEqual(Compositor.LayerOf(c), Compositor.LayerOf(d), "a shadow reaching down onto the row after");
+        }
+
+        [Test]
         public void AShapeOverAnotherInOneNodeIsInTheLayerAbove()
         {
             var node = Root.Node.Child("Node").Sized(Sizing.Fixed(100f), Sizing.Fixed(100f));

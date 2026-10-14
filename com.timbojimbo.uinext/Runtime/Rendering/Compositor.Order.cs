@@ -249,9 +249,11 @@ namespace TimboJimbo.UINext
 
         // ── Layers ───────────────────────────────────────────────────────────────
 
-        // Per node of a tree, the box round its subtree as drawn in its root's space: its own bounds, and its children's
-        // subtrees' but those drawn elsewhere (presented, or lifted into the top layer, each walked on its own). Nothing
-        // for a node not shown. Walked from the last node up, so each child's is known before its parent's.
+        // Per node of a tree, the box round its subtree's surfaces in its root's space: what it paints but its shadows, with
+        // no room for the smoothed edge, and its children's subtrees' but those drawn elsewhere (presented, or lifted into
+        // the top layer, each walked on its own). What the sibling rule tests: a sibling's shadow reaching onto another
+        // does not force them apart (a layer's shadows all lie under its surfaces), and edges that merely touch do not
+        // either. Nothing for a node not shown. Walked from the last node up, so each child's is known before its parent's.
         private static void SubtreeBounds(UITree tree)
         {
             int count = tree.Nodes.Count;
@@ -265,7 +267,7 @@ namespace TimboJimbo.UINext
                     s_subtreeBounds[i] = Nowhere;
                     continue;
                 }
-                var bounds = tree.Bounds[i];
+                var bounds = SurfaceBounds(tree, node, i);
                 int end = tree.SubtreeEnd[i];
                 for (int c = i + 1; c < end; c = tree.SubtreeEnd[c])
                 {
@@ -277,6 +279,25 @@ namespace TimboJimbo.UINext
                 }
                 s_subtreeBounds[i] = bounds;
             }
+        }
+
+        // The box round what a node itself paints but its shadows, in its root's space, as the shader places it.
+        private static Rect SurfaceBounds(UITree tree, UINode node, int i)
+        {
+            var min = new Vector2(float.MaxValue, float.MaxValue);
+            var max = new Vector2(float.MinValue, float.MinValue);
+            var world = tree.World[i];
+            var size = (Vector2)tree.Slots[i].SizeOpacity;
+            IncludeSurfaces(node.Instances, world, size, ref min, ref max);
+            IncludeSurfaces(node.OverlayInstances, world, size, ref min, ref max);
+            return min.x > max.x ? Nowhere : Rect.MinMaxRect(min.x, min.y, max.x, max.y);
+        }
+
+        private static void IncludeSurfaces(List<PrimitiveInstance> instances, Affine2 world, Vector2 size, ref Vector2 min, ref Vector2 max)
+        {
+            for (int k = 0; k < instances.Count; k++)
+                if (instances[k].Type != (uint)PrimitiveType.Shadow)
+                    Include(instances[k], world, size, ref min, ref max);
         }
 
         // Adds a node's primitives, then its children's in ZIndex order (siblings with equal ZIndex in hierarchy order);
