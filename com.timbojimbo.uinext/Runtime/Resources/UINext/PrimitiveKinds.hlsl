@@ -71,6 +71,8 @@ struct Corner
     float2 root;
     float2 uv;
     float4 clips;
+    // A pixel in the node's points (the widest it is along either axis) and in the root's: the smoothed edge's width.
+    float2 pixel;
 };
 
 // Room around the quad: a pixel and a half of the node's, for a smoothed edge, and a shadow's blur; none for a glyph,
@@ -100,10 +102,10 @@ struct Corner
 // A shape's seven parts: its four corner squares (as big as the largest radius, with the room round the quad), drawn by
 // the shape passes, and three bands between them (the two sides, and the middle column), drawn by the flat passes after
 // them, where a rounded rect's distance is a box's. Nothing within a layer overlaps, so the order between shapes is free.
-#if defined(KIND_SHAPE) && defined(FLAT_ONLY)
+#if (defined(KIND_SHAPE) || defined(KIND_IMAGE)) && defined(FLAT_ONLY)
 #define PARTS 3u
 #define PART_FROM 4u
-#elif defined(KIND_SHAPE)
+#elif defined(KIND_SHAPE) || defined(KIND_IMAGE)
 #define PARTS 4u
 #define PART_FROM 0u
 #elif defined(KIND_SLICED)
@@ -114,7 +116,7 @@ struct Corner
 #define PART_FROM 0u
 #endif
 
-#if defined(KIND_SHAPE)
+#if defined(KIND_SHAPE) || defined(KIND_IMAGE)
 // 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left, 4 the left band, 5 the right band, 6 the middle column.
 void PartRect(Instance inst, float4 rect, float margin, uint part, out float2 partMin, out float2 partMax, out float4 sliceX, out float4 sliceY)
 {
@@ -194,6 +196,12 @@ Corner CornerOf(uint vertexID, uint instanceID)
     c.root = float2(dot(c.slot.row0.xy, p) + c.slot.row0.z, dot(c.slot.row1.xy, p) + c.slot.row1.z);
     c.position = mul(_UIMatrix, float4(c.root, OrderDepth(id), 1));
     c.local = p - (c.rect.xy + c.rect.zw * 0.5);
+    // A pixel in the node's points: through the inverse of its transform, as wide as it comes along an axis (the
+    // sum of a row's parts); sizeOpacity.w is a pixel in the node's points by the transform's scale.
+    float det = max(abs(c.slot.row0.x * c.slot.row1.y - c.slot.row0.y * c.slot.row1.x), 1e-8);
+    float scale = sqrt(det);
+    float2 across = float2(abs(c.slot.row1.y) + abs(c.slot.row0.y), abs(c.slot.row1.x) + abs(c.slot.row0.x)) * (c.slot.sizeOpacity.w / scale);
+    c.pixel = float2(max(max(across.x, across.y), 1e-5), max(c.slot.sizeOpacity.w * scale, 1e-5));
     // Textures run up from their bottom; this space runs down.
     c.uv = float2(c.inst.uv.x + t.x * c.inst.uv.z, c.inst.uv.y + (1 - t.y) * c.inst.uv.w);
     return c;
@@ -211,22 +219,29 @@ float2 GradientAxis(float degrees, float2 halfSize)
 
 // ── What every kind passes and does ─────────────────────────────────────────
 
-// Its clips, each its rounded rect in its own space, smoothed over a pixel by its scale.
-float ClipCoverage(float4 clips, float2 root)
+// One clip's coverage of a point in the root's space: its rounded rect in its own space, smoothed over a pixel by its
+// scale.
+float OneClipCoverage(float4 inverse0, float4 inverse1, float4 size, float4 radii, float2 root, float rootAA)
+{
+    float2 cp = float2(dot(inverse0.xy, root) + inverse0.z, dot(inverse1.xy, root) + inverse1.z);
+    return saturate(0.5 + InsideRoundRect(float4(cp, size.xy - cp), radii) / max(rootAA * size.z, 1e-5));
+}
+
+// Its clips: the first as the vertex passed it, any others read here. Rolled, so the clips share registers: unrolled,
+// four clips' tests held more than half the core's.
+float ClipCoverage(float4 clips, float2 root, float rootAA, float4 clip0a, float4 clip0b, float4 clip0c, float4 clip0d)
 {
     float coverage = 1;
 #if defined(CLIPPED)
-    float2 rootPixel = fwidth(root);
-    float rootAA = max(max(rootPixel.x, rootPixel.y), 1e-5);
-    // Rolled, so the clips share registers: unrolled, four clips' tests held more than half the core's.
+    if (clips.x < 0) return 1;
+    coverage = OneClipCoverage(clip0a, clip0b, clip0c, clip0d, root, rootAA);
     [loop]
-    for (int k = 0; k < 4; k++)
+    for (int k = 1; k < 4; k++)
     {
         float index = clips[k];
         if (index < 0) break;
         Clip c = _Clips[(uint)index];
-        float2 cp = float2(dot(c.inverse0.xy, root) + c.inverse0.z, dot(c.inverse1.xy, root) + c.inverse1.z);
-        coverage *= saturate(0.5 + InsideRoundRect(float4(cp, c.size.xy - cp), c.radii) / max(rootAA * c.size.z, 1e-5));
+        coverage *= OneClipCoverage(c.inverse0, c.inverse1, c.size, c.radii, root, rootAA);
     }
 #endif
     return coverage;
@@ -248,41 +263,38 @@ float4 Drawn(float4 color, float coverage, float opacity, float saturation, floa
 }
 
 // Coverage of a box's smoothed edge, and its distance: what a rounded rect's is in its bands, between its corners.
-float BoxCoverage(float2 local, float2 halfSize, out float d)
+float BoxCoverage(float2 local, float2 halfSize, float aa, out float d)
 {
-    float2 px = fwidth(local);
-    float aa = max(max(px.x, px.y), 1e-5);
     float2 q = abs(local) - halfSize;
     d = max(q.x, q.y);
     return saturate(0.5 - d / aa);
 }
 
 // Coverage of a rounded rect's smoothed edge, and its distance.
-float EdgeCoverage(float2 local, float2 halfSize, float4 radii, out float d)
+float EdgeCoverage(float2 local, float2 halfSize, float4 radii, float aa, out float d)
 {
-    float2 px = fwidth(local);
-    float aa = max(max(px.x, px.y), 1e-5);
     d = SdRoundRect(local, halfSize, radii);
     return saturate(0.5 - d / aa);
 }
 
-// Kept inside its own part of the texture: an image's crop or a glyph's cell in its atlas.
-float2 ClampUv(float2 uv, float4 uvRect)
+// The bounds a texture coordinate is kept inside, once a vertex: an image's crop or a glyph's cell in its atlas.
+float4 UvBounds(float4 uvRect)
 {
-    float2 uvMin = min(uvRect.xy, uvRect.xy + uvRect.zw);
-    float2 uvMax = max(uvRect.xy, uvRect.xy + uvRect.zw);
-    return clamp(uv, uvMin, uvMax);
+    return float4(min(uvRect.xy, uvRect.xy + uvRect.zw), max(uvRect.xy, uvRect.xy + uvRect.zw));
 }
 
 #if defined(CLIPPED)
-#define CLIP_VARYINGS nointerpolation float4 clips : TEXCOORD12;
-#define SET_CLIPS(o, c) (o).clips = (c).clips;
-#define COVERAGE_OF(i) ClipCoverage((i).clips, (i).root)
+#define CLIP_VARYINGS nointerpolation float4 clips : TEXCOORD12; nointerpolation float4 clip0a : TEXCOORD13; nointerpolation float4 clip0b : TEXCOORD14; nointerpolation float4 clip0c : TEXCOORD15; nointerpolation float4 clip0d : TEXCOORD16;
+#define SET_CLIPS(o, c) { (o).clips = (c).clips; Clip first = _Clips[(c).clips.x < 0 ? 0u : (uint)(c).clips.x]; (o).clip0a = first.inverse0; (o).clip0b = first.inverse1; (o).clip0c = first.size; (o).clip0d = first.radii; }
+#define COVERAGE_OF(i) ClipCoverage((i).clips, (i).root, (i).pixel.y, (i).clip0a, (i).clip0b, (i).clip0c, (i).clip0d)
 #else
 #define CLIP_VARYINGS
 #define SET_CLIPS(o, c)
 #define COVERAGE_OF(i) 1
 #endif
+// Every kind passes the pixel's size (in the node's points, and the root's).
+#define PIXEL_VARYING nointerpolation float2 pixel : TEXCOORD11;
+#define SET_PIXEL(o, c) (o).pixel = (c).pixel;
 
 // ── Shape: a rounded rect's fill, with a border inside its edge, or as a ring, or as a gradient ────────────────────
 
@@ -302,6 +314,7 @@ struct Varyings
     // Its gradient's axis, its saturation and brightness.
     nointerpolation float4 extra : TEXCOORD6;
     nointerpolation uint flags : TEXCOORD7;
+    PIXEL_VARYING
     CLIP_VARYINGS
 };
 
@@ -321,6 +334,7 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.shape = float4(halfSize, c.slot.sizeOpacity.z, c.inst.params.x);
     o.extra = float4(GradientAxis(c.inst.params.z, halfSize), c.slot.row0.w, c.slot.row1.w);
     o.flags = c.inst.flags;
+    SET_PIXEL(o, c)
     SET_CLIPS(o, c)
     return o;
 }
@@ -328,13 +342,12 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
 float4 Frag(Varyings i) : SV_Target
 {
     float d;
+    float aa = i.pixel.x;
 #if defined(FLAT_ONLY)
-    float coverage = BoxCoverage(i.local, i.shape.xy, d);
+    float coverage = BoxCoverage(i.local, i.shape.xy, aa, d);
 #else
-    float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, d);
+    float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, aa, d);
 #endif
-    float2 px = fwidth(i.local);
-    float aa = max(max(px.x, px.y), 1e-5);
     float4 color = i.color;
     bool gradient = (i.flags & 2u) != 0u;
     if (gradient)
@@ -370,6 +383,7 @@ struct Varyings
     // Its gradient's axis, its saturation and brightness.
     nointerpolation float4 extra : TEXCOORD6;
     nointerpolation uint flags : TEXCOORD7;
+    PIXEL_VARYING
     CLIP_VARYINGS
 };
 
@@ -387,14 +401,14 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.shape = float4(halfSize, c.slot.sizeOpacity.z, c.inst.params.y);
     o.extra = float4(GradientAxis(c.inst.params.z, halfSize), c.slot.row0.w, c.slot.row1.w);
     o.flags = c.inst.flags;
+    SET_PIXEL(o, c)
     SET_CLIPS(o, c)
     return o;
 }
 
 float4 Frag(Varyings i) : SV_Target
 {
-    float2 px = fwidth(i.local);
-    float aa = max(max(px.x, px.y), 1e-5);
+    float aa = i.pixel.x;
     float d = SdRoundRect(i.local, i.shape.xy, i.radii);
     float blur = max(i.shape.w, aa);
     float coverage = 1 - smoothstep(-blur, blur, d);
@@ -416,12 +430,15 @@ struct Varyings
     float2 root : TEXCOORD1;
     float2 uv : TEXCOORD2;
     nointerpolation float4 color : TEXCOORD3;
+#if !defined(FLAT_ONLY)
     nointerpolation float4 radii : TEXCOORD4;
+#endif
     // Its half size, its opacity, its texture.
     nointerpolation float4 shape : TEXCOORD5;
-    nointerpolation float4 uvRect : TEXCOORD6;
+    nointerpolation float4 uvBounds : TEXCOORD6;
     // Its saturation and brightness.
     nointerpolation float2 filters : TEXCOORD7;
+    PIXEL_VARYING
     CLIP_VARYINGS
 };
 
@@ -434,10 +451,13 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.root = c.root;
     o.uv = c.uv;
     o.color = c.inst.color;
+#if !defined(FLAT_ONLY)
     o.radii = c.inst.radii;
+#endif
     o.shape = float4(c.rect.zw * 0.5, c.slot.sizeOpacity.z, c.inst.textureIndex & 15u);
-    o.uvRect = c.inst.uv;
+    o.uvBounds = UvBounds(c.inst.uv);
     o.filters = float2(c.slot.row0.w, c.slot.row1.w);
+    SET_PIXEL(o, c)
     SET_CLIPS(o, c)
     return o;
 }
@@ -445,8 +465,12 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
 float4 Frag(Varyings i) : SV_Target
 {
     float d;
-    float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, d);
-    float4 color = SampleTexture((uint)i.shape.w, ClampUv(i.uv, i.uvRect)) * i.color;
+#if defined(FLAT_ONLY)
+    float coverage = BoxCoverage(i.local, i.shape.xy, i.pixel.x, d);
+#else
+    float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, i.pixel.x, d);
+#endif
+    float4 color = SampleTexture((uint)i.shape.w, clamp(i.uv, i.uvBounds.xy, i.uvBounds.zw)) * i.color;
     coverage *= COVERAGE_OF(i);
     return Drawn(color, coverage, i.shape.z, i.filters.x, i.filters.y);
 }
@@ -465,10 +489,11 @@ struct Varyings
     float2 root : TEXCOORD1;
     nointerpolation float4 color : TEXCOORD2;
     nointerpolation float4 color2 : TEXCOORD3;
-    nointerpolation float4 uvRect : TEXCOORD4;
+    nointerpolation float4 uvBounds : TEXCOORD4;
     // Its edge (0.5, less where synthetic bold widens it), its outline's width past that, its opacity, its texture.
     nointerpolation float4 glyph : TEXCOORD5;
     nointerpolation float2 filters : TEXCOORD6;
+    PIXEL_VARYING
     CLIP_VARYINGS
 };
 
@@ -481,9 +506,10 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.root = c.root;
     o.color = c.inst.color;
     o.color2 = c.inst.color2;
-    o.uvRect = c.inst.uv;
+    o.uvBounds = UvBounds(c.inst.uv);
     o.glyph = float4(0.5 - c.inst.params.y, c.inst.params.w, c.slot.sizeOpacity.z, c.inst.textureIndex & 15u);
     o.filters = float2(c.slot.row0.w, c.slot.row1.w);
+    SET_PIXEL(o, c)
     SET_CLIPS(o, c)
     return o;
 }
@@ -492,7 +518,7 @@ float4 Frag(Varyings i) : SV_Target
 {
     // The distance field holds 0.5 at the glyph's edge, resolved over about a pixel by how fast the field changes on
     // screen, so edges stay crisp at any size. An outline lies past that edge in the second colour.
-    float field = SampleAtlas((uint)i.glyph.w, ClampUv(i.uv, i.uvRect)).a;
+    float field = SampleAtlas((uint)i.glyph.w, clamp(i.uv, i.uvBounds.xy, i.uvBounds.zw)).a;
     float fieldPixel = max(fwidth(field), 1e-4);
     float fill = saturate((field - i.glyph.x) / fieldPixel + 0.5);
     float coverage = fill;
@@ -516,9 +542,10 @@ struct Varyings
     float2 uv : TEXCOORD0;
     float2 root : TEXCOORD1;
     nointerpolation float4 color : TEXCOORD2;
-    nointerpolation float4 uvRect : TEXCOORD3;
+    nointerpolation float4 uvBounds : TEXCOORD3;
     // Its opacity, its texture, its saturation and brightness.
     nointerpolation float4 glyph : TEXCOORD4;
+    PIXEL_VARYING
     CLIP_VARYINGS
 };
 
@@ -530,15 +557,16 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.uv = c.uv;
     o.root = c.root;
     o.color = c.inst.color;
-    o.uvRect = c.inst.uv;
+    o.uvBounds = UvBounds(c.inst.uv);
     o.glyph = float4(c.slot.sizeOpacity.z, c.inst.textureIndex & 15u, c.slot.row0.w, c.slot.row1.w);
+    SET_PIXEL(o, c)
     SET_CLIPS(o, c)
     return o;
 }
 
 float4 Frag(Varyings i) : SV_Target
 {
-    float4 color = SampleTexture((uint)i.glyph.y, ClampUv(i.uv, i.uvRect)) * i.color;
+    float4 color = SampleTexture((uint)i.glyph.y, clamp(i.uv, i.uvBounds.xy, i.uvBounds.zw)) * i.color;
     return Drawn(color, COVERAGE_OF(i), i.glyph.x, i.glyph.z, i.glyph.w);
 }
 #endif
@@ -553,6 +581,7 @@ struct Varyings
     float2 root : TEXCOORD1;
     // Its opacity (the group's, by its colour's alpha), its texture.
     nointerpolation float2 group : TEXCOORD2;
+    PIXEL_VARYING
     CLIP_VARYINGS
 };
 
@@ -564,6 +593,7 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.uv = c.uv;
     o.root = c.root;
     o.group = float2(c.inst.color.a * c.slot.sizeOpacity.z, c.inst.textureIndex & 15u);
+    SET_PIXEL(o, c)
     SET_CLIPS(o, c)
     return o;
 }
@@ -584,6 +614,7 @@ struct Varyings
     float2 root : TEXCOORD1;
     // How far the fade has gone (by its colour's alpha), its opacity, its two textures.
     nointerpolation float4 pair : TEXCOORD2;
+    PIXEL_VARYING
     CLIP_VARYINGS
 };
 
@@ -595,6 +626,7 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.uv = c.uv;
     o.root = c.root;
     o.pair = float4(c.inst.color.a, c.slot.sizeOpacity.z, c.inst.textureIndex & 15u, (c.inst.textureIndex >> 4) & 15u);
+    SET_PIXEL(o, c)
     SET_CLIPS(o, c)
     return o;
 }

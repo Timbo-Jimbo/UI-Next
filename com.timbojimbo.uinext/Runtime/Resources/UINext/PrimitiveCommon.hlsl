@@ -51,7 +51,8 @@ int _InstanceTotal;
 float InsideRoundRect(float4 edges, float4 radii)
 {
     float2 near = float2(min(edges.x, edges.z), min(edges.y, edges.w));
-    float r = edges.x < edges.z ? (edges.y < edges.w ? radii.x : radii.w) : (edges.y < edges.w ? radii.y : radii.z);
+    float2 rx = edges.x < edges.z ? radii.xw : radii.yz;
+    float r = edges.y < edges.w ? rx.x : rx.y;
     float2 q = r - near;
     return q.x > 0 && q.y > 0 ? r - length(q) : min(near.x, near.y);
 }
@@ -60,7 +61,8 @@ float InsideRoundRect(float4 edges, float4 radii)
 // bottom-right, bottom-left.
 float SdRoundRect(float2 p, float2 halfSize, float4 radii)
 {
-    float r = p.x < 0 ? (p.y < 0 ? radii.x : radii.w) : (p.y < 0 ? radii.y : radii.z);
+    float2 rx = p.x < 0 ? radii.xw : radii.yz;
+    float r = p.y < 0 ? rx.x : rx.y;
     r = min(r, min(halfSize.x, halfSize.y));
     float2 q = abs(p) - halfSize + r;
     return min(max(q.x, q.y), 0) + length(max(q, 0)) - r;

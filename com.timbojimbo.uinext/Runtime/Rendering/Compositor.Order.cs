@@ -80,6 +80,7 @@ namespace TimboJimbo.UINext
         private const int OccludersPass = 16;
         private const int OverdrawPass = 17;
         private const int FlatPass = 18;
+        private const int ImageFlatPass = 20;
 
         // Per primitive: what it is drawn with, and its layer.
         private static byte[] s_kinds = new byte[256];
@@ -185,7 +186,8 @@ namespace TimboJimbo.UINext
             if (pass >= OccludersPass) return 1;
             switch ((PrimitiveKind)(pass / 2))
             {
-                case PrimitiveKind.Shape: return 4;
+                case PrimitiveKind.Shape:
+                case PrimitiveKind.Image: return 4;
                 case PrimitiveKind.Sliced: return 9;
                 default: return 1;
             }
@@ -716,10 +718,14 @@ namespace TimboJimbo.UINext
             }
         }
 
+        // The pass that draws a run's bands after its corners, for a shape's or an image's run; -1 for the rest.
+        private static int BandPassOf(int pass) =>
+            pass < 2 ? FlatPass + pass : pass == (int)PrimitiveKind.Image * 2 || pass == (int)PrimitiveKind.Image * 2 + 1 ? ImageFlatPass + pass - (int)PrimitiveKind.Image * 2 : -1;
+
         private static void AddRun(int start, int count, int pass)
         {
             s_runs.Add(new Run { Start = start, Count = count, Pass = pass });
-            if (pass < 2) s_shapeRuns++;
+            if (BandPassOf(pass) >= 0) s_shapeRuns++;
         }
     }
 }
