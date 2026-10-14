@@ -77,6 +77,14 @@ namespace TimboJimbo.UINext.Demos.Circle
         public static readonly string[] Replies = { "On my way!", "Sounds good", "Haha, yes" };
 
         /// <summary>What the photos are of, standing in for pictures: a sky down to a glow at the horizon, and the hills under it.</summary>
+        /// <summary>The photos, on a CDN that makes copies at any width and shape (see the builder's loader).</summary>
+        public static readonly string[] Photos =
+        {
+            "https://cdn.staticshiftracing.com/build-share-dev/0b0ec06f-bdae-4576-b2f2-a1f160a965cc.jpeg",
+            "https://cdn.staticshiftracing.com/build-share-dev/e182026f-c3e8-4d0c-aaec-31b56eb608fa.jpeg",
+            "https://cdn.staticshiftracing.com/build-share-dev/f84c08c0-d8bd-46ab-b3c2-720c3c72301a.jpeg",
+        };
+
         public static readonly (Color Sky, Color Glow, Color Hills)[] Scenes =
         {
             (new Color32(0x5F, 0xA8, 0xD3, 0xFF), new Color32(0xCF, 0xE8, 0xF3, 0xFF), new Color32(0x3E, 0x6B, 0x5A, 0xFF)),

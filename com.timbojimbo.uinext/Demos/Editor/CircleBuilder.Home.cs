@@ -125,6 +125,7 @@ namespace TimboJimboEditor.UINext.Demos
             photoNode.AspectRatio.Value = 4f / 3f;
             photoNode.MatchName.Value = "Photo";
             photoNode.ClipRadii.Value = 14f;
+            photoNode.Image("", loader: PhotoLoader()).CornerRadii.Value = 14f;
             var photo = photoNode.Add<ScenePhoto>();
             photo.Show(scene);
             photoNode.Pressable();
@@ -333,6 +334,7 @@ namespace TimboJimboEditor.UINext.Demos
             slot.MatchName.Value = "Photo";
             slot.MatchId.Value = id;
             slot.ClipRadii.Value = 10f;
+            slot.Image("", loader: PhotoLoader()).CornerRadii.Value = 10f;
             var photo = slot.Add<ScenePhoto>();
             photo.CornerRadius.Value = 10f;
             photo.Show(index);
