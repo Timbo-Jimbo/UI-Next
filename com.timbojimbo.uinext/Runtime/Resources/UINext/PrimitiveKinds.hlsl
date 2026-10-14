@@ -107,10 +107,10 @@ float4 SampleAtlas(uint index, float2 uv)
     }
 }
 
-static const float2 kCorners[6] =
+// A quad's four corners, drawn as two triangles by the compositor's index buffer (0 1 2, 0 2 3).
+static const float2 kCorners[4] =
 {
-    float2(0, 0), float2(1, 0), float2(1, 1),
-    float2(0, 0), float2(1, 1), float2(0, 1)
+    float2(0, 0), float2(1, 0), float2(1, 1), float2(0, 1)
 };
 
 // How far inside a rounded rect a point is (negative outside), from its distances to the rect's edges (left, top,
@@ -279,7 +279,7 @@ Corner CornerOf(uint vertexID, uint instanceID)
     float2 quadMin = c.rect.xy - margin, quadMax = c.rect.xy + c.rect.zw + margin;
     c.clips = c.slot.clips;
     CutToClips(c.slot, skew, 1, quadMin, quadMax, c.clips);
-    float2 corner = kCorners[vertexID % 6];
+    float2 corner = kCorners[vertexID & 3u];
     float2 p = quadMin + corner * (quadMax - quadMin);
     float2 t = (p - c.rect.xy) / max(c.rect.zw, 1e-5);
     p.x += skew * (1 - corner.y);
@@ -823,7 +823,7 @@ float4 Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID) : SV_P
     Slot slot = _Slots[inst.slot];
     float2 opaqueMin, opaqueMax;
     OpaqueRect(inst, slot, RectOf(inst, slot), opaqueMin, opaqueMax);
-    float2 p = opaqueMin + kCorners[vertexID % 6] * (opaqueMax - opaqueMin);
+    float2 p = opaqueMin + kCorners[vertexID & 3u] * (opaqueMax - opaqueMin);
     float2 root = float2(dot(slot.row0.xy, p) + slot.row0.z, dot(slot.row1.xy, p) + slot.row1.z);
     return mul(_UIMatrix, float4(root, OrderDepth(id), 1));
 }

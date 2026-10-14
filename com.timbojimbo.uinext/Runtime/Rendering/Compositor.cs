@@ -156,6 +156,8 @@ namespace TimboJimbo.UINext
         private static GraphicsBuffer s_instanceBuffer;
         private static GraphicsBuffer s_slotBuffer;
         private static GraphicsBuffer s_clipBuffer;
+        // The two triangles every quad draws as (0 1 2, 0 2 3): four vertices a quad rather than six.
+        private static GraphicsBuffer s_indexBuffer;
 
         private static bool s_orderDirty = true;
         private static bool s_slotsDirty = true;
@@ -228,7 +230,8 @@ namespace TimboJimbo.UINext
             s_instanceBuffer?.Release();
             s_slotBuffer?.Release();
             s_clipBuffer?.Release();
-            s_instanceBuffer = s_slotBuffer = s_clipBuffer = null;
+            s_indexBuffer?.Release();
+            s_instanceBuffer = s_slotBuffer = s_clipBuffer = s_indexBuffer = null;
             foreach (var target in s_groupTargets)
             {
                 if (target == null) continue;
@@ -1189,6 +1192,11 @@ namespace TimboJimbo.UINext
                     rebuilt || newInstances ? s_instanceCount : s_patchedTo, PrimitiveInstance.Stride);
                 bytes += Send(s_slotBuffer, s_slots, newSlots ? 0 : s_slotsFrom, newSlots ? s_slotCount : Mathf.Min(s_slotsTo, s_slotCount), NodeSlot.Stride);
                 bytes += Send(s_clipBuffer, s_clips, newClips ? 0 : s_clipsFrom, newClips ? s_clipCount : Mathf.Min(s_clipsTo, s_clipCount), ClipShape.Stride);
+                if (s_indexBuffer == null || !s_indexBuffer.IsValid())
+                {
+                    s_indexBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Index, 6, sizeof(ushort));
+                    s_indexBuffer.SetData(new ushort[] { 0, 1, 2, 0, 2, 3 });
+                }
             }
             s_slotsFrom = s_clipsFrom = int.MaxValue;
             s_slotsTo = s_clipsTo = 0;
@@ -1591,7 +1599,7 @@ namespace TimboJimbo.UINext
                 {
                     var span = s_spans[s];
                     cmd.SetGlobalInt(InstanceOffsetId, span.Start);
-                    cmd.DrawProcedural(Matrix4x4.identity, material, OccludersPass, MeshTopology.Triangles, 6, span.Count);
+                    cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, OccludersPass, MeshTopology.Triangles, 6, span.Count);
                 }
             }
         }
@@ -1665,7 +1673,7 @@ namespace TimboJimbo.UINext
                 {
                     var run = s_runs[r];
                     cmd.SetGlobalInt(InstanceOffsetId, run.Start);
-                    cmd.DrawProcedural(Matrix4x4.identity, material, run.Pass, MeshTopology.Triangles, 6, run.Count);
+                    cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, run.Pass, MeshTopology.Triangles, 6, run.Count);
                 }
             }
         }
