@@ -59,7 +59,15 @@ namespace TimboJimbo.UINext
             UIInput.Hook();
         }
 
-        private static void OnBeginContext(ScriptableRenderContext context, List<Camera> cameras) => Run();
+        private static void OnBeginContext(ScriptableRenderContext context, List<Camera> cameras)
+        {
+            // URP sets this back to true as it begins each frame, and reads it as it records each camera: here is the
+            // one place a frame it can be turned off.
+            var settings = UISettings.Instance;
+            if (settings != null && settings.SkipOverlayUIPass)
+                SupportedRenderingFeatures.active.rendersUIOverlay = false;
+            Run();
+        }
 
         private static void OnBeginCamera(ScriptableRenderContext context, Camera camera)
         {

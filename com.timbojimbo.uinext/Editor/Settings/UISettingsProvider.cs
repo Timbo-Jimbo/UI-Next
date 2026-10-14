@@ -50,7 +50,7 @@ namespace TimboJimboEditor.UINext
             return new SettingsProvider("Project/Timbo Jimbo/UI Next", SettingsScope.Project)
             {
                 label = "UI Next",
-                keywords = new HashSet<string>(new[] { "Image", "Loader", "CDN", "Cache" }),
+                keywords = new HashSet<string>(new[] { "Image", "Loader", "CDN", "Cache", "Overlay", "UGUI", "Render pass" }),
                 deactivateHandler = () => serializedObject = null,
                 guiHandler = _ =>
                 {

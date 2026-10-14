@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Added
+
+- Project Settings > Timbo Jimbo > UI Next > Skip Overlay UI Pass: URP draws screen-space UGUI and UI Toolkit in a pass of its own after its final blit, which loads and stores the whole screen each frame even with nothing to draw (0.3 ms of GPU time a frame on a Pixel 8, a quarter of an empty frame). On, UI Next tells URP each frame not to record it, and the engine draws any such UI after URP as it used to. Off unless set, for projects that draw UGUI or UI Toolkit overlays, which are slower drawn that way. UI Next's own pass is unaffected: it draws inside URP's final pass either way.
+
 ## [0.5.0] - 14/10/2026
 
 ### Added

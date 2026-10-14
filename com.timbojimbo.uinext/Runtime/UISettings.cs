@@ -26,6 +26,9 @@ namespace TimboJimbo.UINext
         [Tooltip("How much of the images loaded from URLs is kept on disk between runs, in megabytes, the files used longest ago going first; 0 keeps none.")]
         [SerializeField, Min(0)] private int _imageDiskCacheMegabytes = DefaultImageDiskCacheMegabytes;
 
+        [Tooltip("URP draws screen-space UGUI and UI Toolkit in a pass of its own after its final blit, which loads and stores the whole screen each frame even with nothing to draw (0.3 ms of GPU time on a Pixel 8). On, UI Next tells URP not to, and the engine draws any such UI after URP as it used to. Leave off in a project that draws UGUI or UI Toolkit overlays: drawn that way they are slower.")]
+        [SerializeField] private bool _skipOverlayUIPass;
+
         private static UISettings s_instance;
         private static readonly Observable<int> s_changes = new();
 
@@ -50,6 +53,12 @@ namespace TimboJimbo.UINext
 
         /// <summary>How much of the images loaded from URLs is kept on disk between runs, in megabytes; 0 keeps none.</summary>
         public int ImageDiskCacheMegabytes => _imageDiskCacheMegabytes;
+
+        /// <summary>
+        /// Whether URP is told each frame not to record its screen-space overlay UI pass (for UGUI and UI Toolkit), which
+        /// loads and stores the whole screen even with nothing to draw; the engine draws any such UI after URP instead.
+        /// </summary>
+        public bool SkipOverlayUIPass => _skipOverlayUIPass;
 
         /// <summary>A tracked read of the settings and the loaders they lead to: what reads it runs again as they change.</summary>
         internal static void Watch() => _ = s_changes.Value;
