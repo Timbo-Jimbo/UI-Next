@@ -33,6 +33,9 @@ namespace TimboJimbo.UINext
         public NodeSlot[] Slots = new NodeSlot[32];
         public Affine2[] World = new Affine2[32];
         public bool[] Shown = new bool[32];
+        // Per node, whether it is scrolled out from under a clip over it (IsOffscreen): none of what it paints is in view, so
+        // it is not drawn, not drawn again until it comes back, and not hit.
+        public bool[] Offscreen = new bool[32];
 
         // How opaque each node is drawn, all told; and, for a node drawn as a group (a composite group not fully opaque,
         // blurred or masked, or a node a transition is fading), the opacity its image is drawn at (0 for the rest).
@@ -388,7 +391,7 @@ namespace TimboJimbo.UINext
                 int i = DrawOrder[k];
                 if (i >= Nodes.Count) continue;
                 var node = Nodes[i];
-                if (node == null || !Shown[i] || Opacities[i] <= 0.001f) continue;
+                if (node == null || !Shown[i] || Offscreen[i] || Opacities[i] <= 0.001f) continue;
                 if (!node.HitTestable.Peek || node.Leaving.Peek) continue;
                 if (node.Drawables.Count == 0 && !node.TryGetComponent<IPointerHandler>(out _)) continue;
                 if (Contains(i, point, 0f) && InsideClips(i, point))
@@ -408,7 +411,7 @@ namespace TimboJimbo.UINext
                 int i = DrawOrder[k];
                 if (i >= Nodes.Count) continue;
                 var node = Nodes[i];
-                if (node == null || !Shown[i] || Opacities[i] <= 0.001f || !accepts(node)) continue;
+                if (node == null || !Shown[i] || Offscreen[i] || Opacities[i] <= 0.001f || !accepts(node)) continue;
                 if (Contains(i, point, 0f) && InsideClips(i, point))
                     return i;
             }
@@ -1036,10 +1039,6 @@ namespace TimboJimbo.UINext
             Opacities[i] = opacities;
             GroupOpacities[i] = groupOpacity;
             Blurs[i] = blur;
-            // Seen, with its drawing waiting for that: it is drawn now, before the compositor builds.
-            if (node.DrawWaiting && shown && opacities > 0f)
-                node.DrawComputation?.Invalidate();
-
             // Its clips: its parent's, and its parent's own clip; none for a node in the top layer.
             var chain = new Vector4(-1f, -1f, -1f, -1f);
             if (p >= 0 && !topLayer)
@@ -1049,6 +1048,11 @@ namespace TimboJimbo.UINext
                     chain = Append(chain, _clipIndex[p]);
             }
             _clipChains[i] = chain;
+            bool offscreen = IsOffscreen(node, in world, frame.size, chain);
+            Offscreen[i] = offscreen;
+            // Seen and in view, with its drawing waiting for that: it is drawn now, before the compositor builds.
+            if (node.DrawWaiting && shown && opacities > 0f && !offscreen)
+                node.DrawComputation?.Invalidate();
             Slots[i] = new NodeSlot
             {
                 Row0 = new Vector4(world.A, world.B, world.Tx, saturation),
@@ -1080,6 +1084,48 @@ namespace TimboJimbo.UINext
             node.DrawnShown = shown;
             node.DrawnPass = CompositePass;
             return order;
+        }
+
+        // Whether a node is scrolled out from under an upright clip over it: what it paints, taken into its root's space, lies
+        // wholly outside the clip's rect. What it paints is its rect and what its own drawing reaches past it, as its draw
+        // computation last found it (its rect alone until it has drawn); a turned node is taken by the box round its corners,
+        // so this errs on the side of drawing. A clip that is not upright never culls, and what is inside a node is tested
+        // on its own, as it may overflow it. Nodes in the top layer or presented have no clips, so are never offscreen.
+        private bool IsOffscreen(UINode node, in Affine2 world, Vector2 size, Vector4 chain)
+        {
+            if (chain.x < 0f) return false;
+            var reach = node.PaintReach;
+            float x0 = -reach.x, y0 = -reach.y, x1 = size.x + reach.z, y1 = size.y + reach.w;
+            if (node.PaintsOutright)
+            {
+                var union = node.PaintUnion;
+                x0 = Mathf.Min(x0, union.xMin);
+                y0 = Mathf.Min(y0, union.yMin);
+                x1 = Mathf.Max(x1, union.xMax);
+                y1 = Mathf.Max(y1, union.yMax);
+            }
+            var a = world.Apply(new Vector2(x0, y0));
+            var b = world.Apply(new Vector2(x1, y0));
+            var c = world.Apply(new Vector2(x1, y1));
+            var d = world.Apply(new Vector2(x0, y1));
+            float rx0 = Mathf.Min(Mathf.Min(a.x, b.x), Mathf.Min(c.x, d.x)), rx1 = Mathf.Max(Mathf.Max(a.x, b.x), Mathf.Max(c.x, d.x));
+            float ry0 = Mathf.Min(Mathf.Min(a.y, b.y), Mathf.Min(c.y, d.y)), ry1 = Mathf.Max(Mathf.Max(a.y, b.y), Mathf.Max(c.y, d.y));
+            for (int k = 0; k < 4; k++)
+            {
+                int index = (int)chain[k];
+                if (index < 0) break;
+                if (index >= ClipShapes.Count) continue;
+                var clip = ClipShapes[index];
+                if (Mathf.Abs(clip.Inverse0.y) > 1e-6f || Mathf.Abs(clip.Inverse1.x) > 1e-6f
+                    || Mathf.Abs(clip.Inverse0.x) < 1e-6f || Mathf.Abs(clip.Inverse1.y) < 1e-6f) continue;
+                // The clip's rect in the root's space: its own runs from 0 to its size, and its inverse takes the root's
+                // into it, so the root's runs from -shift / scale to (size - shift) / scale.
+                float cx0 = -clip.Inverse0.z / clip.Inverse0.x, cx1 = (clip.Size.x - clip.Inverse0.z) / clip.Inverse0.x;
+                float cy0 = -clip.Inverse1.z / clip.Inverse1.y, cy1 = (clip.Size.y - clip.Inverse1.z) / clip.Inverse1.y;
+                if (rx1 < Mathf.Min(cx0, cx1) || rx0 > Mathf.Max(cx0, cx1) || ry1 < Mathf.Min(cy0, cy1) || ry0 > Mathf.Max(cy0, cy1))
+                    return true;
+            }
+            return false;
         }
 
         private static bool Same(in Affine2 a, in Affine2 b) =>
@@ -1155,6 +1201,7 @@ namespace TimboJimbo.UINext
             Array.Resize(ref Slots, size);
             Array.Resize(ref World, size);
             Array.Resize(ref Shown, size);
+            Array.Resize(ref Offscreen, size);
             Array.Resize(ref Opacities, size);
             Array.Resize(ref GroupOpacities, size);
             Array.Resize(ref LocalOpacities, size);

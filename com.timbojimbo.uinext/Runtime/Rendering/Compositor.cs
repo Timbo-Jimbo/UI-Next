@@ -71,7 +71,6 @@ namespace TimboJimbo.UINext
 
         // How far past its rect a node's drawing may reach and still be drawn when the rect itself is outside its clip: a
         // shadow's blur and offset, an overhanging glyph. In root points.
-        private const float OutsideMargin = 100f;
 
         // Every batch's textures, TexturesPerBatch to a batch.
         private static readonly List<Texture> s_batchTextures = new();
@@ -123,6 +122,8 @@ namespace TimboJimbo.UINext
         // Each slot's clips, as its primitives' pixels must treat them (ClassifySlots), and the batches' runs, the main
         // pass's first and the groups' after them.
         private static byte[] s_slotClipState = new byte[64];
+        // Per slot, whether its node is scrolled out from under a clip over it, as its tree found it (UITree.Offscreen).
+        private static bool[] s_slotOffscreen = new bool[64];
         private static readonly List<Run> s_runs = new();
         private static readonly List<Run> s_spans = new();
         private static int s_mainRuns;
@@ -207,6 +208,9 @@ namespace TimboJimbo.UINext
         internal static int PrimitiveCount => s_instanceCount;
         internal static int DrawCalls => s_runs.Count;
         internal static int MainDrawCalls => s_mainRuns;
+
+        /// <summary>How many nodes were scrolled out from under a clip over them, so not drawn, as last built.</summary>
+        public static int OffscreenNodes { get; private set; }
 
         // The GPU's copies and the groups' images outlive a script reload otherwise: let go of them before one, and on quitting.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -337,12 +341,13 @@ namespace TimboJimbo.UINext
 
         // Each slot's clips, as its primitives' pixels must treat them: none; all exact, where the node and every clip over
         // it are upright and the clips square-cornered, so the vertex shader cuts the quad to them exactly and no pixel
-        // need test them; or some to test a pixel. An upright node whose rect, with room round it for what it draws past
-        // it, lies wholly outside an upright clip over it is not drawn at all.
+        // need test them; or some to test a pixel. A node its tree found scrolled out from under a clip over it (what it
+        // paints wholly outside the clip: UITree.IsOffscreen) is not drawn at all.
         private static void ClassifySlots()
         {
             if (s_slotClipState.Length < s_slotCount)
                 System.Array.Resize(ref s_slotClipState, Mathf.NextPowerOfTwo(s_slotCount));
+            int offscreen = 0;
             for (int i = 0; i < s_slotCount; i++)
             {
                 ref var slot = ref s_slots[i];
@@ -352,39 +357,22 @@ namespace TimboJimbo.UINext
                     s_slotClipState[i] = ClipsNone;
                     continue;
                 }
-                bool upright = Upright(slot.Row0, slot.Row1);
-                bool exact = upright;
-                bool outside = false;
-                // The node's rect in its root's space, with the room round it.
-                float x0 = 0f, y0 = 0f, x1 = 0f, y1 = 0f;
-                if (upright)
+                if (s_slotOffscreen[i])
                 {
-                    float ax = slot.Row0.x * slot.SizeOpacity.x, ay = slot.Row1.y * slot.SizeOpacity.y;
-                    x0 = Mathf.Min(slot.Row0.z, slot.Row0.z + ax) - OutsideMargin;
-                    x1 = Mathf.Max(slot.Row0.z, slot.Row0.z + ax) + OutsideMargin;
-                    y0 = Mathf.Min(slot.Row1.z, slot.Row1.z + ay) - OutsideMargin;
-                    y1 = Mathf.Max(slot.Row1.z, slot.Row1.z + ay) + OutsideMargin;
+                    s_slotClipState[i] = ClipsOutside;
+                    offscreen++;
+                    continue;
                 }
-                for (int c = 0; c < 4; c++)
+                bool exact = Upright(slot.Row0, slot.Row1);
+                for (int c = 0; c < 4 && exact; c++)
                 {
                     if (chain[c] < 0f) break;
                     ref var clip = ref s_clips[(int)chain[c]];
-                    bool clipUpright = Upright(clip.Inverse0, clip.Inverse1);
-                    exact = exact && clipUpright && clip.Radii == Vector4.zero;
-                    if (!upright || !clipUpright) continue;
-                    // The clip's rect in the root's space: its own space runs from 0 to its size, and its inverse maps
-                    // the root's space into it, so the root's runs from -shift / scale to (size - shift) / scale.
-                    float cx0 = -clip.Inverse0.z / clip.Inverse0.x, cx1 = (clip.Size.x - clip.Inverse0.z) / clip.Inverse0.x;
-                    float cy0 = -clip.Inverse1.z / clip.Inverse1.y;
-                    float cy1 = (clip.Size.y - clip.Inverse1.z) / clip.Inverse1.y;
-                    if (x1 < Mathf.Min(cx0, cx1) || x0 > Mathf.Max(cx0, cx1) || y1 < Mathf.Min(cy0, cy1) || y0 > Mathf.Max(cy0, cy1))
-                    {
-                        outside = true;
-                        break;
-                    }
+                    exact = Upright(clip.Inverse0, clip.Inverse1) && clip.Radii == Vector4.zero;
                 }
-                s_slotClipState[i] = outside ? ClipsOutside : exact ? ClipsExact : ClipsTested;
+                s_slotClipState[i] = exact ? ClipsExact : ClipsTested;
             }
+            OffscreenNodes = offscreen;
         }
 
         // Whether a 2x3 transform's rows (xy the matrix, z the offset) keep a rect upright, as the shader decides it.
@@ -502,6 +490,7 @@ namespace TimboJimbo.UINext
                         var slot = tree.Slots[i];
                         slot.Clips = OffsetChain(slot.Clips, clipBase);
                         s_slots[slotBase + i] = slot;
+                        s_slotOffscreen[slotBase + i] = tree.Offscreen[i];
                     }
                     SentSlots(slotBase + from, slotBase + to);
                 }
@@ -1234,6 +1223,7 @@ namespace TimboJimbo.UINext
         private static void EnsureSlots(int count)
         {
             if (s_slots.Length < count) System.Array.Resize(ref s_slots, Mathf.NextPowerOfTwo(count));
+            if (s_slotOffscreen.Length < count) System.Array.Resize(ref s_slotOffscreen, Mathf.NextPowerOfTwo(count));
         }
 
         private static void EnsureClips(int count)
@@ -1369,6 +1359,7 @@ namespace TimboJimbo.UINext
         {
             EnsureSlots(s_slotCount + 1);
             s_slots[s_slotCount] = slot;
+            s_slotOffscreen[s_slotCount] = false;
             return s_slotCount++;
         }
 

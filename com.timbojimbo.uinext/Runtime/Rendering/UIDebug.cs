@@ -70,6 +70,9 @@ namespace TimboJimbo.UINext
         /// <summary>How many draw calls the UI was last drawn with: the main pass's and the groups' images'.</summary>
         public static int DrawCalls => Compositor.DrawCalls;
 
+        /// <summary>How many nodes were scrolled out from under a clip over them, so not drawn, as the UI was last drawn.</summary>
+        public static int OffscreenNodes => Compositor.OffscreenNodes;
+
         /// <summary>
         /// Checks every layout pass that solves only what can have moved against solving every node again, logging an
         /// error for each node laid out anywhere else: for testing layout. Every such pass is solved twice over.

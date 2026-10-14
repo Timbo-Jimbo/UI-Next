@@ -371,6 +371,16 @@ namespace TimboJimbo.UINext
         // its drawing as it was. Compositing finding it seen draws it.
         [NonSerialized] internal bool DrawWaiting;
 
+        // What its own drawing reaches past its rect, as its draw computation last found it (compositing tells from it
+        // when none of it is in view): how far the primitives placed against its edges (RelativeToNode) reach out on each
+        // side (left, top, right, bottom, never less than 0), and the rect round those placed outright, in its own space
+        // (meaningful once it has drawn one). And whether it has drawn at all: its first drawing never waits for it to be
+        // in view, so a feed is drawn once as it is made and scrolling patches where things are, building nothing again.
+        [NonSerialized] internal Vector4 PaintReach;
+        [NonSerialized] internal Rect PaintUnion;
+        [NonSerialized] internal bool PaintsOutright;
+        [NonSerialized] internal bool HasDrawn;
+
         // The flight it is drawn in while it flies to its place (a matched node shown), and the flight that took over from
         // it, whose picture of it flies instead (a matched node hidden).
         [NonSerialized] internal Flight FlightIn;

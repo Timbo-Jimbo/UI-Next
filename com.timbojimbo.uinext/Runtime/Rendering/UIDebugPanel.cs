@@ -97,6 +97,13 @@ namespace TimboJimbo.UINext
                     },
                     new DebugUI.Value
                     {
+                        displayName = "Offscreen nodes",
+                        tooltip = "Nodes scrolled out from under a clip over them: not drawn, not drawn again until they come back, not hit.",
+                        getter = () => Compositor.OffscreenNodes,
+                        refreshRate = Refresh,
+                    },
+                    new DebugUI.Value
+                    {
                         displayName = "Nodes",
                         tooltip = "Nodes in every root.",
                         getter = Nodes,

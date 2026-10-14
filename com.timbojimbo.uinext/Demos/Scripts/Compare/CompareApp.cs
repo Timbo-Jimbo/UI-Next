@@ -133,7 +133,7 @@ namespace TimboJimbo.UINext.Demos.Compare
                     var playing = StartCoroutine(Play(scenario));
                     yield return Wait(_warmup);
                     if (_system == "uinext")
-                        Log("UINB|draws|" + scenario + "|" + UIDebug.DrawCalls);
+                        Log("UINB|draws|" + scenario + "|" + UIDebug.DrawCalls + "|offscreen=" + UIDebug.OffscreenNodes);
                     recorder.Begin();
                     float end = Time.realtimeSinceStartup + _measure;
                     while (Time.realtimeSinceStartup < end)
