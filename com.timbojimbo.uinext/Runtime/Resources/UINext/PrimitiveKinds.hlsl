@@ -75,22 +75,6 @@ float4 SampleTexture(uint index, float2 uv)
     }
 }
 
-// A sample with explicit gradients: a nine-slice, whose parts stretch at their own rates.
-float4 SampleTextureGrad(uint index, float2 uv, float2 dx, float2 dy)
-{
-    switch (index)
-    {
-        case 1: return _Texture1.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-        case 2: return _Texture2.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-        case 3: return _Texture3.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-        case 4: return _Texture4.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-        case 5: return _Texture5.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-        case 6: return _Texture6.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-        case 7: return _Texture7.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-        default: return _Texture0.SampleGrad(sampler_linear_clamp, uv, dx, dy);
-    }
-}
-
 // A sample of a distance field atlas, which has no mipmaps: its top level, no gradients worked out.
 float4 SampleAtlas(uint index, float2 uv)
 {
@@ -267,10 +251,51 @@ struct Corner
 #define QUAD_SKEW(inst) 0
 #endif
 
+// The parts a primitive's quad is drawn in, each a quad of its own from the same record, placed by the vertex shader
+// (the compositor draws a run with its count times its kind's parts, and a vertex takes its primitive from its instance
+// index divided by them): a nine-slice's nine slices, each sampling its own part of the image at its own rate, with the
+// hardware's gradients, so it draws as an image. One for the rest: a rounded rect's bands between its corners could do a
+// box's work, but in one pass the compiler computes both paths and selects, and in a pass of their own the draw order
+// of overlapping shapes in a run would go wrong.
+#if defined(KIND_SLICED)
+#define PARTS 9u
+#else
+#define PARTS 1u
+#endif
+
+#if PARTS == 9u
+// One axis of a nine-slice, for slice `k` of three: where it runs, and what share of the image its ends sample, from
+// the borders `head` and `tail` (points) and their shares; borders longer together than the rect shrink alike to fit
+// it. (x0, x1, u0, u1.)
+float4 SliceOf(uint k, float lo, float hi, float head, float tail, float headShare, float tailShare)
+{
+    float fit = min(1, (hi - lo) / max(head + tail, 1e-5));
+    head *= fit;
+    tail *= fit;
+    float x0 = k == 0u ? lo : k == 1u ? lo + head : hi - tail;
+    float x1 = k == 0u ? lo + head : k == 1u ? hi - tail : hi;
+    float u0 = k == 0u ? 0 : k == 1u ? headShare : 1 - tailShare;
+    float u1 = k == 0u ? headShare : k == 1u ? 1 - tailShare : 1;
+    return float4(x0, x1, u0, u1);
+}
+
+// A slice's rect in its node's space, the margin round the quad included on the outside, and how a point along each
+// axis maps to its share of the image.
+void PartRect(Instance inst, float4 rect, float margin, uint part, out float2 partMin, out float2 partMax, out float4 sliceX, out float4 sliceY)
+{
+    uint col = part % 3u, row = part / 3u;
+    float2 lo = rect.xy, hi = rect.xy + rect.zw;
+    sliceX = SliceOf(col, lo.x, hi.x, inst.params.x, inst.params.z, inst.color2.x, inst.color2.z);
+    sliceY = SliceOf(row, lo.y, hi.y, inst.params.y, inst.params.w, inst.color2.y, inst.color2.w);
+    partMin = float2(col == 0u ? sliceX.x - margin : sliceX.x, row == 0u ? sliceY.x - margin : sliceY.x);
+    partMax = float2(col == 2u ? sliceX.y + margin : sliceX.y, row == 2u ? sliceY.y + margin : sliceY.y);
+}
+#endif
+
 Corner CornerOf(uint vertexID, uint instanceID)
 {
     Corner c;
-    uint id = (uint)_InstanceOffset + instanceID;
+    uint id = (uint)_InstanceOffset + instanceID / PARTS;
     c.inst = _Instances[id];
     c.slot = _Slots[c.inst.slot];
     c.rect = RectOf(c.inst, c.slot);
@@ -279,9 +304,25 @@ Corner CornerOf(uint vertexID, uint instanceID)
     float2 quadMin = c.rect.xy - margin, quadMax = c.rect.xy + c.rect.zw + margin;
     c.clips = c.slot.clips;
     CutToClips(c.slot, skew, 1, quadMin, quadMax, c.clips);
+#if PARTS == 9u
+    // Its slice of the quad, and what the clips left of that.
+    float2 partMin, partMax;
+    float4 sliceX, sliceY;
+    PartRect(c.inst, c.rect, margin, instanceID % PARTS, partMin, partMax, sliceX, sliceY);
+    quadMin = max(quadMin, partMin);
+    quadMax = min(quadMax, partMax);
+    if (any(quadMax <= quadMin))
+        quadMax = quadMin;
+#endif
     float2 corner = kCorners[vertexID & 3u];
     float2 p = quadMin + corner * (quadMax - quadMin);
+#if PARTS == 9u
+    // A slice samples its own part of the image: from where it runs to the shares its ends sample.
+    float2 t = float2(sliceX.z + (p.x - sliceX.x) / max(sliceX.y - sliceX.x, 1e-5) * (sliceX.w - sliceX.z),
+                      sliceY.z + (p.y - sliceY.x) / max(sliceY.y - sliceY.x, 1e-5) * (sliceY.w - sliceY.z));
+#else
     float2 t = (p - c.rect.xy) / max(c.rect.zw, 1e-5);
+#endif
     p.x += skew * (1 - corner.y);
     c.root = float2(dot(c.slot.row0.xy, p) + c.slot.row0.z, dot(c.slot.row1.xy, p) + c.slot.row1.z);
     c.position = mul(_UIMatrix, float4(c.root, OrderDepth(id), 1));
@@ -480,9 +521,9 @@ float4 Frag(Varyings i) : SV_Target
 }
 #endif
 
-// ── Image: a texture tinted and cut to a rounded rect ────────────────────────────────────────────────────────────
+// ── Image: a texture tinted and cut to a rounded rect (a nine-slice too, a slice at a time) ────────────────────────────────────────────────────────────
 
-#if defined(KIND_IMAGE)
+#if defined(KIND_IMAGE) || defined(KIND_SLICED)
 struct Varyings
 {
     float4 position : SV_POSITION;
@@ -526,92 +567,8 @@ float4 Frag(Varyings i) : SV_Target
 }
 #endif
 
-// ── Sliced image: a nine-slice, its borders keeping their size while the rest stretches ──────────────────────────
-
-#if defined(KIND_SLICED)
-// One axis of a nine-slice: where a point `p` along a rect `size` long samples, as a share of its image from that axis's
-// start, with borders `head` and `tail` long (points) that are `headShare` and `tailShare` of the image; `rate` is how
-// fast that share moves per point. Borders longer together than the rect shrink alike to fit it.
-float SliceAxis(float p, float size, float head, float tail, float headShare, float tailShare, out float rate)
-{
-    float fit = min(1, size / max(head + tail, 1e-5));
-    head *= fit;
-    tail *= fit;
-    if (p < head)
-    {
-        rate = headShare / max(head, 1e-5);
-        return p * rate;
-    }
-    if (p > size - tail)
-    {
-        rate = tailShare / max(tail, 1e-5);
-        return 1 - (size - p) * rate;
-    }
-    rate = (1 - headShare - tailShare) / max(size - head - tail, 1e-5);
-    return headShare + (p - head) * rate;
-}
-
-// Where a point `p` in a nine-sliced image's rect (from its top-left corner, y down) samples its `uvRect`, and how fast
-// that moves per point each way: `border` holds its borders in points and `share` the same as shares of its image, each
-// left, top, right, bottom.
-float2 SliceUv(float2 p, float2 size, float4 border, float4 share, float4 uvRect, out float2 rate)
-{
-    float rateX, rateY;
-    float x = SliceAxis(p.x, size.x, border.x, border.z, share.x, share.z, rateX);
-    float y = SliceAxis(p.y, size.y, border.y, border.w, share.y, share.w, rateY);
-    // Textures run up from their bottom; this space runs down.
-    rate = float2(rateX * uvRect.z, -rateY * uvRect.w);
-    return float2(uvRect.x + x * uvRect.z, uvRect.y + (1 - y) * uvRect.w);
-}
-
-struct Varyings
-{
-    float4 position : SV_POSITION;
-    float2 local : TEXCOORD0;
-    float2 root : TEXCOORD1;
-    nointerpolation float4 color : TEXCOORD2;
-    nointerpolation float4 radii : TEXCOORD3;
-    // Its half size, its opacity, its texture.
-    nointerpolation float4 shape : TEXCOORD4;
-    nointerpolation float4 uvRect : TEXCOORD5;
-    // Its borders in points, and as shares of its image.
-    nointerpolation float4 border : TEXCOORD6;
-    nointerpolation float4 share : TEXCOORD7;
-    nointerpolation float2 filters : TEXCOORD8;
-    CLIP_VARYINGS
-};
-
-Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
-{
-    Corner c = CornerOf(vertexID, instanceID);
-    Varyings o;
-    o.position = c.position;
-    o.local = c.local;
-    o.root = c.root;
-    o.color = c.inst.color;
-    o.radii = c.inst.radii;
-    o.shape = float4(c.rect.zw * 0.5, c.slot.sizeOpacity.z, c.inst.textureIndex & 15u);
-    o.uvRect = c.inst.uv;
-    o.border = c.inst.params;
-    o.share = c.inst.color2;
-    o.filters = float2(c.slot.row0.w, c.slot.row1.w);
-    SET_CLIPS(o, c)
-    return o;
-}
-
-float4 Frag(Varyings i) : SV_Target
-{
-    float d;
-    float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, d);
-    // Sampled by where the point is in its rect, its gradients following each part's stretch.
-    float2 rate;
-    float2 uv = SliceUv(i.local + i.shape.xy, i.shape.xy * 2, i.border, i.share, i.uvRect, rate);
-    float2 dx = ddx(i.local) * rate, dy = ddy(i.local) * rate;
-    float4 color = SampleTextureGrad((uint)i.shape.w, ClampUv(uv, i.uvRect), dx, dy) * i.color;
-    coverage *= COVERAGE_OF(i);
-    return Drawn(color, coverage, i.shape.z, i.filters.x, i.filters.y);
-}
-#endif
+// ── Sliced image: a nine-slice, its borders keeping their size while the rest stretches: drawn as an image, a slice at a
+// time (PartRect), each sampling its own part of the image at its own rate with the hardware's gradients ─────────
 
 // ── SDF glyph: from a distance field atlas, widened for synthetic bold, with an outline ──────────────────────────
 

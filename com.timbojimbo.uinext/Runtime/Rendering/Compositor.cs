@@ -375,6 +375,10 @@ namespace TimboJimbo.UINext
             OffscreenNodes = offscreen;
         }
 
+        // How many quads a pass draws a primitive as (PrimitiveKinds.hlsl's PARTS): a nine-slice's nine slices, one for the
+        // rest.
+        private static int PartsOf(int pass) => pass < OccludersPass && (PrimitiveKind)(pass / 2) == PrimitiveKind.Sliced ? 9 : 1;
+
         // Whether a 2x3 transform's rows (xy the matrix, z the offset) keep a rect upright, as the shader decides it.
         private static bool Upright(Vector4 row0, Vector4 row1) =>
             Mathf.Abs(row0.y) < 1e-6f && Mathf.Abs(row1.x) < 1e-6f && Mathf.Abs(row0.x) > 1e-6f && Mathf.Abs(row1.y) > 1e-6f;
@@ -1664,7 +1668,7 @@ namespace TimboJimbo.UINext
                 {
                     var run = s_runs[r];
                     cmd.SetGlobalInt(InstanceOffsetId, run.Start);
-                    cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, run.Pass, MeshTopology.Triangles, 6, run.Count);
+                    cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, run.Pass, MeshTopology.Triangles, 6, run.Count * PartsOf(run.Pass));
                 }
             }
         }
