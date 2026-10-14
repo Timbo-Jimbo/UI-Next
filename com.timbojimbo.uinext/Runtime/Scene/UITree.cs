@@ -36,6 +36,9 @@ namespace TimboJimbo.UINext
         // Per node, whether it is scrolled out from under a clip over it (IsOffscreen): none of what it paints is in view, so
         // it is not drawn, not drawn again until it comes back, and not hit.
         public bool[] Offscreen = new bool[32];
+        // Per node, the box round what it paints, in its root's space (IsOffscreen works it out): its rect and what its
+        // drawing reaches past it, through its transform. The compositor's layers come from these.
+        public Rect[] Bounds = new Rect[32];
 
         // How opaque each node is drawn, all told; and, for a node drawn as a group (a composite group not fully opaque,
         // blurred or masked, or a node a transition is fading), the opacity its image is drawn at (0 for the rest).
@@ -1048,7 +1051,7 @@ namespace TimboJimbo.UINext
                     chain = Append(chain, _clipIndex[p]);
             }
             _clipChains[i] = chain;
-            bool offscreen = IsOffscreen(node, in world, frame.size, chain);
+            bool offscreen = IsOffscreen(node, in world, frame.size, chain, out Bounds[i]);
             Offscreen[i] = offscreen;
             // Seen and in view, with its drawing waiting for that: it is drawn now, before the compositor builds.
             if (node.DrawWaiting && shown && opacities > 0f && !offscreen)
@@ -1091,9 +1094,8 @@ namespace TimboJimbo.UINext
         // computation last found it (its rect alone until it has drawn); a turned node is taken by the box round its corners,
         // so this errs on the side of drawing. A clip that is not upright never culls, and what is inside a node is tested
         // on its own, as it may overflow it. Nodes in the top layer or presented have no clips, so are never offscreen.
-        private bool IsOffscreen(UINode node, in Affine2 world, Vector2 size, Vector4 chain)
+        private bool IsOffscreen(UINode node, in Affine2 world, Vector2 size, Vector4 chain, out Rect bounds)
         {
-            if (chain.x < 0f) return false;
             var reach = node.PaintReach;
             float x0 = -reach.x, y0 = -reach.y, x1 = size.x + reach.z, y1 = size.y + reach.w;
             if (node.PaintsOutright)
@@ -1110,6 +1112,8 @@ namespace TimboJimbo.UINext
             var d = world.Apply(new Vector2(x0, y1));
             float rx0 = Mathf.Min(Mathf.Min(a.x, b.x), Mathf.Min(c.x, d.x)), rx1 = Mathf.Max(Mathf.Max(a.x, b.x), Mathf.Max(c.x, d.x));
             float ry0 = Mathf.Min(Mathf.Min(a.y, b.y), Mathf.Min(c.y, d.y)), ry1 = Mathf.Max(Mathf.Max(a.y, b.y), Mathf.Max(c.y, d.y));
+            bounds = Rect.MinMaxRect(rx0, ry0, rx1, ry1);
+            if (chain.x < 0f) return false;
             for (int k = 0; k < 4; k++)
             {
                 int index = (int)chain[k];
@@ -1202,6 +1206,7 @@ namespace TimboJimbo.UINext
             Array.Resize(ref World, size);
             Array.Resize(ref Shown, size);
             Array.Resize(ref Offscreen, size);
+            Array.Resize(ref Bounds, size);
             Array.Resize(ref Opacities, size);
             Array.Resize(ref GroupOpacities, size);
             Array.Resize(ref LocalOpacities, size);

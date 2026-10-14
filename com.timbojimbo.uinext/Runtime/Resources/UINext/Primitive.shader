@@ -177,5 +177,26 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
             #define KIND_OVERDRAW 1
             #include "PrimitiveKinds.hlsl"
             ENDHLSL }
+        // A shape's bands (its corners drawn by the shape passes): the box's edge alone.
+        Pass { Name "ShapeFlat" Blend One OneMinusSrcAlpha ZWrite Off ZTest LEqual Cull Off
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+            #define KIND_SHAPE 1
+            #define FLAT_ONLY 1
+            #include "PrimitiveKinds.hlsl"
+            ENDHLSL }
+        Pass { Name "ShapeFlatClipped" Blend One OneMinusSrcAlpha ZWrite Off ZTest LEqual Cull Off
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+            #define KIND_SHAPE 1
+            #define FLAT_ONLY 1
+            #define CLIPPED 1
+            #include "PrimitiveKinds.hlsl"
+            ENDHLSL }
+
     }
 }

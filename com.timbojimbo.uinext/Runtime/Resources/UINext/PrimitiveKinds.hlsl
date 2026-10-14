@@ -48,6 +48,8 @@ struct Clip
 StructuredBuffer<Instance> _Instances;
 StructuredBuffer<Slot> _Slots;
 StructuredBuffer<Clip> _Clips;
+// The order the primitives are drawn in (by layer, then kind): what an instance index is looked up through.
+StructuredBuffer<uint> _Order;
 int _InstanceOffset;
 float4x4 _UIMatrix;
 // Above 0, the game view's main pass, which has a depth buffer: each of its _InstanceTotal primitives is drawn at the
@@ -257,10 +259,37 @@ struct Corner
 // hardware's gradients, so it draws as an image. One for the rest: a rounded rect's bands between its corners could do a
 // box's work, but in one pass the compiler computes both paths and selects, and in a pass of their own the draw order
 // of overlapping shapes in a run would go wrong.
-#if defined(KIND_SLICED)
+// A shape's seven parts: its four corner squares (as big as the largest radius, with the room round the quad), drawn by
+// the shape passes, and three bands between them (the two sides, and the middle column), drawn by the flat passes after
+// them, where a rounded rect's distance is a box's. Nothing within a layer overlaps, so the order between shapes is free.
+#if defined(KIND_SHAPE) && defined(FLAT_ONLY)
+#define PARTS 3u
+#define PART_FROM 4u
+#elif defined(KIND_SHAPE)
+#define PARTS 4u
+#define PART_FROM 0u
+#elif defined(KIND_SLICED)
 #define PARTS 9u
+#define PART_FROM 0u
 #else
 #define PARTS 1u
+#define PART_FROM 0u
+#endif
+
+#if defined(KIND_SHAPE)
+// 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left, 4 the left band, 5 the right band, 6 the middle column.
+void PartRect(Instance inst, float4 rect, float margin, uint part, out float2 partMin, out float2 partMax, out float4 sliceX, out float4 sliceY)
+{
+    float2 lo = rect.xy, hi = rect.xy + rect.zw;
+    float r = max(0, min(max(max(inst.radii.x, inst.radii.y), max(inst.radii.z, inst.radii.w)), min(rect.z, rect.w) * 0.5));
+    uint col = part == 0u || part == 3u || part == 4u ? 0u : part == 1u || part == 2u || part == 5u ? 2u : 1u;
+    uint row = part < 2u ? 0u : part < 4u ? 2u : 1u;
+    partMin.x = col == 0u ? lo.x - margin : col == 1u ? lo.x + r : hi.x - r;
+    partMax.x = col == 0u ? lo.x + r : col == 1u ? hi.x - r : hi.x + margin;
+    partMin.y = part == 6u ? lo.y - margin : row == 0u ? lo.y - margin : row == 1u ? lo.y + r : hi.y - r;
+    partMax.y = part == 6u ? hi.y + margin : row == 0u ? lo.y + r : row == 1u ? hi.y - r : hi.y + margin;
+    sliceX = sliceY = 0;
+}
 #endif
 
 #if PARTS == 9u
@@ -295,7 +324,7 @@ void PartRect(Instance inst, float4 rect, float margin, uint part, out float2 pa
 Corner CornerOf(uint vertexID, uint instanceID)
 {
     Corner c;
-    uint id = (uint)_InstanceOffset + instanceID / PARTS;
+    uint id = _Order[(uint)_InstanceOffset + instanceID / PARTS];
     c.inst = _Instances[id];
     c.slot = _Slots[c.inst.slot];
     c.rect = RectOf(c.inst, c.slot);
@@ -304,11 +333,11 @@ Corner CornerOf(uint vertexID, uint instanceID)
     float2 quadMin = c.rect.xy - margin, quadMax = c.rect.xy + c.rect.zw + margin;
     c.clips = c.slot.clips;
     CutToClips(c.slot, skew, 1, quadMin, quadMax, c.clips);
-#if PARTS == 9u
-    // Its slice of the quad, and what the clips left of that.
+#if PARTS > 1u
+    // Its part of the quad, and what the clips left of that.
     float2 partMin, partMax;
     float4 sliceX, sliceY;
-    PartRect(c.inst, c.rect, margin, instanceID % PARTS, partMin, partMax, sliceX, sliceY);
+    PartRect(c.inst, c.rect, margin, PART_FROM + instanceID % PARTS, partMin, partMax, sliceX, sliceY);
     quadMin = max(quadMin, partMin);
     quadMax = min(quadMax, partMax);
     if (any(quadMax <= quadMin))
@@ -380,6 +409,16 @@ float4 Drawn(float4 color, float coverage, float opacity, float saturation, floa
     return float4(rgb, alpha);
 }
 
+// Coverage of a box's smoothed edge, and its distance: what a rounded rect's is in its bands, between its corners.
+float BoxCoverage(float2 local, float2 halfSize, out float d)
+{
+    float2 px = fwidth(local);
+    float aa = max(max(px.x, px.y), 1e-5);
+    float2 q = abs(local) - halfSize;
+    d = max(q.x, q.y);
+    return saturate(0.5 - d / aa);
+}
+
 // Coverage of a rounded rect's smoothed edge, and its distance.
 float EdgeCoverage(float2 local, float2 halfSize, float4 radii, out float d)
 {
@@ -447,7 +486,11 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
 float4 Frag(Varyings i) : SV_Target
 {
     float d;
+#if defined(FLAT_ONLY)
+    float coverage = BoxCoverage(i.local, i.shape.xy, d);
+#else
     float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, d);
+#endif
     float2 px = fwidth(i.local);
     float aa = max(max(px.x, px.y), 1e-5);
     float4 color = i.color;
@@ -775,7 +818,7 @@ void OpaqueRect(Instance inst, Slot slot, float4 rect, out float2 opaqueMin, out
 
 float4 Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID) : SV_POSITION
 {
-    uint id = (uint)_InstanceOffset + instanceID;
+    uint id = _Order[(uint)_InstanceOffset + instanceID];
     Instance inst = _Instances[id];
     Slot slot = _Slots[inst.slot];
     float2 opaqueMin, opaqueMax;
