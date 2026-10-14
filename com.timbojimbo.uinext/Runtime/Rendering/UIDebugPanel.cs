@@ -59,6 +59,13 @@ namespace TimboJimbo.UINext
                         getter = () => UIDebug.FocusPath,
                         setter = on => UIDebug.FocusPath = on,
                     },
+                    new DebugUI.BoolField
+                    {
+                        displayName = "Occluders",
+                        tooltip = "The depth of every large opaque shape's inside, laid down first so what it covers is not shaded. Off, everything is shaded: for measuring what they are worth.",
+                        getter = () => UIDebug.Occluders,
+                        setter = on => UIDebug.Occluders = on,
+                    },
                 },
             });
             panel.children.Add(new DebugUI.Foldout
@@ -108,7 +115,7 @@ namespace TimboJimbo.UINext
 
         private static object DrawCalls()
         {
-            int main = Compositor.Batches.Count, layers = Compositor.GroupBatches.Count;
+            int main = Compositor.MainDrawCalls, layers = Compositor.DrawCalls - main;
             return layers > 0 ? (main + layers) + " (" + main + " main, " + layers + " for layers)" : main.ToString();
         }
 

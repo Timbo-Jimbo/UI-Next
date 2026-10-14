@@ -132,6 +132,8 @@ namespace TimboJimbo.UINext.Demos.Compare
                     _running = true;
                     var playing = StartCoroutine(Play(scenario));
                     yield return Wait(_warmup);
+                    if (_system == "uinext")
+                        Log("UINB|draws|" + scenario + "|" + UIDebug.DrawCalls);
                     recorder.Begin();
                     float end = Time.realtimeSinceStartup + _measure;
                     while (Time.realtimeSinceStartup < end)
@@ -172,6 +174,9 @@ namespace TimboJimbo.UINext.Demos.Compare
                     case "-cards" when next != null: int.TryParse(next, out _cards); break;
                     case "-ballast" when next != null: float.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out _ballast); break;
                     case "-stay": _stay = true; break;
+                    // For measuring the GPU: drawn that many times over, and with or without the occluders.
+                    case "-repeat" when next != null && int.TryParse(next, out int repeat): UIDebug.Repeat = repeat; break;
+                    case "-noocc": UIDebug.Occluders = false; break;
                 }
             }
             if (_scenarios.Count == 0)

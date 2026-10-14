@@ -2,6 +2,12 @@
 
 ### Added
 
+- `UIDebug.Occluders` (and the Rendering Debugger's Occluders switch): the occluders turned off, everything shaded, for measuring what they are worth on a GPU; `UIDebug.DrawCalls`, how many draw calls the UI was last drawn with. The Compare player takes `-repeat N` and `-noocc`, and logs each use case's draw calls.
+
+### Changed
+
+- The primitive shader is a pass a kind of primitive (shape, shadow, image, nine-slice, SDF glyph, bitmap glyph, group image, matched pair), each passing and computing only what its kind needs, in 32 registers or fewer where the one shader for every kind took 64 for every pixel; each kind has a plain pass and a clipped one, and the compositor draws each run of one kind with the plain pass when every clip over it is upright and square-cornered and its node upright (the vertex shader's cut is then exact, so no pixel tests a clip), the clipped pass otherwise. The overdraw view is a pass of its own. A node whose rect lies wholly outside an upright clip over it (scrolled out of a scroll view) is not drawn at all, so a long feed costs what is on screen. Each batch draws with a material of its own holding its textures and buffers, each run changing only where it starts. On a Pixel 8 the Compare screen's GPU time went from 2.89 to 1.35 ms a frame at 40 cards and from 3.28 to 1.38 at 100 (the empty screen 0.65; UGUI 1.00), drawn pixel for pixel the same, with the occluders worth 0.83 ms of that on its Mali.
+- An occluder is laid down only for an opaque shape at least 48 pixels a side: a smaller one hides little for what its vertices and fill cost.
 - Project Settings > Timbo Jimbo > UI Next > Skip Overlay UI Pass: URP draws screen-space UGUI and UI Toolkit in a pass of its own after its final blit, which loads and stores the whole screen each frame even with nothing to draw (0.3 ms of GPU time a frame on a Pixel 8, a quarter of an empty frame). On, UI Next tells URP each frame not to record it, and the engine draws any such UI after URP as it used to. Off unless set, for projects that draw UGUI or UI Toolkit overlays, which are slower drawn that way. UI Next's own pass is unaffected: it draws inside URP's final pass either way.
 
 ## [0.5.0] - 14/10/2026
