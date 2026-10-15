@@ -15,62 +15,10 @@ namespace TimboJimbo.UINext
     /// own drawing laid out at the flight's rect, what is inside them fitted and cut to its window), and one quad summing
     /// them.
     /// </summary>
-    internal static class Compositor
+    internal static partial class Compositor
     {
         // A batch's textures: up to this many, each primitive sampling one of them by index.
         private const int TexturesPerBatch = 8;
-
-        internal struct Batch
-        {
-            public UITree Tree;
-            public int Start;
-            public int Count;
-            public int Textures;
-            // Its runs, each drawn with one pass of the primitive shader, and its spans, the stretches of it that are
-            // drawn at all (MakeRuns).
-            public int FirstRun;
-            public int RunCount;
-            public int FirstSpan;
-            public int SpanCount;
-        }
-
-        // A run of a batch's primitives drawn in one call: those in a row of one kind, plain or clipped. A span: those in
-        // a row that are drawn at all (not scrolled out of their clips).
-        private struct Run
-        {
-            public int Start;
-            public int Count;
-            public int Pass;
-        }
-
-        // The kinds of primitive, each with a pass of its own in the primitive shader (two: plain, and clipped), in the
-        // order the passes come.
-        private enum PrimitiveKind : byte
-        {
-            Shape = 0,
-            Shadow = 1,
-            Image = 2,
-            Sliced = 3,
-            Glyph = 4,
-            Bitmap = 5,
-            Group = 6,
-            Pair = 7,
-        }
-
-        // What a primitive is drawn with (s_kinds): its kind in the low bits; whether its pixels must test its clips
-        // whatever they are (an italic glyph: the vertex shader's cut is not exact for a skewed quad); whether a debug view
-        // drew it (drawn as it is in the overdraw view).
-        private const byte KindMask = 15;
-        private const byte KindSkewed = 16;
-        private const byte KindDebug = 32;
-
-        // Whether a slot's clips need testing a pixel (s_slotClipState): none, all exact (the node and its clips upright,
-        // the clips square-cornered, so the vertex shader's cut leaves nothing to test), or some to test; or the node lies
-        // wholly outside one of its clips (scrolled out of a scroll view), so nothing of it is drawn at all.
-        private const byte ClipsNone = 0, ClipsExact = 1, ClipsTested = 2, ClipsOutside = 3;
-
-        // How far past its rect a node's drawing may reach and still be drawn when the rect itself is outside its clip: a
-        // shadow's blur and offset, an overhanging glyph. In root points.
 
         // Every batch's textures, TexturesPerBatch to a batch.
         private static readonly List<Texture> s_batchTextures = new();
@@ -115,38 +63,7 @@ namespace TimboJimbo.UINext
         private static Texture[] s_textures2 = new Texture[256];
         // Where the textures of each primitive's batch start among the batches' textures.
         private static int[] s_textureBase = new int[256];
-        // What each primitive is drawn with (KindOf).
-        private static byte[] s_kinds = new byte[256];
         private static int s_instanceCount;
-
-        // Each primitive's layer: nothing within a layer overlaps, so a layer draws kind by kind in any order (Walk gives
-        // them out). The order the batches, runs and shaders go through the primitives in (MakeOrder): by layer, then
-        // kind, then as recorded; its keys, for sorting; and the GPU's copy. A batch, a run and a span are ranges of it.
-        private static int[] s_layers = new int[256];
-        private static int[] s_order = new int[256];
-        private static long[] s_orderKeys = new long[256];
-        private static GraphicsBuffer s_orderBuffer;
-        // The highest layer given out so far in the range being walked (a tree's main range, or a group's).
-        private static int s_layerTop;
-        // Per node of the tree being walked, the box round its subtree as drawn, in its root's space (SubtreeBounds).
-        private static Rect[] s_subtreeBounds = new Rect[32];
-        // Scratch for a node's own primitives: per kind rank, whether one was seen, the box round those seen and their
-        // highest layer; and each shape's box and layer.
-        private static readonly bool[] s_rankSeen = new bool[8];
-        private static readonly Rect[] s_rankBounds = new Rect[8];
-        private static readonly int[] s_rankLayer = new int[8];
-        private static readonly List<Rect> s_nodeShapes = new();
-        private static readonly List<int> s_nodeShapeLayers = new();
-        private static readonly Rect Nowhere = Rect.MinMaxRect(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
-
-        // Each slot's clips, as its primitives' pixels must treat them (ClassifySlots), and the batches' runs, the main
-        // pass's first and the groups' after them.
-        private static byte[] s_slotClipState = new byte[64];
-        // Per slot, whether its node is scrolled out from under a clip over it, as its tree found it (UITree.Offscreen).
-        private static bool[] s_slotOffscreen = new bool[64];
-        private static readonly List<Run> s_runs = new();
-        private static readonly List<Run> s_spans = new();
-        private static int s_mainRuns;
 
         // A material a batch, holding its textures and the buffers: the draws of a batch's runs then carry no properties
         // of their own, only where in the instances each starts (a global). The groups' batches' follow the main pass's.
@@ -186,8 +103,6 @@ namespace TimboJimbo.UINext
         // Scratch for drawing order: one node's children sorted by ZIndex, the top layer of the level being walked, and
         // the presented nodes of the tree being walked, in level order.
         private static readonly List<UINode> s_children = new();
-        // Beside each child while its parent is walked: the highest layer in its subtree as drawn (-1: nothing drawn).
-        private static readonly List<int> s_childTops = new();
         private static readonly List<UINode> s_topLayer = new();
         private static readonly List<UINode> s_levels = new();
 
@@ -201,11 +116,6 @@ namespace TimboJimbo.UINext
         private static readonly int MatrixId = Shader.PropertyToID("_UIMatrix");
         private static readonly int OcclusionId = Shader.PropertyToID("_UINextOcclusion");
         private static readonly int InstanceTotalId = Shader.PropertyToID("_InstanceTotal");
-        // The primitive shader's passes after the kinds' (two a kind): the occluders, and the overdraw view's heat.
-        private const int OccludersPass = 16;
-        private const int OverdrawPass = 17;
-        // A shape's bands, drawn after its corners (the shape passes draw the corners alone).
-        private const int FlatPass = 18;
         private static readonly int[] TextureIds =
         {
             Shader.PropertyToID("_Texture0"), Shader.PropertyToID("_Texture1"), Shader.PropertyToID("_Texture2"), Shader.PropertyToID("_Texture3"),
@@ -218,8 +128,10 @@ namespace TimboJimbo.UINext
             Batches.Clear();
             s_runs.Clear();
             s_spans.Clear();
-            s_mainRuns = 0;
-            s_shapeRuns = 0;
+            s_segments.Clear();
+            s_mainRuns = s_shapeRuns = 0;
+            s_offscreenSlots = 0;
+            s_classified = 0;
             s_slotBase.Clear();
             s_redrawn.Clear();
             s_orderDirty = s_slotsDirty = true;
@@ -232,22 +144,6 @@ namespace TimboJimbo.UINext
         // What the last build made, for the editor's readout: primitives (groups' included), draw calls in the main pass
         // and in groups' images, and groups.
         internal static int PrimitiveCount => s_instanceCount;
-        internal static int DrawCalls => s_runs.Count + s_shapeRuns;
-        private static int s_shapeRuns;
-
-        /// <summary>How many layers the last build drew the main pass in.</summary>
-        public static int LayerCount { get; private set; }
-
-        /// <summary>The layer a node's index-th primitive was drawn in by the last build, -1 if it drew none.</summary>
-        internal static int LayerOf(UINode node, int index = 0) => node.EmittedBuild == s_builds && index < node.EmittedCount ? s_layers[node.EmittedAt + index] : -1;
-
-        /// <summary>How many draw orders have been made: one more after a rebuild, the same after a patch.</summary>
-        internal static int Builds => s_builds;
-        internal static int MainDrawCalls => s_mainRuns;
-
-        /// <summary>How many nodes were scrolled out from under a clip over them, so not drawn, as last built.</summary>
-        public static int OffscreenNodes { get; private set; }
-
         // The GPU's copies and the groups' images outlive a script reload otherwise: let go of them before one, and on quitting.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void HookRelease()
@@ -284,7 +180,8 @@ namespace TimboJimbo.UINext
             Batches.Clear();
             s_runs.Clear();
             s_spans.Clear();
-            s_mainRuns = 0;
+            s_segments.Clear();
+            s_mainRuns = s_shapeRuns = 0;
             if (s_material != null)
                 Object.DestroyImmediate(s_material);
             s_material = null;
@@ -352,180 +249,6 @@ namespace TimboJimbo.UINext
             s_slotsDirty = false;
         }
 
-        // What a primitive is drawn with: its kind, from its type and flags; whether its pixels must test its clips
-        // whatever they are; whether a debug view drew it.
-        private static byte KindOf(in PrimitiveInstance instance)
-        {
-            byte kind;
-            switch ((PrimitiveType)instance.Type)
-            {
-                case PrimitiveType.Shadow: kind = (byte)PrimitiveKind.Shadow; break;
-                case PrimitiveType.Image:
-                    kind = (byte)((instance.Flags & (uint)PrimitiveFlags.Sliced) != 0 ? PrimitiveKind.Sliced : PrimitiveKind.Image);
-                    break;
-                case PrimitiveType.GlyphSdf: kind = (byte)PrimitiveKind.Glyph; break;
-                case PrimitiveType.GlyphBitmap: kind = (byte)PrimitiveKind.Bitmap; break;
-                case PrimitiveType.Group: kind = (byte)PrimitiveKind.Group; break;
-                case PrimitiveType.Pair: kind = (byte)PrimitiveKind.Pair; break;
-                default: kind = (byte)PrimitiveKind.Shape; break;
-            }
-            if (instance.Type >= (uint)PrimitiveType.GlyphSdf && instance.Type <= (uint)PrimitiveType.GlyphBitmap && instance.Params.z != 0f)
-                kind |= KindSkewed;
-            if ((instance.Flags & (uint)PrimitiveFlags.Debug) != 0)
-                kind |= KindDebug;
-            return kind;
-        }
-
-        // Each slot's clips, as its primitives' pixels must treat them: none; all exact, where the node and every clip over
-        // it are upright and the clips square-cornered, so the vertex shader cuts the quad to them exactly and no pixel
-        // need test them; or some to test a pixel. A node its tree found scrolled out from under a clip over it (what it
-        // paints wholly outside the clip: UITree.IsOffscreen) is not drawn at all.
-        private static void ClassifySlots()
-        {
-            if (s_slotClipState.Length < s_slotCount)
-                System.Array.Resize(ref s_slotClipState, Mathf.NextPowerOfTwo(s_slotCount));
-            int offscreen = 0;
-            for (int i = 0; i < s_slotCount; i++)
-            {
-                ref var slot = ref s_slots[i];
-                var chain = slot.Clips;
-                if (chain.x < 0f)
-                {
-                    s_slotClipState[i] = ClipsNone;
-                    continue;
-                }
-                if (s_slotOffscreen[i])
-                {
-                    s_slotClipState[i] = ClipsOutside;
-                    offscreen++;
-                    continue;
-                }
-                bool exact = Upright(slot.Row0, slot.Row1);
-                for (int c = 0; c < 4 && exact; c++)
-                {
-                    if (chain[c] < 0f) break;
-                    ref var clip = ref s_clips[(int)chain[c]];
-                    exact = Upright(clip.Inverse0, clip.Inverse1) && clip.Radii == Vector4.zero;
-                }
-                s_slotClipState[i] = exact ? ClipsExact : ClipsTested;
-            }
-            OffscreenNodes = offscreen;
-        }
-
-        // How many quads a pass draws a primitive as (PrimitiveKinds.hlsl's PARTS): a shape's four corners (its three bands
-        // are the flat pass's), a nine-slice's nine slices, one for the rest.
-        private static int PartsOf(int pass)
-        {
-            if (pass >= OccludersPass) return 1;
-            switch ((PrimitiveKind)(pass / 2))
-            {
-                case PrimitiveKind.Shape: return 4;
-                case PrimitiveKind.Sliced: return 9;
-                default: return 1;
-            }
-        }
-
-        // The order kinds draw in within a layer: as a node draws them (its shadow, its shape, its image, its text), so a
-        // node's own primitives keep their order without a layer each.
-        private static int RankOf(byte kind)
-        {
-            switch ((PrimitiveKind)(kind & KindMask))
-            {
-                case PrimitiveKind.Shadow: return 0;
-                case PrimitiveKind.Shape: return 1;
-                case PrimitiveKind.Image: return 2;
-                case PrimitiveKind.Sliced: return 3;
-                case PrimitiveKind.Glyph: return 4;
-                case PrimitiveKind.Bitmap: return 5;
-                case PrimitiveKind.Group: return 6;
-                default: return 7;
-            }
-        }
-
-        private static bool Overlaps(in Rect a, in Rect b) =>
-            a.xMin < b.xMax && b.xMin < a.xMax && a.yMin < b.yMax && b.yMin < a.yMax;
-
-        private static Rect Union(in Rect a, in Rect b) =>
-            Rect.MinMaxRect(Mathf.Min(a.xMin, b.xMin), Mathf.Min(a.yMin, b.yMin), Mathf.Max(a.xMax, b.xMax), Mathf.Max(a.yMax, b.yMax));
-
-        // Whether a 2x3 transform's rows (xy the matrix, z the offset) keep a rect upright, as the shader decides it.
-        private static bool Upright(Vector4 row0, Vector4 row1) =>
-            Mathf.Abs(row0.y) < 1e-6f && Mathf.Abs(row1.x) < 1e-6f && Mathf.Abs(row0.x) > 1e-6f && Mathf.Abs(row1.y) > 1e-6f;
-
-        // Each batch's runs: its primitives in a row drawn with one pass, a kind's plain pass where no pixel of theirs
-        // need test a clip, its clipped pass otherwise; in the overdraw view, every primitive but a debug view's own is
-        // drawn as heat.
-        private static void MakeRuns()
-        {
-            using var runs = UIProfiling.Batch.Auto();
-            s_runs.Clear();
-            s_spans.Clear();
-            s_shapeRuns = 0;
-            MakeRuns(Batches);
-            s_mainRuns = s_runs.Count;
-            MakeRuns(GroupBatches);
-        }
-
-        private static void MakeRuns(List<Batch> batches)
-        {
-            bool overdraw = UIDebug.Overdraw;
-            for (int b = 0; b < batches.Count; b++)
-            {
-                var batch = batches[b];
-                batch.FirstRun = s_runs.Count;
-                batch.FirstSpan = s_spans.Count;
-                int end = batch.Start + batch.Count;
-                int runStart = batch.Start, spanStart = batch.Start;
-                // -1 before the first primitive; -2 a stretch not drawn. A run stays within a layer: a shape run draws
-                // its corners then its bands, which only a layer makes safe.
-                int runPass = -1, runLayer = -1;
-                for (int i = batch.Start; i < end; i++)
-                {
-                    int id = s_order[i];
-                    byte kind = s_kinds[id];
-                    byte clips = s_slotClipState[(int)s_instances[id].Slot];
-                    int layer = s_layers[id];
-                    int pass;
-                    if (clips == ClipsOutside)
-                    {
-                        pass = -2;
-                    }
-                    else if (overdraw && (kind & KindDebug) == 0)
-                    {
-                        pass = OverdrawPass;
-                    }
-                    else
-                    {
-                        bool tested = clips == ClipsTested || (clips == ClipsExact && (kind & KindSkewed) != 0);
-                        pass = (kind & KindMask) * 2 + (tested ? 1 : 0);
-                    }
-                    if (pass == runPass && (layer == runLayer || pass == -2)) continue;
-                    if (i > runStart && runPass >= 0)
-                        AddRun(runStart, i - runStart, runPass);
-                    if (pass == -2 && i > spanStart)
-                        s_spans.Add(new Run { Start = spanStart, Count = i - spanStart });
-                    if (runPass == -2)
-                        spanStart = i;
-                    runStart = i;
-                    runPass = pass;
-                    runLayer = layer;
-                }
-                if (end > runStart && runPass >= 0)
-                    AddRun(runStart, end - runStart, runPass);
-                if (runPass != -2 && end > spanStart)
-                    s_spans.Add(new Run { Start = spanStart, Count = end - spanStart });
-                batch.RunCount = s_runs.Count - batch.FirstRun;
-                batch.SpanCount = s_spans.Count - batch.FirstSpan;
-                batches[b] = batch;
-            }
-        }
-
-        private static void AddRun(int start, int count, int pass)
-        {
-            s_runs.Add(new Run { Start = start, Count = count, Pass = pass });
-            if (pass < 2) s_shapeRuns++;
-        }
-
         // The material a batch draws with: its textures and the buffers set on it, so its draws carry no properties.
         private static Material MaterialFor(int index, in Batch batch, Matrix4x4 matrix, bool occlusion)
         {
@@ -575,10 +298,10 @@ namespace TimboJimbo.UINext
                         var slot = tree.Slots[i];
                         slot.Clips = OffsetChain(slot.Clips, clipBase);
                         s_slots[slotBase + i] = slot;
-                        s_slotOffscreen[slotBase + i] = tree.Offscreen[i];
                     }
                     SentSlots(slotBase + from, slotBase + to);
                 }
+                int slotsFrom = from, slotsTo = to;
                 from = whole ? 0 : tree.ChangedClipsFrom;
                 to = whole ? clips : Mathf.Min(tree.ChangedClipsTo, clips);
                 if (to > from)
@@ -587,6 +310,9 @@ namespace TimboJimbo.UINext
                         s_clips[clipBase + c] = tree.ClipShapes[c];
                     SentClips(clipBase + from, clipBase + to);
                 }
+                // Classified once their clips are in place.
+                for (int i = slotsFrom; i < slotsTo; i++)
+                    ClassifySlot(slotBase + i, tree.Offscreen[i]);
                 tree.ChangedSlotsFrom = tree.ChangedClipsFrom = int.MaxValue;
                 tree.ChangedSlotsTo = tree.ChangedClipsTo = 0;
                 tree.CopiedSlotBase = slotBase;
@@ -601,8 +327,17 @@ namespace TimboJimbo.UINext
             AddFlightSlots();
             SentSlots(treeSlots, s_slotCount);
             SentClips(treeClips, s_clipCount);
-            ClassifySlots();
+            // Slots gone since the last copy (a tree removed, a flight over) count for nothing.
+            for (int i = s_slotCount; i < s_classified; i++)
+            {
+                if (s_slotClipState[i] == ClipsOutside) s_offscreenSlots--;
+                s_slotClipState[i] = ClipsNone;
+            }
+            s_classified = s_slotCount;
         }
+
+        // How many slots have been classified: those past the count are cleared as the count falls.
+        private static int s_classified;
 
         // Slots and clips copied since the last upload, to send with the next.
         private static void SentSlots(int from, int to)
@@ -637,7 +372,7 @@ namespace TimboJimbo.UINext
                 if (tree.Nodes.Count == 0) continue;
                 int start = s_instanceCount;
                 SubtreeBounds(tree);
-                s_layerTop = 0;
+                BeginRange();
                 if (UIDebug.Overdraw)
                     EmitOverdrawBackdrop(tree);
                 tree.DrawOrder.Clear();
@@ -665,64 +400,15 @@ namespace TimboJimbo.UINext
                     EmitFlights(tree, l);
                 }
                 LayerCount = s_layerTop + 1;
-                MakeOrder(start, s_instanceCount);
-                MakeBatches(Batches, tree, start, s_instanceCount);
+                EndRange(Batches, tree, start);
                 WalkGroups(tree);
                 // Over all of it, once its groups (inner ones included) are known: the debug views' outlines.
                 int debug = s_instanceCount;
+                BeginRange();
                 EmitDebugOutlines(tree);
                 if (s_instanceCount > debug)
-                {
-                    MakeOrder(debug, s_instanceCount);
-                    MakeBatches(Batches, tree, debug, s_instanceCount);
-                }
+                    EndRange(Batches, tree, debug);
             }
-        }
-
-        // Per node of a tree, the box round its subtree as drawn in its root's space: its own bounds, and its children's
-        // subtrees' but those drawn elsewhere (presented, or lifted into the top layer, each walked on its own). Nothing
-        // for a node not shown. Walked from the last node up, so each child's is known before its parent's.
-        private static void SubtreeBounds(UITree tree)
-        {
-            int count = tree.Nodes.Count;
-            if (s_subtreeBounds.Length < count)
-                System.Array.Resize(ref s_subtreeBounds, Mathf.NextPowerOfTwo(count));
-            for (int i = count - 1; i >= 0; i--)
-            {
-                var node = tree.Nodes[i];
-                if (node == null || !tree.Shown[i] || tree.Opacities[i] <= 0f)
-                {
-                    s_subtreeBounds[i] = Nowhere;
-                    continue;
-                }
-                var bounds = tree.Bounds[i];
-                int end = tree.SubtreeEnd[i];
-                for (int c = i + 1; c < end; c = tree.SubtreeEnd[c])
-                {
-                    var child = tree.Nodes[c];
-                    if (child == null || child.PresentationLevel.Peek != 0 || child.TopLayer.Peek) continue;
-                    var cb = s_subtreeBounds[c];
-                    if (cb.xMin <= cb.xMax)
-                        bounds = Union(bounds, cb);
-                }
-                s_subtreeBounds[i] = bounds;
-            }
-        }
-
-        // The order a range of primitives is drawn in: by layer, then by kind rank, then as recorded (so a node's keep
-        // their order, and a culled node's lie together).
-        private static void MakeOrder(int start, int end)
-        {
-            if (s_order.Length < end)
-            {
-                System.Array.Resize(ref s_order, Mathf.NextPowerOfTwo(end));
-                System.Array.Resize(ref s_orderKeys, Mathf.NextPowerOfTwo(end));
-            }
-            for (int i = start; i < end; i++)
-                s_orderKeys[i] = ((long)s_layers[i] << 36) | ((long)RankOf(s_kinds[i]) << 32) | (uint)i;
-            System.Array.Sort(s_orderKeys, start, end - start);
-            for (int i = start; i < end; i++)
-                s_order[i] = (int)(s_orderKeys[i] & 0xFFFFFFFFL);
         }
 
         // Which of a tree's levels (its root, then each presented node, lowest first) it is drawn from: the topmost cover in
@@ -916,17 +602,9 @@ namespace TimboJimbo.UINext
             });
         }
 
-        // A debug primitive, in a layer of its own above everything so far (the backdrop, at 0, is the first thing emitted).
-        private static void EmitDebug(in PrimitiveInstance instance)
-        {
-            EnsureInstances(s_instanceCount + 1);
-            s_instances[s_instanceCount] = instance;
-            s_kinds[s_instanceCount] = KindOf(instance);
-            s_layers[s_instanceCount] = s_instanceCount == 0 ? 0 : ++s_layerTop;
-            s_textures[s_instanceCount] = null;
-            s_textures2[s_instanceCount] = null;
-            s_instanceCount++;
-        }
+        // A debug primitive, in a layer of its own above everything in its range so far (the backdrop is the first thing
+        // in its tree's).
+        private static void EmitDebug(in PrimitiveInstance instance) => PutOnTop(instance, null, null);
 
         // The levels of a tree: its root, then every presented node in it, lowest level first.
         private static void CollectLevels(UITree tree)
@@ -949,154 +627,6 @@ namespace TimboJimbo.UINext
 
             public int Compare(UINode a, UINode b) =>
                 Mathf.Abs(a.PresentationLevel.Peek).CompareTo(Mathf.Abs(b.PresentationLevel.Peek));
-        }
-
-        // Adds a node's primitives, then its children's in ZIndex order (siblings with equal ZIndex in hierarchy order);
-        // a node in the top layer is put off until the end of its level, and a presented node to its own level, unless
-        // it is the one being drawn there now. The node's primitives go in `layer` (or above it, where they overlap an
-        // earlier one of its own: EmitNode); each child's in the layer above, or past any earlier sibling's subtree it
-        // overlaps; its overlay primitives above everything inside it. Returns the highest layer given out in its subtree,
-        // -1 for nothing drawn.
-        private static int Walk(UITree tree, UINode node, int slotBase, bool lifted, UINode level, int layer)
-        {
-            if (node.Index < 0 || node.Tree != tree) return -1;
-            if (node != level && node.PresentationLevel.Peek != 0) return -1;
-            // Inside a group it is drawn in place: a group is one image.
-            if (!lifted && s_groupRoot == null && node.TopLayer.Peek)
-            {
-                s_topLayer.Add(node);
-                return -1;
-            }
-            // Hidden, or drawn at no opacity: nothing in it is seen.
-            if (!tree.Shown[node.Index] || tree.Opacities[node.Index] <= 0f) return -1;
-
-            // Flying to its place: drawn in its flight, above everything at its level, while it is hit where it is laid
-            // out. Taken over by a node matched to it: its picture flies instead.
-            var flying = node.FlightIn;
-            if (flying != null && flying.InBuild)
-            {
-                if (s_groupRoot == null)
-                    AddDrawOrder(tree, node);
-                return -1;
-            }
-            if (node.FlightOut != null) return -1;
-
-            // A group: a quad over the root draws its image here; what is in it is walked into a range of its own
-            // later. It still takes its place in drawing order for hit testing.
-            if (node != s_groupRoot && tree.GroupOpacities[node.Index] > 0f)
-            {
-                if (s_groupRoot == null)
-                    AddDrawOrder(tree, node);
-                EmitGroupQuad(tree, node, slotBase, layer);
-                return layer;
-            }
-
-            if (s_groupRoot == null)
-                tree.DrawOrder.Add(node.Index);
-            uint slot = (uint)(slotBase + node.Index);
-            // Where its primitives go, so a drawing of as many is patched there.
-            node.EmittedBuild = s_builds;
-            node.EmittedInGroup = s_groupRoot != null;
-            node.EmittedAt = s_instanceCount;
-            node.EmittedCount = node.Instances.Count;
-            int top = EmitNode(tree, node, node.Instances, node.InstanceTextures, slot, layer);
-
-            int first = s_children.Count;
-            int end = tree.SubtreeEnd[node.Index];
-            for (int i = node.Index + 1; i < end; i = tree.SubtreeEnd[i])
-            {
-                s_children.Add(tree.Nodes[i]);
-                s_childTops.Add(-1);
-            }
-            int count = s_children.Count - first;
-            if (count > 1)
-                SortByZIndex(first, count);
-            for (int i = 0; i < count; i++)
-            {
-                var child = s_children[first + i];
-                // Above its parent, and past any earlier sibling's subtree it overlaps.
-                int childLayer = layer + 1;
-                if (child.Index >= 0 && child.Index < s_subtreeBounds.Length)
-                {
-                    var bounds = s_subtreeBounds[child.Index];
-                    for (int e = 0; e < i; e++)
-                    {
-                        int earlierTop = s_childTops[first + e];
-                        var earlier = s_children[first + e];
-                        if (earlierTop >= childLayer && earlier.Index >= 0 && Overlaps(bounds, s_subtreeBounds[earlier.Index]))
-                            childLayer = earlierTop + 1;
-                    }
-                }
-                int childTop = Walk(tree, child, slotBase, false, level, childLayer);
-                s_childTops[first + i] = childTop;
-                top = Mathf.Max(top, childTop);
-            }
-            s_children.RemoveRange(first, count);
-            s_childTops.RemoveRange(first, count);
-            node.EmittedOverlayAt = s_instanceCount;
-            node.EmittedOverlayCount = node.OverlayInstances.Count;
-            // Over everything inside it.
-            top = Mathf.Max(top, EmitNode(tree, node, node.OverlayInstances, node.OverlayTextures, slot, Mathf.Max(layer, top + 1)));
-            return top;
-        }
-
-        // A node's primitives, from `layer` up: one goes past an earlier one of the node it overlaps whose kind would
-        // otherwise draw after it (a shape over an image), and a shape past any earlier shape it overlaps (a layer's
-        // shapes draw their corners then their bands). Returns the highest layer given out, -1 for none.
-        private static int EmitNode(UITree tree, UINode node, List<PrimitiveInstance> instances, List<Texture> textures, uint slot, int layer)
-        {
-            int count = instances.Count;
-            if (count == 0) return -1;
-            EnsureInstances(s_instanceCount + count);
-            var world = tree.World[node.Index];
-            var size = (Vector2)tree.Slots[node.Index].SizeOpacity;
-            for (int r = 0; r < 8; r++)
-                s_rankSeen[r] = false;
-            s_nodeShapes.Clear();
-            s_nodeShapeLayers.Clear();
-            int top = layer;
-            for (int i = 0; i < count; i++)
-            {
-                var instance = instances[i];
-                instance.Slot = slot;
-                byte kind = KindOf(instance);
-                int rank = RankOf(kind);
-                var min = new Vector2(float.MaxValue, float.MaxValue);
-                var max = new Vector2(float.MinValue, float.MinValue);
-                Include(instance, world, size, ref min, ref max);
-                var bounds = Rect.MinMaxRect(min.x - 2f, min.y - 2f, max.x + 2f, max.y + 2f);
-                int own = layer;
-                for (int r = rank + 1; r < 8; r++)
-                    if (s_rankSeen[r] && s_rankLayer[r] >= own && Overlaps(bounds, s_rankBounds[r]))
-                        own = s_rankLayer[r] + 1;
-                if ((kind & KindMask) == (byte)PrimitiveKind.Shape)
-                {
-                    for (int s = 0; s < s_nodeShapes.Count; s++)
-                        if (s_nodeShapeLayers[s] >= own && Overlaps(bounds, s_nodeShapes[s]))
-                            own = s_nodeShapeLayers[s] + 1;
-                    s_nodeShapes.Add(bounds);
-                    s_nodeShapeLayers.Add(own);
-                }
-                if (s_rankSeen[rank])
-                {
-                    s_rankBounds[rank] = Union(s_rankBounds[rank], bounds);
-                    s_rankLayer[rank] = Mathf.Max(s_rankLayer[rank], own);
-                }
-                else
-                {
-                    s_rankSeen[rank] = true;
-                    s_rankBounds[rank] = bounds;
-                    s_rankLayer[rank] = own;
-                }
-                s_instances[s_instanceCount] = instance;
-                s_kinds[s_instanceCount] = kind;
-                s_layers[s_instanceCount] = own;
-                s_textures[s_instanceCount] = textures[i];
-                s_textures2[s_instanceCount] = null;
-                s_instanceCount++;
-                top = Mathf.Max(top, own);
-            }
-            return top;
         }
 
         // A group's quad: covering its root (its slot is the root's), sampling the group's image at the group's opacity.
@@ -1133,20 +663,14 @@ namespace TimboJimbo.UINext
                 MaskSize = tree.Slots[node.Index].SizeOpacity,
                 MaskInverse = tree.World[node.Index].Inverse,
             });
-            EnsureInstances(s_instanceCount + 1);
-            s_instances[s_instanceCount] = new PrimitiveInstance
+            Put(new PrimitiveInstance
             {
                 Rect = new Vector4(region.x, region.y, region.width, region.height),
                 Color = new Color(1f, 1f, 1f, tree.GroupOpacities[node.Index]),
                 Uv = new Vector4(0f, 0f, 1f, 1f),
                 Slot = (uint)slotBase,
                 Type = (uint)PrimitiveType.Group,
-            };
-            s_kinds[s_instanceCount] = (byte)PrimitiveKind.Group;
-            s_layers[s_instanceCount] = layer;
-            s_textures[s_instanceCount] = target;
-            s_textures2[s_instanceCount] = null;
-            s_instanceCount++;
+            }, (byte)PrimitiveKind.Group, layer, target, null);
         }
 
         // The bounds of what a group draws, in its root's points: every primitive the walk puts in it (its nodes but
@@ -1220,6 +744,7 @@ namespace TimboJimbo.UINext
                 var group = Groups[g];
                 if (group.Tree != tree) continue;
                 int start = s_instanceCount;
+                BeginRange();
                 if (group.Flight != null)
                 {
                     EmitFlightEnd(tree, group.Flight, group.End);
@@ -1237,8 +762,7 @@ namespace TimboJimbo.UINext
                     }
                 }
                 group.FirstBatch = GroupBatches.Count;
-                MakeOrder(start, s_instanceCount);
-                MakeBatches(GroupBatches, tree, start, s_instanceCount);
+                EndRange(GroupBatches, tree, start);
                 group.BatchCount = GroupBatches.Count - group.FirstBatch;
                 Groups[g] = group;
             }
@@ -1286,91 +810,6 @@ namespace TimboJimbo.UINext
                 }
                 s_children[j + 1] = node;
             }
-        }
-
-        // Runs of primitives drawn in one call, each with up to eight textures that its primitives say which of they
-        // sample: a run ends only when a ninth texture turns up. A primitive that samples nothing (a shape, a shadow)
-        // goes with any run; one that samples two (a matched pair) has both in its run, the second's index in the
-        // second four bits of its texture index.
-        private static void MakeBatches(List<Batch> batches, UITree tree, int start, int end)
-        {
-            using var batch = UIProfiling.Batch.Auto();
-            int batchStart = start;
-            int first = s_batchTextures.Count;
-            int used = 0;
-            // The last texture looked up, and where it is in the run: a label's glyphs all sample one.
-            Texture last = null;
-            int lastIndex = 0;
-            for (int i = start; i < end; i++)
-            {
-                int id = s_order[i];
-                var texture = s_textures[id];
-                var second = s_textures2[id];
-                s_textureBase[id] = first;
-                if (texture is null && second is null)
-                {
-                    s_instances[id].Texture = 0;
-                    continue;
-                }
-                if (second is null && ReferenceEquals(texture, last))
-                {
-                    s_instances[id].Texture = (uint)lastIndex;
-                    continue;
-                }
-                // Room for what it samples that the run does not have yet.
-                int at = texture is null ? -1 : FindBatchTexture(texture, first, used);
-                int at2 = second is null || ReferenceEquals(second, texture) ? -1 : FindBatchTexture(second, first, used);
-                int needed = (texture is not null && at < 0 ? 1 : 0) + (second is not null && !ReferenceEquals(second, texture) && at2 < 0 ? 1 : 0);
-                if (used + needed > TexturesPerBatch)
-                {
-                    CloseBatch(batches, tree, batchStart, i, first);
-                    batchStart = i;
-                    first = s_batchTextures.Count;
-                    used = 0;
-                    at = at2 = -1;
-                    last = null;
-                    s_textureBase[id] = first;
-                }
-                int index = 0;
-                if (texture is not null)
-                {
-                    if (at < 0)
-                    {
-                        s_batchTextures.Add(texture);
-                        at = used++;
-                    }
-                    index = at;
-                }
-                if (second is not null)
-                {
-                    if (ReferenceEquals(second, texture))
-                    {
-                        at2 = at;
-                    }
-                    else if (at2 < 0)
-                    {
-                        s_batchTextures.Add(second);
-                        at2 = used++;
-                    }
-                    index |= at2 << 4;
-                }
-                s_instances[id].Texture = (uint)index;
-                if (second is null)
-                {
-                    last = texture;
-                    lastIndex = index;
-                }
-            }
-            if (end > batchStart)
-                CloseBatch(batches, tree, batchStart, end, first);
-        }
-
-        private static void CloseBatch(List<Batch> batches, UITree tree, int start, int end, int firstTexture)
-        {
-            // Unused slots hold the white texture, so every slot is bound.
-            while (s_batchTextures.Count < firstTexture + TexturesPerBatch)
-                s_batchTextures.Add(null);
-            batches.Add(new Batch { Tree = tree, Start = start, Count = end - start, Textures = firstTexture });
         }
 
         private static Vector4 OffsetChain(Vector4 chain, int clipBase)
@@ -1442,7 +881,7 @@ namespace TimboJimbo.UINext
         private static void EnsureSlots(int count)
         {
             if (s_slots.Length < count) System.Array.Resize(ref s_slots, Mathf.NextPowerOfTwo(count));
-            if (s_slotOffscreen.Length < count) System.Array.Resize(ref s_slotOffscreen, Mathf.NextPowerOfTwo(count));
+            EnsureSlotStates(count);
         }
 
         private static void EnsureClips(int count)
@@ -1514,6 +953,8 @@ namespace TimboJimbo.UINext
                 };
             }
             s_slotCount += end - d;
+            for (int i = flight.LiveSlots; i < s_slotCount; i++)
+                ClassifySlot(i, false);
             flight.LiveOwn = AddOwn(s_slots[flight.LiveSlots], rect, pixels);
 
             // The picture, as the source was drawn, fitted the same way.
@@ -1542,6 +983,8 @@ namespace TimboJimbo.UINext
                 };
             }
             s_slotCount += picture.Slots.Count;
+            for (int i = flight.PictureSlots; i < s_slotCount; i++)
+                ClassifySlot(i, false);
             flight.PictureOwn = picture.Slots.Count > 0 ? AddOwn(s_slots[flight.PictureSlots], rect, pixels) : -1;
         }
 
@@ -1577,9 +1020,10 @@ namespace TimboJimbo.UINext
         private static int AddSlot(in NodeSlot slot)
         {
             EnsureSlots(s_slotCount + 1);
-            s_slots[s_slotCount] = slot;
-            s_slotOffscreen[s_slotCount] = false;
-            return s_slotCount++;
+            int index = s_slotCount++;
+            s_slots[index] = slot;
+            ClassifySlot(index, false);
+            return index;
         }
 
         // A clip from its transform from its root's space into its own, its size and its corners.
@@ -1649,21 +1093,15 @@ namespace TimboJimbo.UINext
             var live = GroupTarget(Groups.Count, picture.width, picture.height);
             Groups.Add(new Group { Tree = tree, Target = live, Region = region, Flight = flight, End = 1 });
 
-            EnsureInstances(s_instanceCount + 1);
-            s_instances[s_instanceCount] = new PrimitiveInstance
+            // Above everything at its level so far.
+            PutOnTop(new PrimitiveInstance
             {
                 Rect = new Vector4(region.x, region.y, region.width, region.height),
                 Color = new Color(1f, 1f, 1f, flight.Progress),
                 Uv = new Vector4(0f, 0f, 1f, 1f),
                 Slot = (uint)flight.PairSlot,
                 Type = (uint)PrimitiveType.Pair,
-            };
-            s_kinds[s_instanceCount] = (byte)PrimitiveKind.Pair;
-            // Above everything at its level so far.
-            s_layers[s_instanceCount] = ++s_layerTop;
-            s_textures[s_instanceCount] = picture;
-            s_textures2[s_instanceCount] = live;
-            s_instanceCount++;
+            }, picture, live);
         }
 
         // Grows the bounds by what an end's root draws relative to its rect (a box, a shadow's blur past it), laid out at
@@ -1696,7 +1134,7 @@ namespace TimboJimbo.UINext
                 var drawn = picture.Slots[k];
                 s_skip.Add((drawn.Parent >= 0 && s_skip[drawn.Parent]) || (k > 0 && (FliesOnItsOwn(drawn.Node) || SetsOff(drawn.Node))));
             }
-            EnsureInstances(s_instanceCount + picture.Instances.Count);
+            // As it was drawn: a layer each keeps its order.
             for (int i = 0; i < picture.Instances.Count; i++)
             {
                 var instance = picture.Instances[i];
@@ -1705,12 +1143,7 @@ namespace TimboJimbo.UINext
                 instance.Slot = k == 0 && (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0
                     ? (uint)flight.PictureOwn
                     : (uint)(flight.PictureSlots + k);
-                s_instances[s_instanceCount] = instance;
-                s_kinds[s_instanceCount] = KindOf(instance);
-                s_layers[s_instanceCount] = s_instanceCount;
-                s_textures[s_instanceCount] = picture.Textures[i];
-                s_textures2[s_instanceCount] = null;
-                s_instanceCount++;
+                PutOnTop(instance, picture.Textures[i], null);
             }
         }
 
@@ -1757,17 +1190,12 @@ namespace TimboJimbo.UINext
         // laid out at the flight's rect; for the nodes inside it, their slot), the rest in `slot`.
         private static void EmitLive(List<PrimitiveInstance> instances, List<Texture> textures, uint slot, uint own)
         {
-            EnsureInstances(s_instanceCount + instances.Count);
+            // As the walk draws them: a layer each keeps their order.
             for (int i = 0; i < instances.Count; i++)
             {
                 var instance = instances[i];
                 instance.Slot = (instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0 ? own : slot;
-                s_instances[s_instanceCount] = instance;
-                s_kinds[s_instanceCount] = KindOf(instance);
-                s_layers[s_instanceCount] = s_instanceCount;
-                s_textures[s_instanceCount] = textures[i];
-                s_textures2[s_instanceCount] = null;
-                s_instanceCount++;
+                PutOnTop(instance, textures[i], null);
             }
         }
 
@@ -1888,9 +1316,11 @@ namespace TimboJimbo.UINext
                     var run = s_runs[r];
                     cmd.SetGlobalInt(InstanceOffsetId, run.Start);
                     cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, run.Pass, MeshTopology.Triangles, 6, run.Count * PartsOf(run.Pass));
-                    // A shape's bands after its corners: within a layer nothing overlaps, so the order between shapes is free.
-                    if (run.Pass < 2)
-                        cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, FlatPass + run.Pass, MeshTopology.Triangles, 6, run.Count * 3);
+                    // A shape's, a shadow's or an image's bands and interiors after its corners: within a layer nothing
+                    // overlaps, so the order is free.
+                    int bands = BandPassOf(run.Pass);
+                    if (bands >= 0)
+                        cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, bands, MeshTopology.Triangles, 6, run.Count * BandParts);
                 }
             }
         }

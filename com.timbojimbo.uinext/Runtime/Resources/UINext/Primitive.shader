@@ -197,6 +197,46 @@ Shader "Hidden/TimboJimbo/UINext/Primitive"
             #define CLIPPED 1
             #include "PrimitiveKinds.hlsl"
             ENDHLSL }
+        // An image's bands (its corners drawn by the image passes): the box's edge alone.
+        Pass { Name "ImageFlat" Blend One OneMinusSrcAlpha ZWrite Off ZTest LEqual Cull Off
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+            #define KIND_IMAGE 1
+            #define FLAT_ONLY 1
+            #include "PrimitiveKinds.hlsl"
+            ENDHLSL }
+        Pass { Name "ImageFlatClipped" Blend One OneMinusSrcAlpha ZWrite Off ZTest LEqual Cull Off
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+            #define KIND_IMAGE 1
+            #define FLAT_ONLY 1
+            #define CLIPPED 1
+            #include "PrimitiveKinds.hlsl"
+            ENDHLSL }
+        // A shadow's bands (its corners drawn by the shadow passes): the blur of one edge alone.
+        Pass { Name "ShadowFlat" Blend One OneMinusSrcAlpha ZWrite Off ZTest LEqual Cull Off
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+            #define KIND_SHADOW 1
+            #define FLAT_ONLY 1
+            #include "PrimitiveKinds.hlsl"
+            ENDHLSL }
+        Pass { Name "ShadowFlatClipped" Blend One OneMinusSrcAlpha ZWrite Off ZTest LEqual Cull Off
+            HLSLPROGRAM
+            #pragma vertex Vert
+            #pragma fragment Frag
+            #pragma target 4.5
+            #define KIND_SHADOW 1
+            #define FLAT_ONLY 1
+            #define CLIPPED 1
+            #include "PrimitiveKinds.hlsl"
+            ENDHLSL }
 
     }
 }

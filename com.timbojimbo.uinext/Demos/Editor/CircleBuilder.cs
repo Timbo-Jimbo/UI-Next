@@ -17,6 +17,20 @@ namespace TimboJimboEditor.UINext.Demos
     public static partial class CircleBuilder
     {
         private const string Folder = DemoKit.DemosFolder + "/Circle";
+
+        // The photos' loader, made once beside the scene: copies as wide as they are drawn, cropped to their node's shape
+        // (Bunny's optimizer crops to an aspect ratio), and a small blurred preview that stands in while one loads.
+        private static ImageLoader PhotoLoader()
+        {
+            string path = Folder + "/Photo Loader.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<ImageLoader>(path);
+            if (existing != null) return existing;
+            var loader = ScriptableObject.CreateInstance<ImageLoader>();
+            loader.Template = "{url}?width={width}&aspect_ratio={width}:{height}";
+            loader.PreviewTemplate = "{url}?width=32&aspect_ratio={width}:{height}&blur=20";
+            AssetDatabase.CreateAsset(loader, path);
+            return loader;
+        }
         public const string ScenePath = DemoKit.DemosFolder + "/Scenes/Circle.unity";
 
         private static readonly Color Accent = new Color32(0x34, 0x78, 0xF6, 0xFF);
@@ -287,6 +301,7 @@ namespace TimboJimboEditor.UINext.Demos
             photoNode.Width.Value = Sizing.Grow();
             photoNode.AspectRatio.Value = 4f / 3f;
             photoNode.MatchName.Value = "Photo";
+            photoNode.Image("", loader: PhotoLoader());
             var photo = photoNode.Add<ScenePhoto>();
             photo.CornerRadius.Value = 0f;
             photoNode.Pressable();
