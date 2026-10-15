@@ -5,6 +5,10 @@
 - `UIDebug.Occluders` (and the Rendering Debugger's Occluders switch): the occluders turned off, everything shaded, for measuring what they are worth on a GPU; `UIDebug.DrawCalls`, `UIDebug.OffscreenNodes` and `UIDebug.Layers`: how many draw calls the UI was last drawn with, how many nodes were scrolled out from under a clip over them, and how many layers the main pass was drawn in. The Compare player takes `-repeat N` and `-noocc`, and logs them each use case.
 - Project Settings > Timbo Jimbo > UI Next > Skip Overlay UI Pass: URP draws screen-space UGUI and UI Toolkit in a pass of its own after its final blit, which loads and stores the whole screen each frame even with nothing to draw (0.3 ms of GPU time a frame on a Pixel 8, a quarter of an empty frame). On, UI Next tells URP each frame not to record it, and the engine draws any such UI after URP as it used to. Off unless set, for projects that draw UGUI or UI Toolkit overlays, which are slower drawn that way. UI Next's own pass is unaffected: it draws inside URP's final pass either way.
 
+### Changed
+
+- Shadows are drawn as shapes and images are: four corners by the shadow pass, where the rounded rect's distance and its blur are worked out a pixel, and the rest by a flat pass after them (`ShadowFlat`). The flat parts of a shape, a shadow and an image are now four bands along its edges and its interior: in a band the rounded rect's distance is exactly the distance to that one edge, which the vertex shader works out and the hardware interpolates, so a band's pixel does an abs and a subtract where it did a box's two axes; the interior lies past where the edge's work reaches (the smoothed edge, a border, a shadow's blur), so it does none, and a ring (a border alone, the focus ring) has no interior part and shades only its rim. The corners grow to the border's width or the blur where that is more than the radius, so this holds exactly; a gradient's position along its axis is interpolated too. Drawn pixel for pixel the same.
+
 ## [0.5.0] - 14/10/2026
 
 ### Added

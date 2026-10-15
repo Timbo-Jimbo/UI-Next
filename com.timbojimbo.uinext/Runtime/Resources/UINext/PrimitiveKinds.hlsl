@@ -73,6 +73,9 @@ struct Corner
     float4 clips;
     // A pixel in the node's points (the widest it is along either axis) and in the root's: the smoothed edge's width.
     float2 pixel;
+    // In a band (a flat pass's part): the distance along the band's axis from the primitive's centre, and its half size
+    // along it, from which the pixel's distance to the edge is abs(x) - half; in the interior, far inside.
+    float2 band;
 };
 
 // Room around the quad: a pixel and a half of the node's, for a smoothed edge, and a shadow's blur; none for a glyph,
@@ -99,13 +102,16 @@ struct Corner
 // hardware's gradients, so it draws as an image. One for the rest: a rounded rect's bands between its corners could do a
 // box's work, but in one pass the compiler computes both paths and selects, and in a pass of their own the draw order
 // of overlapping shapes in a run would go wrong.
-// A shape's seven parts: its four corner squares (as big as the largest radius, with the room round the quad), drawn by
-// the shape passes, and three bands between them (the two sides, and the middle column), drawn by the flat passes after
-// them, where a rounded rect's distance is a box's. Nothing within a layer overlaps, so the order between shapes is free.
-#if (defined(KIND_SHAPE) || defined(KIND_IMAGE)) && defined(FLAT_ONLY)
-#define PARTS 3u
+// A rounded rect's nine parts (a shape, a shadow, an image): its four corner squares, drawn by the kind's passes with
+// the rounded rect's distance, and five flat parts drawn by its flat passes after them: the four bands along its edges,
+// where its distance is the distance to that one edge alone (worked out once a vertex and interpolated), and the
+// interior, where its edge's work (the smoothed edge, a border, a shadow's blur) does not reach. The corners are as big
+// as the largest radius or that reach, whichever is more, so that this holds. Nothing within a layer overlaps, so the
+// order between parts is free.
+#if (defined(KIND_SHAPE) || defined(KIND_IMAGE) || defined(KIND_SHADOW)) && defined(FLAT_ONLY)
+#define PARTS 5u
 #define PART_FROM 4u
-#elif defined(KIND_SHAPE) || defined(KIND_IMAGE)
+#elif defined(KIND_SHAPE) || defined(KIND_IMAGE) || defined(KIND_SHADOW)
 #define PARTS 4u
 #define PART_FROM 0u
 #elif defined(KIND_SLICED)
@@ -116,19 +122,33 @@ struct Corner
 #define PART_FROM 0u
 #endif
 
-#if defined(KIND_SHAPE) || defined(KIND_IMAGE)
-// 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left, 4 the left band, 5 the right band, 6 the middle column.
-void PartRect(Instance inst, float4 rect, float margin, uint part, out float2 partMin, out float2 partMax, out float4 sliceX, out float4 sliceY)
+// How far in from its edge a primitive's edge works: a pixel and a half of smoothed edge, and a shape's border, or a
+// shadow's blur.
+#if defined(KIND_SHADOW)
+#define INSIDE_REACH(inst, slot) (1.5 * max((slot).sizeOpacity.w, 0.01) + (inst).params.y)
+#elif defined(KIND_SHAPE)
+#define INSIDE_REACH(inst, slot) (1.5 * max((slot).sizeOpacity.w, 0.01) + (inst).params.x)
+#else
+#define INSIDE_REACH(inst, slot) (1.5 * max((slot).sizeOpacity.w, 0.01))
+#endif
+
+#if defined(KIND_SHAPE) || defined(KIND_IMAGE) || defined(KIND_SHADOW)
+// 0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left; 4 the left band, 5 the right, 6 the top, 7 the bottom; 8 the
+// interior (none for a ring, which draws nothing there).
+void PartRect(Instance inst, float4 rect, float margin, float inside, uint part, out float2 partMin, out float2 partMax)
 {
     float2 lo = rect.xy, hi = rect.xy + rect.zw;
-    float r = max(0, min(max(max(inst.radii.x, inst.radii.y), max(inst.radii.z, inst.radii.w)), min(rect.z, rect.w) * 0.5));
+    float halfSide = min(rect.z, rect.w) * 0.5;
+    float r = max(0, min(max(max(inst.radii.x, inst.radii.y), max(inst.radii.z, inst.radii.w)), halfSide));
+    float s = min(max(r, inside), halfSide);
     uint col = part == 0u || part == 3u || part == 4u ? 0u : part == 1u || part == 2u || part == 5u ? 2u : 1u;
-    uint row = part < 2u ? 0u : part < 4u ? 2u : 1u;
-    partMin.x = col == 0u ? lo.x - margin : col == 1u ? lo.x + r : hi.x - r;
-    partMax.x = col == 0u ? lo.x + r : col == 1u ? hi.x - r : hi.x + margin;
-    partMin.y = part == 6u ? lo.y - margin : row == 0u ? lo.y - margin : row == 1u ? lo.y + r : hi.y - r;
-    partMax.y = part == 6u ? hi.y + margin : row == 0u ? lo.y + r : row == 1u ? hi.y - r : hi.y + margin;
-    sliceX = sliceY = 0;
+    uint row = part < 2u || part == 6u ? 0u : part == 2u || part == 3u || part == 7u ? 2u : 1u;
+    partMin.x = col == 0u ? lo.x - margin : col == 1u ? lo.x + s : hi.x - s;
+    partMax.x = col == 0u ? lo.x + s : col == 1u ? hi.x - s : hi.x + margin;
+    partMin.y = row == 0u ? lo.y - margin : row == 1u ? lo.y + s : hi.y - s;
+    partMax.y = row == 0u ? lo.y + s : row == 1u ? hi.y - s : hi.y + margin;
+    if (part == 8u && (inst.flags & 4u) != 0u)
+        partMax = partMin;
 }
 #endif
 
@@ -175,9 +195,14 @@ Corner CornerOf(uint vertexID, uint instanceID)
     CutToClips(c.slot, skew, 1, quadMin, quadMax, c.clips);
 #if PARTS > 1u
     // Its part of the quad, and what the clips left of that.
+    uint part = PART_FROM + instanceID % PARTS;
     float2 partMin, partMax;
+#if PARTS == 9u
     float4 sliceX, sliceY;
-    PartRect(c.inst, c.rect, margin, PART_FROM + instanceID % PARTS, partMin, partMax, sliceX, sliceY);
+    PartRect(c.inst, c.rect, margin, part, partMin, partMax, sliceX, sliceY);
+#else
+    PartRect(c.inst, c.rect, margin, INSIDE_REACH(c.inst, c.slot), part, partMin, partMax);
+#endif
     quadMin = max(quadMin, partMin);
     quadMax = min(quadMax, partMax);
     if (any(quadMax <= quadMin))
@@ -196,6 +221,11 @@ Corner CornerOf(uint vertexID, uint instanceID)
     c.root = float2(dot(c.slot.row0.xy, p) + c.slot.row0.z, dot(c.slot.row1.xy, p) + c.slot.row1.z);
     c.position = mul(_UIMatrix, float4(c.root, OrderDepth(id), 1));
     c.local = p - (c.rect.xy + c.rect.zw * 0.5);
+    // In a band, its axis: the side bands' x, the top and bottom bands' y; the interior lies far inside every edge.
+    c.band = float2(0, 1e4);
+#if defined(FLAT_ONLY)
+    c.band = part < 6u ? float2(c.local.x, c.rect.z * 0.5) : part < 8u ? float2(c.local.y, c.rect.w * 0.5) : float2(0, 1e4);
+#endif
     // A pixel in the node's points: through the inverse of its transform, as wide as it comes along an axis (the
     // sum of a row's parts); sizeOpacity.w is a pixel in the node's points by the transform's scale.
     float det = max(abs(c.slot.row0.x * c.slot.row1.y - c.slot.row0.y * c.slot.row1.x), 1e-8);
@@ -262,11 +292,11 @@ float4 Drawn(float4 color, float coverage, float opacity, float saturation, floa
     return float4(rgb, alpha);
 }
 
-// Coverage of a box's smoothed edge, and its distance: what a rounded rect's is in its bands, between its corners.
-float BoxCoverage(float2 local, float2 halfSize, float aa, out float d)
+// Coverage of a band's smoothed edge, and its distance: in a band along one of a rounded rect's edges, its distance is
+// the distance to that edge alone, from the band's axis (Corner.band); in the interior, far inside.
+float BandCoverage(float2 band, float aa, out float d)
 {
-    float2 q = abs(local) - halfSize;
-    d = max(q.x, q.y);
+    d = abs(band.x) - band.y;
     return saturate(0.5 - d / aa);
 }
 
@@ -302,7 +332,11 @@ float4 UvBounds(float4 uvRect)
 struct Varyings
 {
     float4 position : SV_POSITION;
+#if defined(FLAT_ONLY)
+    float2 band : TEXCOORD0;
+#else
     float2 local : TEXCOORD0;
+#endif
     float2 root : TEXCOORD1;
     nointerpolation float4 color : TEXCOORD2;
     nointerpolation float4 color2 : TEXCOORD3;
@@ -311,8 +345,10 @@ struct Varyings
 #endif
     // Its half size, its opacity, its border width.
     nointerpolation float4 shape : TEXCOORD5;
-    // Its gradient's axis, its saturation and brightness.
-    nointerpolation float4 extra : TEXCOORD6;
+    // Its saturation and brightness.
+    nointerpolation float2 filters : TEXCOORD6;
+    // How far along its gradient the pixel is, 0 to 1 across the rect.
+    float gradient : TEXCOORD8;
     nointerpolation uint flags : TEXCOORD7;
     PIXEL_VARYING
     CLIP_VARYINGS
@@ -324,7 +360,11 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     float2 halfSize = c.rect.zw * 0.5;
     Varyings o;
     o.position = c.position;
+#if defined(FLAT_ONLY)
+    o.band = c.band;
+#else
     o.local = c.local;
+#endif
     o.root = c.root;
     o.color = c.inst.color;
     o.color2 = c.inst.color2;
@@ -332,7 +372,8 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     o.radii = c.inst.radii;
 #endif
     o.shape = float4(halfSize, c.slot.sizeOpacity.z, c.inst.params.x);
-    o.extra = float4(GradientAxis(c.inst.params.z, halfSize), c.slot.row0.w, c.slot.row1.w);
+    o.filters = float2(c.slot.row0.w, c.slot.row1.w);
+    o.gradient = dot(c.local, GradientAxis(c.inst.params.z, halfSize)) + 0.5;
     o.flags = c.inst.flags;
     SET_PIXEL(o, c)
     SET_CLIPS(o, c)
@@ -344,14 +385,14 @@ float4 Frag(Varyings i) : SV_Target
     float d;
     float aa = i.pixel.x;
 #if defined(FLAT_ONLY)
-    float coverage = BoxCoverage(i.local, i.shape.xy, aa, d);
+    float coverage = BandCoverage(i.band, aa, d);
 #else
     float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, aa, d);
 #endif
     float4 color = i.color;
     bool gradient = (i.flags & 2u) != 0u;
     if (gradient)
-        color = lerp(i.color, i.color2, saturate(dot(i.local, i.extra.xy) + 0.5));
+        color = lerp(i.color, i.color2, saturate(i.gradient));
     if ((i.flags & 4u) != 0u)
     {
         // A ring: only its border, shape.w wide inside its edge, in its colour or gradient.
@@ -363,7 +404,7 @@ float4 Frag(Varyings i) : SV_Target
         color = lerp(i.color2, i.color, saturate(0.5 - (d + i.shape.w) / aa));
     }
     coverage *= COVERAGE_OF(i);
-    return Drawn(color, coverage, i.shape.z, i.extra.z, i.extra.w);
+    return Drawn(color, coverage, i.shape.z, i.filters.x, i.filters.y);
 }
 #endif
 
@@ -373,15 +414,23 @@ float4 Frag(Varyings i) : SV_Target
 struct Varyings
 {
     float4 position : SV_POSITION;
+#if defined(FLAT_ONLY)
+    float2 band : TEXCOORD0;
+#else
     float2 local : TEXCOORD0;
+#endif
     float2 root : TEXCOORD1;
     nointerpolation float4 color : TEXCOORD2;
     nointerpolation float4 color2 : TEXCOORD3;
+#if !defined(FLAT_ONLY)
     nointerpolation float4 radii : TEXCOORD4;
+#endif
     // Its half size, its opacity, its blur.
     nointerpolation float4 shape : TEXCOORD5;
-    // Its gradient's axis, its saturation and brightness.
-    nointerpolation float4 extra : TEXCOORD6;
+    // Its saturation and brightness.
+    nointerpolation float2 filters : TEXCOORD6;
+    // How far along its gradient the pixel is, 0 to 1 across the rect.
+    float gradient : TEXCOORD8;
     nointerpolation uint flags : TEXCOORD7;
     PIXEL_VARYING
     CLIP_VARYINGS
@@ -393,13 +442,20 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     float2 halfSize = c.rect.zw * 0.5;
     Varyings o;
     o.position = c.position;
+#if defined(FLAT_ONLY)
+    o.band = c.band;
+#else
     o.local = c.local;
+#endif
     o.root = c.root;
     o.color = c.inst.color;
     o.color2 = c.inst.color2;
+#if !defined(FLAT_ONLY)
     o.radii = c.inst.radii;
+#endif
     o.shape = float4(halfSize, c.slot.sizeOpacity.z, c.inst.params.y);
-    o.extra = float4(GradientAxis(c.inst.params.z, halfSize), c.slot.row0.w, c.slot.row1.w);
+    o.filters = float2(c.slot.row0.w, c.slot.row1.w);
+    o.gradient = dot(c.local, GradientAxis(c.inst.params.z, halfSize)) + 0.5;
     o.flags = c.inst.flags;
     SET_PIXEL(o, c)
     SET_CLIPS(o, c)
@@ -409,14 +465,19 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
 float4 Frag(Varyings i) : SV_Target
 {
     float aa = i.pixel.x;
+#if defined(FLAT_ONLY)
+    // In a band, the distance to its one edge; in the interior, far inside, where the blur has run out.
+    float d = abs(i.band.x) - i.band.y;
+#else
     float d = SdRoundRect(i.local, i.shape.xy, i.radii);
+#endif
     float blur = max(i.shape.w, aa);
     float coverage = 1 - smoothstep(-blur, blur, d);
     float4 color = i.color;
     if ((i.flags & 2u) != 0u)
-        color = lerp(i.color, i.color2, saturate(dot(i.local, i.extra.xy) + 0.5));
+        color = lerp(i.color, i.color2, saturate(i.gradient));
     coverage *= COVERAGE_OF(i);
-    return Drawn(color, coverage, i.shape.z, i.extra.z, i.extra.w);
+    return Drawn(color, coverage, i.shape.z, i.filters.x, i.filters.y);
 }
 #endif
 
@@ -426,7 +487,11 @@ float4 Frag(Varyings i) : SV_Target
 struct Varyings
 {
     float4 position : SV_POSITION;
+#if defined(FLAT_ONLY)
+    float2 band : TEXCOORD0;
+#else
     float2 local : TEXCOORD0;
+#endif
     float2 root : TEXCOORD1;
     float2 uv : TEXCOORD2;
     nointerpolation float4 color : TEXCOORD3;
@@ -447,7 +512,11 @@ Varyings Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
     Corner c = CornerOf(vertexID, instanceID);
     Varyings o;
     o.position = c.position;
+#if defined(FLAT_ONLY)
+    o.band = c.band;
+#else
     o.local = c.local;
+#endif
     o.root = c.root;
     o.uv = c.uv;
     o.color = c.inst.color;
@@ -466,7 +535,7 @@ float4 Frag(Varyings i) : SV_Target
 {
     float d;
 #if defined(FLAT_ONLY)
-    float coverage = BoxCoverage(i.local, i.shape.xy, i.pixel.x, d);
+    float coverage = BandCoverage(i.band, i.pixel.x, d);
 #else
     float coverage = EdgeCoverage(i.local, i.shape.xy, i.radii, i.pixel.x, d);
 #endif

@@ -75,12 +75,15 @@ namespace TimboJimbo.UINext
         // scrolled out from under one of its clips, so nothing of it is drawn at all.
         private const byte ClipsNone = 0, ClipsExact = 1, ClipsTested = 2, ClipsOutside = 3;
 
-        // The primitive shader's passes after the kinds' (two a kind): the occluders, the overdraw view's heat, and a
-        // shape's bands (plain and clipped), drawn after its corners.
+        // The primitive shader's passes after the kinds' (two a kind): the occluders, the overdraw view's heat, and the
+        // flat parts (plain and clipped) of a shape, an image and a shadow, drawn after their corners.
         private const int OccludersPass = 16;
         private const int OverdrawPass = 17;
         private const int FlatPass = 18;
         private const int ImageFlatPass = 20;
+        private const int ShadowFlatPass = 22;
+        // How many quads a flat pass draws a primitive as: its four bands and its interior.
+        internal const int BandParts = 5;
 
         // Per primitive: what it is drawn with, and its layer.
         private static byte[] s_kinds = new byte[256];
@@ -179,15 +182,16 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // How many quads a pass draws a primitive as (PrimitiveKinds.hlsl's PARTS): a shape's four corners (its three bands
-        // are the flat pass's), a nine-slice's nine slices, one for the rest.
+        // How many quads a pass draws a primitive as (PrimitiveKinds.hlsl's PARTS): a shape's, an image's or a shadow's
+        // four corners (its bands and interior are the flat pass's, BandParts), a nine-slice's nine slices, one for the rest.
         private static int PartsOf(int pass)
         {
             if (pass >= OccludersPass) return 1;
             switch ((PrimitiveKind)(pass / 2))
             {
                 case PrimitiveKind.Shape:
-                case PrimitiveKind.Image: return 4;
+                case PrimitiveKind.Image:
+                case PrimitiveKind.Shadow: return 4;
                 case PrimitiveKind.Sliced: return 9;
                 default: return 1;
             }
@@ -718,9 +722,20 @@ namespace TimboJimbo.UINext
             }
         }
 
-        // The pass that draws a run's bands after its corners, for a shape's or an image's run; -1 for the rest.
-        private static int BandPassOf(int pass) =>
-            pass < 2 ? FlatPass + pass : pass == (int)PrimitiveKind.Image * 2 || pass == (int)PrimitiveKind.Image * 2 + 1 ? ImageFlatPass + pass - (int)PrimitiveKind.Image * 2 : -1;
+        // The pass that draws a run's bands and interiors after its corners, for a shape's, a shadow's or an image's run
+        // (its plain or clipped flat pass, as the run is); -1 for the rest.
+        private static int BandPassOf(int pass)
+        {
+            if (pass >= OccludersPass) return -1;
+            int clipped = pass & 1;
+            switch ((PrimitiveKind)(pass / 2))
+            {
+                case PrimitiveKind.Shape: return FlatPass + clipped;
+                case PrimitiveKind.Image: return ImageFlatPass + clipped;
+                case PrimitiveKind.Shadow: return ShadowFlatPass + clipped;
+                default: return -1;
+            }
+        }
 
         private static void AddRun(int start, int count, int pass)
         {

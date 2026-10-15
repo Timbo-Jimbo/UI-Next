@@ -1316,10 +1316,11 @@ namespace TimboJimbo.UINext
                     var run = s_runs[r];
                     cmd.SetGlobalInt(InstanceOffsetId, run.Start);
                     cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, run.Pass, MeshTopology.Triangles, 6, run.Count * PartsOf(run.Pass));
-                    // A shape's or an image's bands after its corners: within a layer nothing overlaps, so the order is free.
+                    // A shape's, a shadow's or an image's bands and interiors after its corners: within a layer nothing
+                    // overlaps, so the order is free.
                     int bands = BandPassOf(run.Pass);
                     if (bands >= 0)
-                        cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, bands, MeshTopology.Triangles, 6, run.Count * 3);
+                        cmd.DrawProcedural(s_indexBuffer, Matrix4x4.identity, material, bands, MeshTopology.Triangles, 6, run.Count * BandParts);
                 }
             }
         }
