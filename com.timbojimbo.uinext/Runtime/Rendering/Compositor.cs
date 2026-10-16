@@ -1222,7 +1222,7 @@ namespace TimboJimbo.UINext
         {
             using var render = UIProfiling.Render.Auto();
             bool occlusion = !sceneView;
-            if (occlusion && UIDebug.Occluders)
+            if (occlusion && UISettings.Occluding)
                 DrawOccluders(cmd, camera, flipped);
             for (int r = 0; r < UIDebug.Repeat; r++)
                 Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped, occlusion: occlusion);

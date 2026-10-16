@@ -174,9 +174,9 @@ namespace TimboJimbo.UINext.Demos.Compare
                     case "-cards" when next != null: int.TryParse(next, out _cards); break;
                     case "-ballast" when next != null: float.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out _ballast); break;
                     case "-stay": _stay = true; break;
-                    // For measuring the GPU: drawn that many times over, and with or without the occluders.
+                    // For measuring the GPU: drawn that many times over. (UI Next itself takes -uinext-noocc, for measuring
+                    // without the occluders.)
                     case "-repeat" when next != null && int.TryParse(next, out int repeat): UIDebug.Repeat = repeat; break;
-                    case "-noocc": UIDebug.Occluders = false; break;
                 }
             }
             if (_scenarios.Count == 0)

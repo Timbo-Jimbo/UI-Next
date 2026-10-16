@@ -29,6 +29,9 @@ namespace TimboJimbo.UINext
         [Tooltip("URP draws screen-space UGUI and UI Toolkit in a pass of its own after its final blit, which loads and stores the whole screen each frame even with nothing to draw (0.3 ms of GPU time on a Pixel 8). On, UI Next tells URP not to, and the engine draws any such UI after URP as it used to. Leave off in a project that draws UGUI or UI Toolkit overlays: drawn that way they are slower.")]
         [SerializeField] private bool _skipOverlayUIPass;
 
+        [Tooltip("In the game view, the depth of every large opaque shape's inside is laid down before the UI is drawn, so what such a shape covers is not shaded. Off, everything is shaded. The command line's -uinext-noocc turns them off whatever this says.")]
+        [SerializeField] private bool _occluders = true;
+
         private static UISettings s_instance;
         private static readonly Observable<int> s_changes = new();
 
@@ -59,6 +62,19 @@ namespace TimboJimbo.UINext
         /// loads and stores the whole screen even with nothing to draw; the engine draws any such UI after URP instead.
         /// </summary>
         public bool SkipOverlayUIPass => _skipOverlayUIPass;
+
+        /// <summary>Whether the occluders are drawn in the game view, so what a large opaque shape covers is not shaded.</summary>
+        public bool Occluders => _occluders;
+
+        /// <summary>Whether the occluders are drawn: as the active settings say (on with no settings asset), unless the command line has -uinext-noocc.</summary>
+        internal static bool Occluding => !CommandLine.NoOccluders && (Instance == null || Instance._occluders);
+
+        // Features turned off from the command line (on Android, the "unity" extra), read once: for measuring what one is
+        // worth by turns in one build.
+        private static class CommandLine
+        {
+            public static readonly bool NoOccluders = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-uinext-noocc") >= 0;
+        }
 
         /// <summary>A tracked read of the settings and the loaders they lead to: what reads it runs again as they change.</summary>
         internal static void Watch() => _ = s_changes.Value;

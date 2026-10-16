@@ -59,13 +59,6 @@ namespace TimboJimbo.UINext
                         getter = () => UIDebug.FocusPath,
                         setter = on => UIDebug.FocusPath = on,
                     },
-                    new DebugUI.BoolField
-                    {
-                        displayName = "Occluders",
-                        tooltip = "The depth of every large opaque shape's inside, laid down first so what it covers is not shaded. Off, everything is shaded: for measuring what they are worth.",
-                        getter = () => UIDebug.Occluders,
-                        setter = on => UIDebug.Occluders = on,
-                    },
                 },
             });
             panel.children.Add(new DebugUI.Foldout

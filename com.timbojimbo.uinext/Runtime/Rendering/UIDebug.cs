@@ -60,13 +60,6 @@ namespace TimboJimbo.UINext
 
         private static int s_repeat = 1;
 
-        /// <summary>
-        /// Whether the occluders are drawn (they are unless turned off): the depth of every large opaque shape's inside,
-        /// laid down first, so what such a shape covers is not shaded. Off, everything is shaded: for measuring what they
-        /// are worth on a GPU.
-        /// </summary>
-        public static bool Occluders { get; set; } = true;
-
         /// <summary>How many draw calls the UI was last drawn with: the main pass's and the groups' images'.</summary>
         public static int DrawCalls => Compositor.DrawCalls;
 
