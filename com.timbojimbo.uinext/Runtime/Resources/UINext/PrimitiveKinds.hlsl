@@ -219,7 +219,7 @@ Corner CornerOf(uint vertexID, uint instanceID)
 #endif
     p.x += skew * (1 - corner.y);
     c.root = float2(dot(c.slot.row0.xy, p) + c.slot.row0.z, dot(c.slot.row1.xy, p) + c.slot.row1.z);
-    c.position = mul(_UIMatrix, float4(c.root, OrderDepth(id), 1));
+    c.position = ToTarget(mul(_UIMatrix, float4(c.root, OrderDepth(id), 1)));
     c.local = p - (c.rect.xy + c.rect.zw * 0.5);
     // In a band, its axis: the side bands' x, the top and bottom bands' y; the interior lies far inside every edge.
     c.band = float2(0, 1e4);
@@ -768,7 +768,7 @@ float4 Vert(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID) : SV_P
     OpaqueRect(inst, slot, RectOf(inst, slot), opaqueMin, opaqueMax);
     float2 p = opaqueMin + kCorners[vertexID & 3u] * (opaqueMax - opaqueMin);
     float2 root = float2(dot(slot.row0.xy, p) + slot.row0.z, dot(slot.row1.xy, p) + slot.row1.z);
-    return mul(_UIMatrix, float4(root, OrderDepth(id), 1));
+    return ToTarget(mul(_UIMatrix, float4(root, OrderDepth(id), 1)));
 }
 
 float4 Frag() : SV_Target

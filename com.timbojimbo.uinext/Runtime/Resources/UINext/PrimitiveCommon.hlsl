@@ -45,6 +45,30 @@ float4x4 _UIMatrix;
 // depth of its place in the order (OrderDepth), so the occluders drawn first hide what lies under them.
 float _UINextOcclusion;
 int _InstanceTotal;
+
+// Vulkan's swapchain pre-rotation (Player Settings: Apply display rotation during rendering): drawing to the screen of
+// a device turned from its panel's own orientation, the swapchain stays in the panel's, and positions must be turned a
+// quarter turn or more to match. Unity turns its own matrices; the UI draws with _UIMatrix, so it turns its positions
+// here, as the render pipelines' ApplyPretransformRotation does. The engine sets the turn per target: 0 in a texture.
+#if defined(SHADER_API_VULKAN) && defined(UNITY_PRETRANSFORM_TO_DISPLAY_ORIENTATION)
+#   ifdef UNITY_COMPILER_DXC
+        [[vk::constant_id(1)]] const int UnityDisplayOrientationPreTransform = 0;
+#   else
+        cbuffer UnityDisplayOrientationPreTransformData { int UnityDisplayOrientationPreTransform; };
+#   endif
+#endif
+
+// A clip-space position as the target wants it: turned for a pre-rotated swapchain, else as it is.
+float4 ToTarget(float4 position)
+{
+#if defined(SHADER_API_VULKAN) && defined(UNITY_PRETRANSFORM_TO_DISPLAY_ORIENTATION)
+    if (UnityDisplayOrientationPreTransform == 1) position.xy = float2(position.y, -position.x);
+    else if (UnityDisplayOrientationPreTransform == 2) position.xy = -position.xy;
+    else if (UnityDisplayOrientationPreTransform == 3) position.xy = float2(-position.y, position.x);
+#endif
+    return position;
+}
+
 // How far inside a rounded rect a point is (negative outside), from its distances to the rect's edges (left, top,
 // right, bottom) and the corners' radii (top-left, top-right, bottom-right, bottom-left, none more than half its
 // shorter side): within a corner's radius of both its edges, from the corner's circle; elsewhere from its nearest edge.
