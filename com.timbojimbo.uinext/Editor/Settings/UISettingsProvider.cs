@@ -47,10 +47,10 @@ namespace TimboJimboEditor.UINext
         {
             SerializedObject serializedObject = null;
 
-            return new SettingsProvider("Project/Timbo Jimbo/UI Next", SettingsScope.Project)
+            return new SettingsProvider(UISettings.SettingsPath, SettingsScope.Project)
             {
                 label = "UI Next",
-                keywords = new HashSet<string>(new[] { "Image", "Loader", "CDN", "Cache", "Overlay", "UGUI", "Render pass" }),
+                keywords = new HashSet<string>(new[] { "Image", "Loader", "CDN", "Cache", "Overlay", "UGUI", "Render pass", "Subtree", "Match" }),
                 deactivateHandler = () => serializedObject = null,
                 guiHandler = _ =>
                 {
@@ -83,10 +83,15 @@ namespace TimboJimboEditor.UINext
                             serializedObject = new SerializedObject(active);
                         serializedObject.Update();
                         EditorGUILayout.Space();
+                        // Subtree matching's settings greyed out while it is off.
+                        bool matching = serializedObject.FindProperty("_matchSubtrees").boolValue;
                         var property = serializedObject.GetIterator();
                         for (bool enterChildren = true; property.NextVisible(enterChildren); enterChildren = false)
-                            if (property.propertyPath != "m_Script")
+                        {
+                            if (property.propertyPath == "m_Script") continue;
+                            using (new EditorGUI.DisabledScope(!matching && UISettings.IsMatchingField(property.name)))
                                 EditorGUILayout.PropertyField(property, true);
+                        }
                         // Applying runs the asset's OnValidate, which tells images.
                         serializedObject.ApplyModifiedProperties();
                     }

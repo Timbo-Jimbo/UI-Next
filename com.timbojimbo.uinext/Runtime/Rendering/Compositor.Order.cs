@@ -197,7 +197,7 @@ namespace TimboJimbo.UINext
             }
         }
 
-        private static bool Overlaps(in Rect a, in Rect b) =>
+        internal static bool Overlaps(in Rect a, in Rect b) =>
             a.xMin < b.xMax && b.xMin < a.xMax && a.yMin < b.yMax && b.yMin < a.yMax;
 
         private static Rect Union(in Rect a, in Rect b) =>
@@ -347,15 +347,25 @@ namespace TimboJimbo.UINext
                 return layer;
             }
 
+            // Drawn partly the same as other copies: a quad in its first layer shows the image one of them is drawn to, and
+            // only its primitives the image does not hold are drawn here (Compositor.Matches).
+            var drawing = s_drawing;
+            if (IsCopy(node))
+            {
+                EmitMatchQuad(tree, node, slotBase, layer);
+                s_drawing = Drawing.Live;
+            }
+
             if (s_groupRoot == null)
                 tree.DrawOrder.Add(node.Index);
             uint slot = (uint)(slotBase + node.Index);
-            // Where its primitives go, so a drawing of as many is patched there.
+            // Where its primitives go, so a drawing of as many is patched there, and the layer they count from.
             node.EmittedBuild = s_builds;
-            node.EmittedInGroup = s_groupRoot != null;
+            node.EmittedLayer = layer;
+            node.EmittedInGroup = s_groupRoot != null || s_drawing != Drawing.All;
             node.EmittedAt = s_instanceCount;
             node.EmittedCount = node.Instances.Count;
-            int top = EmitNode(tree, node, node.Instances, node.InstanceTextures, slot, layer, out bool surfaces);
+            int top = EmitNode(tree, node, node.Instances, node.InstanceTextures, 0, slot, layer, out bool surfaces);
             // What is inside it lies above its surfaces; above nothing, if it has none.
             int inside = surfaces ? top + 1 : layer;
 
@@ -394,7 +404,8 @@ namespace TimboJimbo.UINext
             node.EmittedOverlayAt = s_instanceCount;
             node.EmittedOverlayCount = node.OverlayInstances.Count;
             // Over everything inside it.
-            top = Mathf.Max(top, EmitNode(tree, node, node.OverlayInstances, node.OverlayTextures, slot, Mathf.Max(layer, top + 1), out _));
+            top = Mathf.Max(top, EmitNode(tree, node, node.OverlayInstances, node.OverlayTextures, node.Instances.Count, slot, Mathf.Max(layer, top + 1), out _));
+            s_drawing = drawing;
             return top;
         }
 
@@ -402,7 +413,7 @@ namespace TimboJimbo.UINext
         // otherwise draw after it (a shape over an image), and a shape past any earlier shape it overlaps (a layer's
         // shapes draw their corners then their bands). Each into its layer's bucket for its kind. Returns the highest
         // layer given out, -1 for none; and whether any of them is a surface (anything but a shadow, with any alpha).
-        private static int EmitNode(UITree tree, UINode node, List<PrimitiveInstance> instances, List<Texture> textures, uint slot, int layer, out bool surfaces)
+        private static int EmitNode(UITree tree, UINode node, List<PrimitiveInstance> instances, List<Texture> textures, int offset, uint slot, int layer, out bool surfaces)
         {
             surfaces = false;
             int count = instances.Count;
@@ -448,7 +459,10 @@ namespace TimboJimbo.UINext
                     s_rankBounds[rank] = bounds;
                     s_rankLayer[rank] = own;
                 }
-                Put(instance, kind, own, textures[i], null);
+                // Laid out whether it is drawn here or not, so the layers are the same either way; drawn unless it is a
+                // copy's primitive its set's image holds, or one an image does not.
+                if (Draws(node, offset + i))
+                    Put(instance, kind, own, textures[i], null);
                 top = Mathf.Max(top, own);
                 // A surface: anything but a shadow that shows at all (a fill at no alpha, a hit area, is none; its second
                 // colour shows only as a gradient or a border).

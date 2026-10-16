@@ -356,8 +356,10 @@ namespace TimboJimbo.UINext
 
         // Where the compositor last put its primitives: the build that drew it (any other's: it is not drawn now), where
         // its primitives under its children and those over them start, how many of each, and whether they went into a
-        // group's image. Drawn again with as many, they are patched there rather than the draw order made again.
+        // group's image; and the layer it was walked at, which its primitives' layers count from. Drawn again with as many,
+        // they are patched there rather than the draw order made again.
         [NonSerialized] internal int EmittedBuild = -1;
+        [NonSerialized] internal int EmittedLayer;
         [NonSerialized] internal int EmittedAt;
         [NonSerialized] internal int EmittedCount;
         [NonSerialized] internal int EmittedOverlayAt;

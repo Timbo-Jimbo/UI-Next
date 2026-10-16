@@ -49,6 +49,7 @@ namespace TimboJimbo.UINext
         public static readonly ProfilerMarker Patch = new(Category, "UINext.Compositor.Patch");
         public static readonly ProfilerMarker Order = new(Category, "UINext.Compositor.Order");
         public static readonly ProfilerMarker Batch = new(Category, "UINext.Compositor.Batch");
+        public static readonly ProfilerMarker Match = new(Category, "UINext.Compositor.Match");
         public static readonly ProfilerMarker Upload = new(Category, "UINext.Compositor.Upload");
         public static readonly ProfilerMarker Render = new(Category, "UINext.Compositor.Render");
         public static readonly ProfilerMarker Input = new(Category, "UINext.Input");

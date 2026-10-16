@@ -41,6 +41,12 @@ namespace TimboJimbo.UINext
             // Or one end of a matched flight, in place of a node: its picture (0) or its destination (1).
             public Flight Flight;
             public int End;
+            // Or a matched subtree's image, drawn in its node's own space: Region is in its node's points, and FromRoot
+            // takes its root's points into them.
+            public bool InNodeSpace;
+            public Affine2 FromRoot;
+            // A matched set's image: its node's primitives the image holds, alone.
+            public bool MatchImage;
             public int FirstBatch;
             public int BatchCount;
         }
@@ -176,6 +182,15 @@ namespace TimboJimbo.UINext
                 Object.DestroyImmediate(target);
             }
             s_groupTargets.Clear();
+            foreach (var target in s_matchTargets)
+            {
+                if (target == null) continue;
+                target.Release();
+                Object.DestroyImmediate(target);
+            }
+            s_matchTargets.Clear();
+            ClearShares();
+            s_treeShares.Clear();
             Groups.Clear();
             Batches.Clear();
             s_runs.Clear();
@@ -225,6 +240,9 @@ namespace TimboJimbo.UINext
             if (UIDebug.FocusPath && UIFocus.Focused != s_debugFocused)
                 s_orderDirty = true;
             if (!s_orderDirty && !s_slotsDirty && s_redrawn.Count == 0) return;
+            // What matches changes as anything is drawn again or moves, and matches are found as the draw order is made.
+            if (UISettings.Matching)
+                s_orderDirty = true;
             if (MatchedGeometry.Flights.Count > 0)
                 MatchedGeometry.Update();
             var trees = UITree.Trees;
@@ -354,11 +372,27 @@ namespace TimboJimbo.UINext
             s_clipsTo = Mathf.Max(s_clipsTo, to);
         }
 
-        // Makes the draw order again: every tree walked into primitives in drawing order, batched, its groups after it.
+        // Makes the draw order again. With subtree matching on, walked twice: once as it is, which tells the layer each
+        // node's primitives are drawn in; then, the sets found from those, again drawing each copy partly from its set's
+        // image.
         private static void Rebuild(IReadOnlyList<UITree> trees)
         {
             using var order = UIProfiling.Order.Auto();
             UIProfiling.OrderRebuilds.Value++;
+            ClearShares();
+            if (UISettings.Matching)
+            {
+                WalkTrees(trees);
+                using var match = UIProfiling.Match.Auto();
+                FindShares(trees);
+            }
+            WalkTrees(trees);
+            s_currentShares = null;
+        }
+
+        // Every tree walked into primitives in drawing order, batched, its groups after it.
+        private static void WalkTrees(IReadOnlyList<UITree> trees)
+        {
             s_builds++;
             s_instanceCount = 0;
             Batches.Clear();
@@ -366,10 +400,12 @@ namespace TimboJimbo.UINext
             Groups.Clear();
             GroupBatches.Clear();
             s_debugFocused = UIFocus.Focused;
+            s_matchQuads = 0;
             for (int t = 0; t < trees.Count; t++)
             {
                 var tree = trees[t];
                 if (tree.Nodes.Count == 0) continue;
+                s_treeShares.TryGetValue(tree, out s_currentShares);
                 int start = s_instanceCount;
                 SubtreeBounds(tree);
                 BeginRange();
@@ -402,6 +438,7 @@ namespace TimboJimbo.UINext
                 LayerCount = s_layerTop + 1;
                 EndRange(Batches, tree, start);
                 WalkGroups(tree);
+                AddMatchGroups(tree);
                 // Over all of it, once its groups (inner ones included) are known: the debug views' outlines.
                 int debug = s_instanceCount;
                 BeginRange();
@@ -554,15 +591,34 @@ namespace TimboJimbo.UINext
             });
         }
 
-        // Over a tree's UI: each layer's bounds, and the focus path, as the debug views ask.
+        // Over a tree's UI: each copy drawn partly from its set's image tinted (the copy drawn to its set's image outlined
+        // thicker), each layer's bounds, and the focus path, as the debug views ask.
         private static void EmitDebugOutlines(UITree tree)
         {
             int slotBase = s_slotBase[tree];
+            var matches = UIDebug.SubtreeMatches && s_currentShares != null ? s_currentShares.Matches : null;
+            for (int m = 0; matches != null && m < matches.Count; m++)
+            {
+                var match = matches[m];
+                var colour = SubtreeMatch.ColourOf(match.Hash);
+                uint slot = (uint)(slotBase + match.Node);
+                EmitDebug(new PrimitiveInstance
+                {
+                    Radii = Vector4.one * 4f,
+                    Color = new Color(colour.r, colour.g, colour.b, 0.3f),
+                    Slot = slot,
+                    Type = (uint)PrimitiveType.Shape,
+                    Flags = (uint)(PrimitiveFlags.RelativeToNode | PrimitiveFlags.Debug),
+                });
+                int set = s_drawMatches ? s_currentShares.SetOf[match.Node] : -1;
+                bool representative = set >= 0 && s_shared[set].Representative == match.Node;
+                EmitOutline(Vector4.zero, colour, representative ? 5f : 2f, slot, relative: true);
+            }
             if (UIDebug.LayerBounds)
             {
                 foreach (var group in Groups)
                 {
-                    if (group.Tree != tree) continue;
+                    if (group.Tree != tree || group.InNodeSpace) continue;
                     var colour = group.Flight != null ? DebugFlight : group.Mask != null ? DebugMasked
                         : group.Blur > 0.01f ? DebugBlurred : DebugFading;
                     var region = group.Region;
@@ -705,7 +761,7 @@ namespace TimboJimbo.UINext
         }
 
         // Grows the bounds by one primitive of a node `size` big at `world`, as the shader draws it.
-        private static void Include(in PrimitiveInstance instance, Affine2 world, Vector2 size, ref Vector2 min, ref Vector2 max)
+        internal static void Include(in PrimitiveInstance instance, Affine2 world, Vector2 size, ref Vector2 min, ref Vector2 max)
         {
             var rect = instance.Rect;
             if ((instance.Flags & (uint)PrimitiveFlags.RelativeToNode) != 0)
@@ -735,11 +791,11 @@ namespace TimboJimbo.UINext
                     tree.DrawOrder.Add(i);
         }
 
-        // Walks each group found in the tree into a range of its own and batches it; groups inside groups are found as
-        // their group is walked, and walked after it.
-        private static void WalkGroups(UITree tree)
+        // Walks each group found in the tree, from the first-th, into a range of its own and batches it; groups inside
+        // groups are found as their group is walked, and walked after it.
+        private static void WalkGroups(UITree tree, int first = 0)
         {
-            for (int g = 0; g < Groups.Count; g++)
+            for (int g = first; g < Groups.Count; g++)
             {
                 var group = Groups[g];
                 if (group.Tree != tree) continue;
@@ -751,7 +807,10 @@ namespace TimboJimbo.UINext
                 }
                 else
                 {
+                    // A matched set's image: what it holds of its representative, alone.
                     s_groupRoot = group.Node;
+                    if (group.MatchImage)
+                        s_drawing = Drawing.Image;
                     try
                     {
                         Walk(tree, group.Node, s_slotBase[tree], true, group.Node, 0);
@@ -759,6 +818,7 @@ namespace TimboJimbo.UINext
                     finally
                     {
                         s_groupRoot = null;
+                        s_drawing = Drawing.All;
                     }
                 }
                 group.FirstBatch = GroupBatches.Count;
@@ -772,14 +832,23 @@ namespace TimboJimbo.UINext
         // it is big enough and not more than a step too big each way.
         private static RenderTexture GroupTarget(int index, int width, int height)
         {
-            width = (width + GroupStep - 1) / GroupStep * GroupStep;
-            height = (height + GroupStep - 1) / GroupStep * GroupStep;
             while (s_groupTargets.Count <= index)
                 s_groupTargets.Add(null);
             var target = s_groupTargets[index];
+            ImageTarget(ref target, "UINext Group " + index, width, height);
+            s_groupTargets[index] = target;
+            return target;
+        }
+
+        // Makes `target` an image at least width by height pixels, in steps: kept while it is big enough and not more than
+        // a step too big each way, made again otherwise.
+        private static void ImageTarget(ref RenderTexture target, string name, int width, int height)
+        {
+            width = (width + GroupStep - 1) / GroupStep * GroupStep;
+            height = (height + GroupStep - 1) / GroupStep * GroupStep;
             if (target != null && target.width >= width && target.height >= height
                 && target.width <= width + GroupStep && target.height <= height + GroupStep)
-                return target;
+                return;
             if (target != null)
             {
                 target.Release();
@@ -787,12 +856,10 @@ namespace TimboJimbo.UINext
             }
             target = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32)
             {
-                name = "UINext Group " + index,
+                name = name,
                 hideFlags = HideFlags.HideAndDontSave,
             };
             target.Create();
-            s_groupTargets[index] = target;
-            return target;
         }
 
         // A stable insertion sort of one node's children by ZIndex.
@@ -1222,7 +1289,7 @@ namespace TimboJimbo.UINext
         {
             using var render = UIProfiling.Render.Auto();
             bool occlusion = !sceneView;
-            if (occlusion && UIDebug.Occluders)
+            if (occlusion && UISettings.Occluding)
                 DrawOccluders(cmd, camera, flipped);
             for (int r = 0; r < UIDebug.Repeat; r++)
                 Draw(cmd, Batches, 0, Batches.Count, camera, sceneView, flipped, occlusion: occlusion);
@@ -1253,6 +1320,18 @@ namespace TimboJimbo.UINext
             cmd.ClearRenderTarget(false, true, Color.clear);
             var region = group.Region;
             var matrix = GL.GetGPUProjectionMatrix(Matrix4x4.Ortho(region.xMin, region.xMax, region.yMax, region.yMin, -1f, 1f), flipped);
+            if (group.InNodeSpace)
+            {
+                var from = group.FromRoot;
+                var toNode = Matrix4x4.identity;
+                toNode.m00 = from.A;
+                toNode.m01 = from.B;
+                toNode.m03 = from.Tx;
+                toNode.m10 = from.C;
+                toNode.m11 = from.D;
+                toNode.m13 = from.Ty;
+                matrix *= toNode;
+            }
             Draw(cmd, GroupBatches, group.FirstBatch, group.BatchCount, null, false, flipped, matrix);
             if (group.Mask != null)
                 DrawMask(cmd, group, matrix);

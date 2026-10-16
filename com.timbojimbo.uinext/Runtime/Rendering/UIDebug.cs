@@ -47,6 +47,22 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
+        /// Matched subtrees (<see cref="SubtreeMatch"/>), while the project's settings match subtrees
+        /// (<see cref="UISettings.MatchSubtrees"/>): a tinted box over each copy drawn partly from its set's
+        /// image, the same colour for the same set, the copy drawn to the image outlined thicker.
+        /// </summary>
+        public static bool SubtreeMatches
+        {
+            get => s_subtreeMatches;
+            set => Set(ref s_subtreeMatches, value);
+        }
+
+        private static bool s_subtreeMatches;
+
+        /// <summary>The copies drawn partly from a shared image as the UI was last drawn, while <see cref="UISettings.MatchSubtrees"/> is on: how many, in how many sets, and how many primitives their images hold (a copy's, summed).</summary>
+        public static (int Subtrees, int Sets, int Primitives) Matched => Compositor.Matched;
+
+        /// <summary>
         /// How many times over the UI is drawn each frame (1 as it is): for measuring what it costs the GPU. A phone's GPU
         /// slows down when it has little to do, which hides what its work costs; drawn several times over, the UI keeps it
         /// busy, at its full clock, and the time a frame takes it, less what it takes with nothing drawn, over the number of
@@ -59,13 +75,6 @@ namespace TimboJimbo.UINext
         }
 
         private static int s_repeat = 1;
-
-        /// <summary>
-        /// Whether the occluders are drawn (they are unless turned off): the depth of every large opaque shape's inside,
-        /// laid down first, so what such a shape covers is not shaded. Off, everything is shaded: for measuring what they
-        /// are worth on a GPU.
-        /// </summary>
-        public static bool Occluders { get; set; } = true;
 
         /// <summary>How many draw calls the UI was last drawn with: the main pass's and the groups' images'.</summary>
         public static int DrawCalls => Compositor.DrawCalls;

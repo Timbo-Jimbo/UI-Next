@@ -61,11 +61,25 @@ namespace TimboJimbo.UINext
                     },
                     new DebugUI.BoolField
                     {
-                        displayName = "Occluders",
-                        tooltip = "The depth of every large opaque shape's inside, laid down first so what it covers is not shaded. Off, everything is shaded: for measuring what they are worth.",
-                        getter = () => UIDebug.Occluders,
-                        setter = on => UIDebug.Occluders = on,
+                        displayName = "Matched subtrees",
+                        tooltip = "A tinted box over each copy drawn partly from its set's image, the same colour for the same set; the copy drawn to the image outlined thicker.",
+                        getter = () => UIDebug.SubtreeMatches,
+                        setter = on => UIDebug.SubtreeMatches = on,
+                        isHiddenCallback = () => !UISettings.Matching,
                     },
+                    new DebugUI.MessageBox
+                    {
+                        displayName = "Matched subtrees: subtree matching is off (UI Next's project settings, or -uinext-nomatch).",
+                        isHiddenCallback = () => UISettings.Matching,
+                    },
+#if UNITY_EDITOR
+                    new DebugUI.Button
+                    {
+                        displayName = "Open UI Next settings",
+                        action = () => UnityEditor.SettingsService.OpenProjectSettings(UISettings.SettingsPath),
+                        isHiddenCallback = () => UISettings.Matching,
+                    },
+#endif
                 },
             });
             panel.children.Add(new DebugUI.Foldout
@@ -104,6 +118,14 @@ namespace TimboJimbo.UINext
                     },
                     new DebugUI.Value
                     {
+                        displayName = "Matched subtrees",
+                        tooltip = "Copies drawn partly from a shared image, in how many sets, the primitives their images hold, and how many copies are drawn from an image.",
+                        getter = Matched,
+                        refreshRate = Refresh,
+                        isHiddenCallback = () => !UISettings.Matching,
+                    },
+                    new DebugUI.Value
+                    {
                         displayName = "Nodes",
                         tooltip = "Nodes in every root.",
                         getter = Nodes,
@@ -134,6 +156,13 @@ namespace TimboJimbo.UINext
                     bytes += (long)group.Target.width * group.Target.height * 4;
             int count = Compositor.Groups.Count;
             return count == 0 ? "0" : count + " · " + (bytes >= 1 << 20 ? (bytes / (float)(1 << 20)).ToString("0.0") + " MB" : bytes / 1024 + " KB");
+        }
+
+        private static object Matched()
+        {
+            var (subtrees, sets, primitives) = Compositor.Matched;
+            return subtrees + " in " + sets + (sets == 1 ? " set · " : " sets · ") + primitives + " primitives · "
+                   + Compositor.MatchQuads + " from images";
         }
 
         private static object Nodes()
