@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- The Circle demo runs at the highest rate its screen offers, not the one it runs at as it starts: Android holds a game at its default rate (60 Hz on Pixels) until something asks for more.
+
 ### Fixed
 
 - On Vulkan with Player Settings' Apply display rotation during rendering, a device held away from its panel's own orientation drew the UI turned and cut. The swapchain stays in the panel's orientation there and Unity turns its own matrices to it; the UI draws with a matrix of its own, so its vertex shaders now turn their positions to the target as the render pipelines do (0 in a texture, so groups' images are drawn as they were). And drawing to the screen, the occluders' depth buffer is the screen's own, cleared as the pass starts: one made at the size the render graph reports, the display's way round, cut the pass (and URP's final blit merged into it) to the square both cover.
