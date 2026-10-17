@@ -47,20 +47,20 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
-        /// Matched subtrees (<see cref="SubtreeMatch"/>), while the project's settings match subtrees
-        /// (<see cref="UISettings.MatchSubtrees"/>): a tinted box over each copy drawn partly from its set's
-        /// image, the same colour for the same set, the copy drawn to the image outlined thicker.
+        /// Shared copies, while the project shares drawing (<see cref="UISettings.SharedDrawing"/>): a tinted box over each
+        /// copy drawn partly from its variant's image (<see cref="UINode.SharedDrawing"/>), the same colour for the same
+        /// variant, the copy drawn to the image outlined thicker.
         /// </summary>
-        public static bool SubtreeMatches
+        public static bool SharedCopies
         {
-            get => s_subtreeMatches;
-            set => Set(ref s_subtreeMatches, value);
+            get => s_sharedCopies;
+            set => Set(ref s_sharedCopies, value);
         }
 
-        private static bool s_subtreeMatches;
+        private static bool s_sharedCopies;
 
-        /// <summary>The copies drawn partly from a shared image as the UI was last drawn, while <see cref="UISettings.MatchSubtrees"/> is on: how many, in how many sets, and how many primitives their images hold (a copy's, summed).</summary>
-        public static (int Subtrees, int Sets, int Primitives) Matched => Compositor.Matched;
+        /// <summary>The copies drawn partly from a shared image as the UI was last drawn: how many, in how many variants, and how many primitives their images hold (a copy's, summed).</summary>
+        public static (int Copies, int Variants, int Primitives) Shared => Compositor.Shared;
 
         /// <summary>
         /// How many times over the UI is drawn each frame (1 as it is): for measuring what it costs the GPU. A phone's GPU

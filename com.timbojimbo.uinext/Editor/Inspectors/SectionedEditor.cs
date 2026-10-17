@@ -247,7 +247,7 @@ namespace TimboJimboEditor.UINext
             new(null, true, "_width", "_height", "_aspectRatio", "_floating", "_offset", "_scale", "_rotation"),
             new("Children", true, "_direction", "_alignX", "_alignY", "_gap", "_padding", "_wrap"),
             new("Look", false, "_display", "_opacity", "_zIndex", "_topLayer", "_clips", "_clipRadii", "_compositeGroup", "_blur", "_mask",
-                "_saturation", "_brightness"),
+                "_saturation", "_brightness", "_sharedDrawing"),
             new("Safe area", false, "_ignoresSafeArea", "_avoidsKeyboard"),
             new("Input and focus", false, "_hitTestable", "_focusable", "_prefersFocus", "_focusRing", "_focusScope", "_focusEntry"),
             new("Matching", false, "_matchName", "_matchAnchor", "_matchId"),

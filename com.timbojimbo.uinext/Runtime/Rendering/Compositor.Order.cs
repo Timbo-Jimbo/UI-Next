@@ -348,11 +348,11 @@ namespace TimboJimbo.UINext
             }
 
             // Drawn partly the same as other copies: a quad in its first layer shows the image one of them is drawn to, and
-            // only its primitives the image does not hold are drawn here (Compositor.Matches).
+            // only its primitives the image does not hold are drawn here (Compositor.Shared).
             var drawing = s_drawing;
             if (IsCopy(node))
             {
-                EmitMatchQuad(tree, node, slotBase, layer);
+                EmitSharedQuad(tree, node, slotBase, layer);
                 s_drawing = Drawing.Live;
             }
 

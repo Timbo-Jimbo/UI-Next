@@ -74,6 +74,9 @@ namespace TimboJimbo.UINext
         [Tooltip("Whether it takes the pointer. Off, presses go to what is under it.")]
         [SerializeField] private UIValue<bool> _hitTestable = true;
 
+        [Tooltip("The name of the copies it is one of (a list's item cards): what they draw the same is drawn once, to an image they all show, with what differs drawn over it, while the project shares drawing. Empty: it is not shared.")]
+        [SerializeField] private UIValue<string> _sharedDrawing = "";
+
         // ── Matched ──────────────────────────────────────────────────────────────
 
         [Tooltip("The name it is matched by. Shown in a change that hides a node of the same name and id, it flies from where that one was drawn to its own place; shown while one stays, it flies out of it.")]
@@ -211,6 +214,16 @@ namespace TimboJimbo.UINext
 
         /// <summary>Whether it takes the pointer.</summary>
         public UIValue<bool> HitTestable => _hitTestable;
+
+        /// <summary>
+        /// The name of the copies of a thing it is one of, a list's item cards: while the project shares drawing
+        /// (<see cref="UISettings.SharedDrawing"/>), what its subtree draws the same as other copies of that name, up to
+        /// where they differ, is drawn once to an image every copy shows, and the rest (an icon, a label, and anything lying
+        /// on them) is drawn live over it. Copies of one name that draw differently from the bottom up (a yellow card and a
+        /// purple one) share an image each. A named node inside another is a copy of its own name, not part of the other's.
+        /// Empty: it is not shared.
+        /// </summary>
+        public UIValue<string> SharedDrawing => _sharedDrawing;
 
         /// <summary>
         /// The name it is matched by, as SwiftUI's matchedGeometryEffect: shown inside a change
@@ -773,7 +786,7 @@ namespace TimboJimbo.UINext
             action(_alignX); action(_alignY); action(_aspectRatio); action(_floating); action(_display); action(_ignoresSafeArea);
             action(_opacity); action(_offset); action(_scale); action(_rotation); action(_zIndex); action(_compositeGroup); action(_blur);
             action(_saturation); action(_brightness); action(_mask); action(_avoidsKeyboard);
-            action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable); action(_matchName); action(_matchId); action(_matchAnchor);
+            action(_clips); action(_clipRadii); action(_topLayer); action(_hitTestable); action(_sharedDrawing); action(_matchName); action(_matchId); action(_matchAnchor);
             action(_focusScope); action(_focusEntry); action(_prefersFocus); action(_focusable); action(_focusRing);
         }
     }

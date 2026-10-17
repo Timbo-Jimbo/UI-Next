@@ -3,14 +3,14 @@ using UnityEngine;
 
 namespace TimboJimbo.UINext
 {
-    // Shared primitives (SubtreeMatch) drawn once. With subtree matching on, the draw order is made twice: walked once as
-    // it is, which tells each node's primitives' layers; then the sets found from those, and walked again. One copy of each
-    // set, its representative, has the primitives its set's image holds drawn to that image, in its own space; every copy
-    // (the representative too) is drawn as a quad in its first layer showing the image, and only its other primitives are
-    // drawn live, each in its own layer, over it.
+    // Shared drawing (UINode.SharedDrawing, SharedCopies). With it on, the draw order is made twice: walked once as it is,
+    // which tells each node's primitives' layers; then the copies of each name sorted into variants and what each
+    // variant's copies draw the same found, and walked again. One copy of each variant, its representative, has what its
+    // variant's image holds drawn to that image, in its own space; every copy (the representative too) is drawn as a quad
+    // in its first layer showing the image, and only its other primitives are drawn live, each in its own layer, over it.
     internal static partial class Compositor
     {
-        /// <summary>One set of copies drawn partly from one image.</summary>
+        /// <summary>One variant's copies, drawn partly from one image.</summary>
         private struct SharedImage
         {
             public UITree Tree;
@@ -26,20 +26,22 @@ namespace TimboJimbo.UINext
         }
 
         /// <summary>
-        /// A tree's copies as last found, the primitives their images hold, each node's set (-1 for none), and for each node
-        /// in a copy whether its set's image holds each of its primitives (from ImageAt, -1 for a node in no copy).
+        /// A tree's copies as last found, the primitives their images hold, each node's variant (-1 for none) and nearest
+        /// named node (its owner), and for each node a copy owns whether its variant's image holds each of its primitives
+        /// (from ImageAt, -1 for a node in no copy).
         /// </summary>
         private sealed class TreeShares
         {
-            public readonly List<SubtreeMatch.Match> Matches = new();
-            public readonly List<SubtreeMatch.ImagePrimitive> Image = new();
+            public readonly List<SharedCopies.Copy> Copies = new();
+            public readonly List<SharedCopies.ImagePrimitive> Image = new();
             public readonly List<bool> InImage = new();
-            public int[] SetOf = new int[32];
+            public int[] VariantOf = new int[32];
+            public int[] Owner = new int[32];
             public int[] ImageAt = new int[32];
         }
 
-        // What a walk draws of a node's primitives: all of them, a copy's live ones (those its set's image does not hold),
-        // or an image's (those it holds).
+        // What a walk draws of a node's primitives: all of them, a copy's live ones (those its variant's image does not
+        // hold), or an image's (those it holds).
         private enum Drawing : byte
         {
             All,
@@ -49,90 +51,95 @@ namespace TimboJimbo.UINext
 
         private static readonly Dictionary<UITree, TreeShares> s_treeShares = new();
         private static readonly List<SharedImage> s_shared = new();
-        private static readonly List<RenderTexture> s_matchTargets = new();
+        private static readonly List<RenderTexture> s_sharedTargets = new();
         // The tree being walked's shares (null: none), whether copies are drawn from images in this walk, how many quads
         // showing an image it emitted, and what of the node being walked it draws.
         private static TreeShares s_currentShares;
-        private static bool s_drawMatches;
-        private static int s_matchQuads;
+        private static bool s_drawShared;
+        private static int s_sharedQuads;
         private static Drawing s_drawing;
 
-        /// <summary>How many copies were drawn from a set's image in the last build.</summary>
-        internal static int MatchQuads => s_matchQuads;
+        /// <summary>How many copies were drawn from a variant's image in the last build.</summary>
+        internal static int SharedQuads => s_sharedQuads;
 
-        // What the last build found: copies, sets, and the primitives their images hold (a copy's, summed).
-        internal static (int Subtrees, int Sets, int Primitives) Matched;
+        // What the last build found: copies, variants, and the primitives their images hold (a copy's, summed).
+        internal static (int Copies, int Variants, int Primitives) Shared;
 
-        // Forgets the last build's sets.
+        // Forgets the last build's variants.
         private static void ClearShares()
         {
             s_shared.Clear();
             foreach (var shares in s_treeShares.Values)
             {
-                shares.Matches.Clear();
+                shares.Copies.Clear();
                 shares.Image.Clear();
                 shares.InImage.Clear();
             }
             s_currentShares = null;
-            s_drawMatches = false;
-            Matched = default;
+            s_drawShared = false;
+            Shared = default;
         }
 
-        // After the walk as it is: each tree's sets, from the layers its primitives were drawn in; which primitives of each
-        // copy its set's image holds; and for each set the first copy that can be drawn to the image for the rest. A set
-        // with no copy to draw from is drawn as it is.
+        // After the walk as it is: each tree's variants, from the layers its primitives were drawn in; which primitives of
+        // each copy its variant's image holds; and for each variant the first copy that can be drawn to the image for the
+        // rest. A variant with no copy to draw from is drawn as it is.
         private static void FindShares(IReadOnlyList<UITree> trees)
         {
+            var settings = UISettings.Instance;
+            int minCopies = settings != null ? settings.SharedMinCopies : UISettings.DefaultSharedMinCopies;
             for (int t = 0; t < trees.Count; t++)
             {
                 var tree = trees[t];
                 if (tree.Nodes.Count == 0) continue;
                 if (!s_treeShares.TryGetValue(tree, out var shares))
                     s_treeShares.Add(tree, shares = new TreeShares());
-                SubtreeMatch.Find(tree, s_builds, s_layers, shares.Matches, shares.Image);
                 int count = tree.Nodes.Count;
-                if (shares.SetOf.Length < count)
+                if (shares.VariantOf.Length < count)
                 {
-                    shares.SetOf = new int[Mathf.NextPowerOfTwo(count)];
-                    shares.ImageAt = new int[shares.SetOf.Length];
+                    int size = Mathf.NextPowerOfTwo(count);
+                    shares.VariantOf = new int[size];
+                    shares.Owner = new int[size];
+                    shares.ImageAt = new int[size];
                 }
-                System.Array.Fill(shares.SetOf, -1, 0, count);
+                SharedCopies.Find(tree, s_builds, s_layers, minCopies, shares.Copies, shares.Image, shares.Owner);
+                System.Array.Fill(shares.VariantOf, -1, 0, count);
                 System.Array.Fill(shares.ImageAt, -1, 0, count);
                 int first = s_shared.Count;
-                foreach (var match in shares.Matches)
+                foreach (var copy in shares.Copies)
                 {
-                    // Every node of the copy gets a flag a primitive, the image's set.
-                    for (int j = match.Node; j < tree.SubtreeEnd[match.Node]; j++)
+                    // A flag a primitive for every node the copy owns, set where the image holds it.
+                    for (int j = copy.Node; j < tree.SubtreeEnd[copy.Node]; j++)
                     {
+                        if (shares.Owner[j] != copy.Node) continue;
                         var node = tree.Nodes[j];
                         shares.ImageAt[j] = shares.InImage.Count;
                         for (int k = node.Instances.Count + node.OverlayInstances.Count; k > 0; k--)
                             shares.InImage.Add(false);
                     }
-                    for (int p = match.ImageFirst; p < match.ImageFirst + match.ImageCount; p++)
+                    for (int p = copy.ImageFirst; p < copy.ImageFirst + copy.ImageCount; p++)
                     {
                         var primitive = shares.Image[p];
                         shares.InImage[shares.ImageAt[primitive.Node] + primitive.Index] = true;
                     }
 
-                    int set = first + match.Set;
-                    while (s_shared.Count <= set)
+                    int variant = first + copy.Variant;
+                    while (s_shared.Count <= variant)
                         s_shared.Add(new SharedImage { Tree = tree, Representative = -1 });
-                    var shared = s_shared[set];
+                    var shared = s_shared[variant];
                     shared.Copies++;
-                    if (shared.Representative < 0 && CanRepresent(tree, match, shares.Image, out shared.Bounds, out shared.Scale))
-                        shared.Representative = match.Node;
-                    s_shared[set] = shared;
-                    shares.SetOf[match.Node] = set;
-                    Matched.Subtrees++;
-                    Matched.Primitives += match.Primitives;
+                    if (shared.Representative < 0 && CanRepresent(tree, copy, shares.Image, out shared.Bounds, out shared.Scale))
+                        shared.Representative = copy.Node;
+                    s_shared[variant] = shared;
+                    shares.VariantOf[copy.Node] = variant;
+                    Shared.Copies++;
+                    Shared.Primitives += copy.Primitives;
                 }
-                Matched.Sets += s_shared.Count - first;
-                foreach (var match in shares.Matches)
-                    if (s_shared[first + match.Set].Representative < 0)
-                        shares.SetOf[match.Node] = -1;
+                Shared.Variants += s_shared.Count - first;
+                foreach (var copy in shares.Copies)
+                    if (s_shared[first + copy.Variant].Representative < 0)
+                        shares.VariantOf[copy.Node] = -1;
             }
-            s_drawMatches = s_shared.Count > 0;
+            s_drawShared = s_shared.Count > 0;
         }
 
         // Whether a copy can have its image drawn from it for the others: drawn at its full opacity (what is above it fades
@@ -140,10 +147,10 @@ namespace TimboJimbo.UINext
         // what the image covers in the copy's own space, in points (smoothed edges and shadows included), and pixels to a
         // point at the scale it is drawn on screen. Where it is drawn upright, the image's pixels line up with the screen's
         // there.
-        private static bool CanRepresent(UITree tree, in SubtreeMatch.Match match, List<SubtreeMatch.ImagePrimitive> image, out Rect bounds, out float scale)
+        private static bool CanRepresent(UITree tree, in SharedCopies.Copy copy, List<SharedCopies.ImagePrimitive> image, out Rect bounds, out float scale)
         {
             bounds = default;
-            int i = match.Node;
+            int i = copy.Node;
             var slot = tree.Slots[i];
             var world = tree.World[i];
             float pixels = tree.Root.PixelsPerPoint;
@@ -153,7 +160,7 @@ namespace TimboJimbo.UINext
             var toLocal = world.Inverse;
             var min = new Vector2(float.MaxValue, float.MaxValue);
             var max = new Vector2(float.MinValue, float.MinValue);
-            for (int p = match.ImageFirst; p < match.ImageFirst + match.ImageCount; p++)
+            for (int p = copy.ImageFirst; p < copy.ImageFirst + copy.ImageCount; p++)
             {
                 var primitive = image[p];
                 var node = tree.Nodes[primitive.Node];
@@ -196,40 +203,44 @@ namespace TimboJimbo.UINext
             return x >= round && y >= round && x <= shape.Size.x - round && y <= shape.Size.y - round;
         }
 
-        // Whether `node` is a copy drawn partly from its set's image, while it is walked (not while its own image is).
+        // Whether `node` is a copy drawn partly from its variant's image, while the main walk or a group's reaches it (an
+        // image's walk draws its own copy's primitives alone).
         private static bool IsCopy(UINode node) =>
-            s_drawMatches && node != s_groupRoot && s_currentShares != null && s_currentShares.SetOf[node.Index] >= 0;
+            s_drawShared && node != s_groupRoot && s_drawing != Drawing.Image && s_currentShares != null
+            && s_currentShares.VariantOf[node.Index] >= 0;
 
-        // Whether the walk draws a node's index-th primitive (those under its children, then those over them).
+        // Whether the walk draws a node's index-th primitive (those under its children, then those over them): a copy's
+        // live ones, or an image's own.
         private static bool Draws(UINode node, int index)
         {
             if (s_drawing == Drawing.All) return true;
             int at = s_currentShares.ImageAt[node.Index];
             bool inImage = at >= 0 && s_currentShares.InImage[at + index];
-            return inImage == (s_drawing == Drawing.Image);
+            if (s_drawing == Drawing.Live) return !inImage;
+            return inImage && s_currentShares.Owner[node.Index] == s_groupRoot.Index;
         }
 
-        // A copy's quad: on its own node in its first layer, showing its set's image (made as the first copy is emitted)
-        // at full opacity, its node's fading it.
-        private static void EmitMatchQuad(UITree tree, UINode node, int slotBase, int layer)
+        // A copy's quad: on its own node in its first layer, showing its variant's image (made as the first copy is
+        // emitted) at full opacity, its node's fading it.
+        private static void EmitSharedQuad(UITree tree, UINode node, int slotBase, int layer)
         {
-            int set = s_currentShares.SetOf[node.Index];
-            var shared = s_shared[set];
+            int variant = s_currentShares.VariantOf[node.Index];
+            var shared = s_shared[variant];
             if (shared.Target == null)
             {
                 var bounds = shared.Bounds;
-                while (s_matchTargets.Count <= set)
-                    s_matchTargets.Add(null);
-                var target = s_matchTargets[set];
-                ImageTarget(ref target, "UINext Match " + set, Mathf.Max(1, Mathf.CeilToInt(bounds.width * shared.Scale)),
+                while (s_sharedTargets.Count <= variant)
+                    s_sharedTargets.Add(null);
+                var target = s_sharedTargets[variant];
+                ImageTarget(ref target, "UINext Shared " + variant, Mathf.Max(1, Mathf.CeilToInt(bounds.width * shared.Scale)),
                     Mathf.Max(1, Mathf.CeilToInt(bounds.height * shared.Scale)));
-                s_matchTargets[set] = target;
+                s_sharedTargets[variant] = target;
                 shared.Target = target;
                 shared.Region = new Rect(bounds.x, bounds.y, target.width / shared.Scale, target.height / shared.Scale);
-                s_shared[set] = shared;
+                s_shared[variant] = shared;
             }
             var region = shared.Region;
-            s_matchQuads++;
+            s_sharedQuads++;
             Put(new PrimitiveInstance
             {
                 Rect = new Vector4(region.x, region.y, region.width, region.height),
@@ -240,12 +251,12 @@ namespace TimboJimbo.UINext
             }, (byte)PrimitiveKind.Group, layer, shared.Target, null);
         }
 
-        // After the tree's groups: a group for each of its sets a copy was emitted showing, drawing what its image holds of
-        // its representative, in its own space. Last in the groups, so drawn first: copies inside other groups' images
-        // show them.
-        private static void AddMatchGroups(UITree tree)
+        // After the tree's groups: a group for each of its variants a copy was emitted showing, drawing what its image holds
+        // of its representative, in its own space. Last in the groups, so drawn first: copies inside other groups' images
+        // show them, and an image holds no other.
+        private static void AddSharedGroups(UITree tree)
         {
-            if (!s_drawMatches) return;
+            if (!s_drawShared) return;
             int first = Groups.Count;
             foreach (var shared in s_shared)
             {
@@ -258,7 +269,7 @@ namespace TimboJimbo.UINext
                     Region = shared.Region,
                     InNodeSpace = true,
                     FromRoot = tree.World[shared.Representative].Inverse,
-                    MatchImage = true,
+                    IsSharedImage = true,
                 });
             }
             WalkGroups(tree, first);

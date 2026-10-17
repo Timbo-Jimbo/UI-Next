@@ -175,7 +175,7 @@ namespace TimboJimbo.UINext.Demos.Compare
                     case "-ballast" when next != null: float.TryParse(next, NumberStyles.Float, CultureInfo.InvariantCulture, out _ballast); break;
                     case "-stay": _stay = true; break;
                     // For measuring the GPU: drawn that many times over. (UI Next itself takes -uinext-noocc and
-                    // -uinext-nomatch, for measuring without the occluders or subtree matching.)
+                    // -uinext-noshare, for measuring without the occluders or shared drawing.)
                     case "-repeat" when next != null && int.TryParse(next, out int repeat): UIDebug.Repeat = repeat; break;
                 }
             }

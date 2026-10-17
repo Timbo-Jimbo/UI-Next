@@ -14,14 +14,14 @@ namespace TimboJimboEditor.UINext
         private const string Overdraw = "TimboJimbo.UINext.Debug.Overdraw";
         private const string LayerBounds = "TimboJimbo.UINext.Debug.LayerBounds";
         private const string FocusPath = "TimboJimbo.UINext.Debug.FocusPath";
-        private const string SubtreeMatches = "TimboJimbo.UINext.Debug.SubtreeMatches";
+        private const string SharedCopies = "TimboJimbo.UINext.Debug.SharedCopies";
 
         static DebugViewsSession()
         {
             UIDebug.Overdraw = SessionState.GetBool(Overdraw, false);
             UIDebug.LayerBounds = SessionState.GetBool(LayerBounds, false);
             UIDebug.FocusPath = SessionState.GetBool(FocusPath, false);
-            UIDebug.SubtreeMatches = SessionState.GetBool(SubtreeMatches, false);
+            UIDebug.SharedCopies = SessionState.GetBool(SharedCopies, false);
             UIDebug.Changed += Keep;
         }
 
@@ -30,7 +30,7 @@ namespace TimboJimboEditor.UINext
             SessionState.SetBool(Overdraw, UIDebug.Overdraw);
             SessionState.SetBool(LayerBounds, UIDebug.LayerBounds);
             SessionState.SetBool(FocusPath, UIDebug.FocusPath);
-            SessionState.SetBool(SubtreeMatches, UIDebug.SubtreeMatches);
+            SessionState.SetBool(SharedCopies, UIDebug.SharedCopies);
             InternalEditorUtility.RepaintAllViews();
         }
     }

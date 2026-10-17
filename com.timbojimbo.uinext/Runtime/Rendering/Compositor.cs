@@ -41,12 +41,12 @@ namespace TimboJimbo.UINext
             // Or one end of a matched flight, in place of a node: its picture (0) or its destination (1).
             public Flight Flight;
             public int End;
-            // Or a matched subtree's image, drawn in its node's own space: Region is in its node's points, and FromRoot
+            // Or a shared drawing's image, drawn in its node's own space: Region is in its node's points, and FromRoot
             // takes its root's points into them.
             public bool InNodeSpace;
             public Affine2 FromRoot;
-            // A matched set's image: its node's primitives the image holds, alone.
-            public bool MatchImage;
+            // A shared drawing's image: its node's primitives the image holds, alone.
+            public bool IsSharedImage;
             public int FirstBatch;
             public int BatchCount;
         }
@@ -182,13 +182,13 @@ namespace TimboJimbo.UINext
                 Object.DestroyImmediate(target);
             }
             s_groupTargets.Clear();
-            foreach (var target in s_matchTargets)
+            foreach (var target in s_sharedTargets)
             {
                 if (target == null) continue;
                 target.Release();
                 Object.DestroyImmediate(target);
             }
-            s_matchTargets.Clear();
+            s_sharedTargets.Clear();
             ClearShares();
             s_treeShares.Clear();
             Groups.Clear();
@@ -240,8 +240,9 @@ namespace TimboJimbo.UINext
             if (UIDebug.FocusPath && UIFocus.Focused != s_debugFocused)
                 s_orderDirty = true;
             if (!s_orderDirty && !s_slotsDirty && s_redrawn.Count == 0) return;
-            // What matches changes as anything is drawn again or moves, and matches are found as the draw order is made.
-            if (UISettings.Matching)
+            // What copies draw the same changes as anything is drawn again or moves, and it is found as the draw order is
+            // made.
+            if (UISettings.Sharing)
                 s_orderDirty = true;
             if (MatchedGeometry.Flights.Count > 0)
                 MatchedGeometry.Update();
@@ -372,18 +373,18 @@ namespace TimboJimbo.UINext
             s_clipsTo = Mathf.Max(s_clipsTo, to);
         }
 
-        // Makes the draw order again. With subtree matching on, walked twice: once as it is, which tells the layer each
-        // node's primitives are drawn in; then, the sets found from those, again drawing each copy partly from its set's
-        // image.
+        // Makes the draw order again. With shared drawing on, walked twice: once as it is, which tells the layer each
+        // node's primitives are drawn in; then, the variants found from those, again drawing each copy partly from its
+        // variant's image.
         private static void Rebuild(IReadOnlyList<UITree> trees)
         {
             using var order = UIProfiling.Order.Auto();
             UIProfiling.OrderRebuilds.Value++;
             ClearShares();
-            if (UISettings.Matching)
+            if (UISettings.Sharing)
             {
                 WalkTrees(trees);
-                using var match = UIProfiling.Match.Auto();
+                using var share = UIProfiling.Share.Auto();
                 FindShares(trees);
             }
             WalkTrees(trees);
@@ -438,7 +439,7 @@ namespace TimboJimbo.UINext
                 LayerCount = s_layerTop + 1;
                 EndRange(Batches, tree, start);
                 WalkGroups(tree);
-                AddMatchGroups(tree);
+                AddSharedGroups(tree);
                 // Over all of it, once its groups (inner ones included) are known: the debug views' outlines.
                 int debug = s_instanceCount;
                 BeginRange();
@@ -591,17 +592,17 @@ namespace TimboJimbo.UINext
             });
         }
 
-        // Over a tree's UI: each copy drawn partly from its set's image tinted (the copy drawn to its set's image outlined
+        // Over a tree's UI: each copy drawn partly from its variant's image tinted (the copy drawn to the image outlined
         // thicker), each layer's bounds, and the focus path, as the debug views ask.
         private static void EmitDebugOutlines(UITree tree)
         {
             int slotBase = s_slotBase[tree];
-            var matches = UIDebug.SubtreeMatches && s_currentShares != null ? s_currentShares.Matches : null;
-            for (int m = 0; matches != null && m < matches.Count; m++)
+            var copies = UIDebug.SharedCopies && s_currentShares != null ? s_currentShares.Copies : null;
+            for (int m = 0; copies != null && m < copies.Count; m++)
             {
-                var match = matches[m];
-                var colour = SubtreeMatch.ColourOf(match.Hash);
-                uint slot = (uint)(slotBase + match.Node);
+                var copy = copies[m];
+                var colour = SharedCopies.ColourOf(copy.Hash);
+                uint slot = (uint)(slotBase + copy.Node);
                 EmitDebug(new PrimitiveInstance
                 {
                     Radii = Vector4.one * 4f,
@@ -610,8 +611,8 @@ namespace TimboJimbo.UINext
                     Type = (uint)PrimitiveType.Shape,
                     Flags = (uint)(PrimitiveFlags.RelativeToNode | PrimitiveFlags.Debug),
                 });
-                int set = s_drawMatches ? s_currentShares.SetOf[match.Node] : -1;
-                bool representative = set >= 0 && s_shared[set].Representative == match.Node;
+                int variant = s_drawShared ? s_currentShares.VariantOf[copy.Node] : -1;
+                bool representative = variant >= 0 && s_shared[variant].Representative == copy.Node;
                 EmitOutline(Vector4.zero, colour, representative ? 5f : 2f, slot, relative: true);
             }
             if (UIDebug.LayerBounds)
@@ -807,9 +808,9 @@ namespace TimboJimbo.UINext
                 }
                 else
                 {
-                    // A matched set's image: what it holds of its representative, alone.
+                    // A shared drawing's image: what it holds of its representative, alone.
                     s_groupRoot = group.Node;
-                    if (group.MatchImage)
+                    if (group.IsSharedImage)
                         s_drawing = Drawing.Image;
                     try
                     {

@@ -61,23 +61,23 @@ namespace TimboJimbo.UINext
                     },
                     new DebugUI.BoolField
                     {
-                        displayName = "Matched subtrees",
-                        tooltip = "A tinted box over each copy drawn partly from its set's image, the same colour for the same set; the copy drawn to the image outlined thicker.",
-                        getter = () => UIDebug.SubtreeMatches,
-                        setter = on => UIDebug.SubtreeMatches = on,
-                        isHiddenCallback = () => !UISettings.Matching,
+                        displayName = "Shared copies",
+                        tooltip = "A tinted box over each copy drawn partly from its variant's image, the same colour for the same variant; the copy drawn to the image outlined thicker.",
+                        getter = () => UIDebug.SharedCopies,
+                        setter = on => UIDebug.SharedCopies = on,
+                        isHiddenCallback = () => !UISettings.Sharing,
                     },
                     new DebugUI.MessageBox
                     {
-                        displayName = "Matched subtrees: subtree matching is off (UI Next's project settings, or -uinext-nomatch).",
-                        isHiddenCallback = () => UISettings.Matching,
+                        displayName = "Shared copies: shared drawing is off (UI Next's project settings, or -uinext-noshare).",
+                        isHiddenCallback = () => UISettings.Sharing,
                     },
 #if UNITY_EDITOR
                     new DebugUI.Button
                     {
                         displayName = "Open UI Next settings",
                         action = () => UnityEditor.SettingsService.OpenProjectSettings(UISettings.SettingsPath),
-                        isHiddenCallback = () => UISettings.Matching,
+                        isHiddenCallback = () => UISettings.Sharing,
                     },
 #endif
                 },
@@ -118,11 +118,11 @@ namespace TimboJimbo.UINext
                     },
                     new DebugUI.Value
                     {
-                        displayName = "Matched subtrees",
-                        tooltip = "Copies drawn partly from a shared image, in how many sets, the primitives their images hold, and how many copies are drawn from an image.",
-                        getter = Matched,
+                        displayName = "Shared copies",
+                        tooltip = "Copies drawn partly from a shared image, in how many variants, the primitives their images hold, and how many copies are drawn from an image.",
+                        getter = SharedCopies,
                         refreshRate = Refresh,
-                        isHiddenCallback = () => !UISettings.Matching,
+                        isHiddenCallback = () => !UISettings.Sharing,
                     },
                     new DebugUI.Value
                     {
@@ -158,11 +158,11 @@ namespace TimboJimbo.UINext
             return count == 0 ? "0" : count + " · " + (bytes >= 1 << 20 ? (bytes / (float)(1 << 20)).ToString("0.0") + " MB" : bytes / 1024 + " KB");
         }
 
-        private static object Matched()
+        private static object SharedCopies()
         {
-            var (subtrees, sets, primitives) = Compositor.Matched;
-            return subtrees + " in " + sets + (sets == 1 ? " set · " : " sets · ") + primitives + " primitives · "
-                   + Compositor.MatchQuads + " from images";
+            var (copies, variants, primitives) = Compositor.Shared;
+            return copies + " in " + variants + (variants == 1 ? " variant · " : " variants · ") + primitives + " primitives · "
+                   + Compositor.SharedQuads + " from images";
         }
 
         private static object Nodes()

@@ -50,7 +50,7 @@ namespace TimboJimboEditor.UINext
             return new SettingsProvider(UISettings.SettingsPath, SettingsScope.Project)
             {
                 label = "UI Next",
-                keywords = new HashSet<string>(new[] { "Image", "Loader", "CDN", "Cache", "Overlay", "UGUI", "Render pass", "Subtree", "Match" }),
+                keywords = new HashSet<string>(new[] { "Image", "Loader", "CDN", "Cache", "Overlay", "UGUI", "Render pass", "Shared drawing", "Occluders" }),
                 deactivateHandler = () => serializedObject = null,
                 guiHandler = _ =>
                 {
@@ -83,13 +83,13 @@ namespace TimboJimboEditor.UINext
                             serializedObject = new SerializedObject(active);
                         serializedObject.Update();
                         EditorGUILayout.Space();
-                        // Subtree matching's settings greyed out while it is off.
-                        bool matching = serializedObject.FindProperty("_matchSubtrees").boolValue;
+                        // Shared drawing's settings greyed out while it is off.
+                        bool sharing = serializedObject.FindProperty("_sharedDrawing").boolValue;
                         var property = serializedObject.GetIterator();
                         for (bool enterChildren = true; property.NextVisible(enterChildren); enterChildren = false)
                         {
                             if (property.propertyPath == "m_Script") continue;
-                            using (new EditorGUI.DisabledScope(!matching && UISettings.IsMatchingField(property.name)))
+                            using (new EditorGUI.DisabledScope(!sharing && UISettings.IsSharingField(property.name)))
                                 EditorGUILayout.PropertyField(property, true);
                         }
                         // Applying runs the asset's OnValidate, which tells images.

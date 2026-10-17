@@ -15,8 +15,7 @@ namespace TimboJimbo.UINext
 
         internal const int DefaultImageMemoryCacheMegabytes = 64;
         internal const int DefaultImageDiskCacheMegabytes = 256;
-        internal const int DefaultMatchMinCopies = 2;
-        internal const int DefaultMatchMinPrimitives = 1;
+        internal const int DefaultSharedMinCopies = 2;
 
         [Tooltip("How images with no loader of their own ask for what they load from URLs (a CDN's resizing). Empty: they load their URLs as they are.")]
         [SerializeField] private ImageLoader _defaultImageLoader;
@@ -34,21 +33,12 @@ namespace TimboJimbo.UINext
         [Tooltip("In the game view, the depth of every large opaque shape's inside is laid down before the UI is drawn, so what such a shape covers is not shaded. Off, everything is shaded. The command line's -uinext-noocc turns them off whatever this says.")]
         [SerializeField] private bool _occluders = true;
 
-        [Header("Subtree matching")]
-        [Tooltip("Copies of a thing (a list's item cards) found as the draw order is made, and what all of them draw the same (but what lies on something that differs, an icon or a label) drawn once: one copy's to an image, every copy as a quad showing it, with the rest drawn over it. While on, the draw order is made twice, and again whenever anything is drawn again or moves. The command line's -uinext-nomatch turns it off whatever this says.")]
-        [SerializeField] private bool _matchSubtrees;
+        [Header("Shared drawing")]
+        [Tooltip("Copies of a thing named alike (UINode.SharedDrawing: a list's item cards) have what they draw the same, up to where they differ, drawn once: one copy's to an image, every copy as a quad showing it, with the rest (an icon, a label) drawn live over it. While on, the draw order is made twice, and again whenever anything is drawn again or moves. The command line's -uinext-noshare turns it off whatever this says.")]
+        [SerializeField] private bool _sharedDrawing;
 
-        [Tooltip("How many copies must draw the same for it to be drawn once.")]
-        [SerializeField, Min(2)] private int _matchMinCopies = DefaultMatchMinCopies;
-
-        [Tooltip("How many primitives a set's image must hold to be drawn once: more leaves out small things such as an icon or a divider.")]
-        [SerializeField, Min(1)] private int _matchMinPrimitives = DefaultMatchMinPrimitives;
-
-        [Tooltip("Whether copies scrolled out of view count towards the copies a match needs (those in view are the ones matched).")]
-        [SerializeField] private bool _matchCountsOffscreen;
-
-        [Tooltip("Whether copies must be drawn at the same scale and turn to match, so one's image would show pixel for pixel in the others' places. Off, only what is inside them must be the same.")]
-        [SerializeField] private bool _matchSameScale;
+        [Tooltip("How many copies drawn alike there must be for them to share an image.")]
+        [SerializeField, Min(2)] private int _sharedMinCopies = DefaultSharedMinCopies;
 
         private static UISettings s_instance;
         private static readonly Observable<int> s_changes = new();
@@ -84,44 +74,33 @@ namespace TimboJimbo.UINext
         /// <summary>Whether the occluders are drawn in the game view, so what a large opaque shape covers is not shaded.</summary>
         public bool Occluders => _occluders;
 
-        /// <summary>Whether what copies of a thing draw the same is drawn once, from an image (<see cref="SubtreeMatch"/>).</summary>
-        public bool MatchSubtrees => _matchSubtrees;
+        /// <summary>Whether copies of a thing named alike (<see cref="UINode.SharedDrawing"/>) have what they draw the same drawn once, from an image.</summary>
+        public bool SharedDrawing => _sharedDrawing;
+
+        /// <summary>How many copies drawn alike there must be for them to share an image.</summary>
+        public int SharedMinCopies => _sharedMinCopies;
 
         /// <summary>Whether the occluders are drawn: as the active settings say (on with no settings asset), unless the command line has -uinext-noocc.</summary>
         internal static bool Occluding => !CommandLine.NoOccluders && (Instance == null || Instance._occluders);
 
-        /// <summary>Whether subtrees are matched: as the active settings say (off with no settings asset), unless the command line has -uinext-nomatch.</summary>
-        internal static bool Matching => !CommandLine.NoMatching && Instance != null && Instance._matchSubtrees;
+        /// <summary>Whether drawing is shared: as the active settings say (off with no settings asset), unless the command line has -uinext-noshare.</summary>
+        internal static bool Sharing => !CommandLine.NoSharing && Instance != null && Instance._sharedDrawing;
 
         // Features turned off from the command line (on Android, the "unity" extra), read once: for measuring what one is
         // worth by turns in one build.
         private static class CommandLine
         {
             public static readonly bool NoOccluders = Has("-uinext-noocc");
-            public static readonly bool NoMatching = Has("-uinext-nomatch");
+            public static readonly bool NoSharing = Has("-uinext-noshare");
 
             private static bool Has(string flag) => System.Array.IndexOf(System.Environment.GetCommandLineArgs(), flag) >= 0;
         }
 
-        /// <summary>Whether a field of the settings only means anything while subtrees are matched (the settings page greys it out otherwise).</summary>
-        internal static bool IsMatchingField(string field) =>
-            field == nameof(_matchMinCopies) || field == nameof(_matchMinPrimitives) || field == nameof(_matchCountsOffscreen)
-            || field == nameof(_matchSameScale);
+        /// <summary>Whether a field of the settings only means anything while drawing is shared (the settings page greys it out otherwise).</summary>
+        internal static bool IsSharingField(string field) => field == nameof(_sharedMinCopies);
 
         /// <summary>The settings page's path in Project Settings.</summary>
         internal const string SettingsPath = "Project/Timbo Jimbo/UI Next";
-
-        /// <summary>How many copies must draw the same for it to be drawn once.</summary>
-        public int MatchMinCopies => _matchMinCopies;
-
-        /// <summary>How many primitives a set's image must hold to be drawn once.</summary>
-        public int MatchMinPrimitives => _matchMinPrimitives;
-
-        /// <summary>Whether copies scrolled out of view count towards the copies a match needs.</summary>
-        public bool MatchCountsOffscreen => _matchCountsOffscreen;
-
-        /// <summary>Whether copies must be drawn at the same scale and turn to match.</summary>
-        public bool MatchSameScale => _matchSameScale;
 
         /// <summary>A tracked read of the settings and the loaders they lead to: what reads it runs again as they change.</summary>
         internal static void Watch() => _ = s_changes.Value;
@@ -137,7 +116,7 @@ namespace TimboJimbo.UINext
             NotifyChanged();
         }
 
-        // Edits apply live; the matched subtrees view is emitted with the draw order.
+        // Edits apply live; what is shared is found as the draw order is made.
         private void OnValidate()
         {
             if (this != s_instance) return;
