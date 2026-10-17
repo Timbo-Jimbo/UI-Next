@@ -20,6 +20,7 @@ namespace TimboJimbo.UINext
             public Camera Camera;
             public bool SceneView;
             public TextureHandle Color;
+            public bool ClearsDepth;
         }
 
         private sealed class GroupPassData
@@ -98,16 +99,28 @@ namespace TimboJimbo.UINext
             builder.SetRenderAttachment(data.Color, 0, AccessFlags.ReadWrite);
             if (!sceneView)
             {
-                // In the game view, a depth buffer of its own for the occluders (Compositor.Render): cleared, used by this
-                // pass alone and never stored, so on a tiled GPU it stays on the chip.
-                var info = renderGraph.GetRenderTargetInfo(data.Color);
-                var depth = renderGraph.CreateTexture(new TextureDesc(info.width, info.height)
+                // In the game view, a depth buffer for the occluders (Compositor.Render), cleared and never read after. On
+                // the screen, the screen's own: a swapchain the device has pre-rotated (Vulkan) is its panel's way round,
+                // while the graph reports its size the display's way round, and a buffer made at that size would cut the
+                // pass (and the final blit merged into it) to the square both cover. Elsewhere, one of its own, used by
+                // this pass alone and never stored, so on a tiled GPU it stays on the chip.
+                TextureHandle depth;
+                if (resourceData.isActiveTargetBackBuffer)
                 {
-                    depthBufferBits = DepthBits.Depth24,
-                    msaaSamples = (MSAASamples)Mathf.Max(1, info.msaaSamples),
-                    clearBuffer = true,
-                    name = "UINext Depth",
-                });
+                    depth = resourceData.backBufferDepth;
+                    data.ClearsDepth = true;
+                }
+                else
+                {
+                    var info = renderGraph.GetRenderTargetInfo(data.Color);
+                    depth = renderGraph.CreateTexture(new TextureDesc(info.width, info.height)
+                    {
+                        depthBufferBits = DepthBits.Depth24,
+                        msaaSamples = (MSAASamples)Mathf.Max(1, info.msaaSamples),
+                        clearBuffer = true,
+                        name = "UINext Depth",
+                    });
+                }
                 builder.SetRenderAttachmentDepth(depth, AccessFlags.Write);
             }
             foreach (var groupTexture in s_groupTextures)
@@ -117,6 +130,8 @@ namespace TimboJimbo.UINext
             builder.AllowGlobalStateModification(true);
             builder.SetRenderFunc(static (PassData pass, RasterGraphContext context) =>
             {
+                if (pass.ClearsDepth)
+                    context.cmd.ClearRenderTarget(RTClearFlags.DepthStencil, Color.clear, 1f, 0u);
                 bool flipped = context.GetTextureUVOrigin(pass.Color) == TextureUVOrigin.BottomLeft;
                 Compositor.Render(context.cmd, pass.Camera, pass.SceneView, flipped);
             });

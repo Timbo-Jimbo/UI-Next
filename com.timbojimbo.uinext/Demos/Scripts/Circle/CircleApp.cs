@@ -46,8 +46,11 @@ namespace TimboJimbo.UINext.Demos.Circle
 
         private void Awake()
         {
-            // Springs want every frame the screen shows.
-            int rate = Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value);
+            // Springs want every frame the screen can show: its highest rate, not the one it runs at now (Android holds a
+            // game at its default rate, 60 Hz on Pixels, until something asks for more).
+            int rate = 0;
+            foreach (var resolution in Screen.resolutions)
+                rate = Mathf.Max(rate, Mathf.RoundToInt((float)resolution.refreshRateRatio.value));
             Application.targetFrameRate = rate > 0 ? rate : 60;
         }
 

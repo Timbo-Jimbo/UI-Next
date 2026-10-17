@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### Changed
+
+- The occluders are a project setting: Project Settings > Timbo Jimbo > UI Next > Occluders (on unless set, and with no settings asset), in place of `UIDebug.Occluders` and the Rendering Debugger's Occluders switch, which are gone: the Rendering Debugger shows views, and runtime features are set with the project. For measuring what they are worth by turns in one build, the command line's `-uinext-noocc` (on Android, in the "unity" extra) turns them off whatever the setting says; the Compare player's `-noocc` is gone with it.
+- The Circle demo runs at the highest rate its screen offers, not the one it runs at as it starts: Android holds a game at its default rate (60 Hz on Pixels) until something asks for more.
+
+### Fixed
+
+- On Vulkan with Player Settings' Apply display rotation during rendering, a device held away from its panel's own orientation drew the UI turned and cut. The swapchain stays in the panel's orientation there and Unity turns its own matrices to it; the UI draws with a matrix of its own, so its vertex shaders now turn their positions to the target as the render pipelines do (0 in a texture, so groups' images are drawn as they were). And drawing to the screen, the occluders' depth buffer is the screen's own, cleared as the pass starts: one made at the size the render graph reports, the display's way round, cut the pass (and URP's final blit merged into it) to the square both cover.
+
 ## [0.6.0] - 15/10/2026
 
 ### Added
