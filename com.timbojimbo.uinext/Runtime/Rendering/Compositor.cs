@@ -401,7 +401,7 @@ namespace TimboJimbo.UINext
             Groups.Clear();
             GroupBatches.Clear();
             s_debugFocused = UIFocus.Focused;
-            s_matchQuads = 0;
+            s_sharedQuads = 0;
             for (int t = 0; t < trees.Count; t++)
             {
                 var tree = trees[t];
